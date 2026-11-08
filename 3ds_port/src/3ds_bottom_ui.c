@@ -113,6 +113,8 @@
 #include "3ds_bottom.h"
 #include "3ds_extras.h"
 #include "3ds_bottom_art.h"
+#include "3ds_coop.h"
+#include "3ds_coop_title.h"
 #include "3ds_clock_store.h"
 #include "3ds_input.h"
 #include "3ds_nuzlocke_ui.h"
@@ -5055,9 +5057,9 @@ static struct
 } sIntro;
 
 /*
- * Under the title screen: the developer's logo in the bottom-left corner and
- * the build's version (CTR_APP_VERSION, the Makefile's APP_VERSION) in the
- * bottom-right one, both in the logo's own grey over black.
+ * Under the title screen: the co-op credit above the developer's logo on the
+ * left, the mod version above the upstream build's version (CTR_APP_VERSION,
+ * the Makefile's APP_VERSION) on the right, all in the logo's grey over black.
  */
 #ifndef CTR_APP_VERSION
 #define CTR_APP_VERSION "dev"
@@ -5079,6 +5081,14 @@ static void DrawTitleCredit(void)
             if (a)
                 Put(x0 + x, y0 + y, PackRgb(a, a, a));
         }
+    for (int y = 0; y < COOP_CREDIT_H; ++y)
+        for (int x = 0; x < COOP_CREDIT_W; ++x)
+        {
+            u8 a = sCoopCredit[y * COOP_CREDIT_W + x];
+
+            if (a)
+                Put(x0 + x, y0 - 16 + y, PackRgb(a, a, a));
+        }
     /* Its capitals level with the logo's lettering (the logo's rows 8 to 20). */
     {
         const u8 *str = Ascii("v" CTR_APP_VERSION);
@@ -5089,6 +5099,7 @@ static void DrawTitleCredit(void)
         InkColumns(&sNormal, str, &ix0, &ix1);
         CapRows(&sNormal, &top, &bottom);
         DrawStr(&sNormal, str, W - TITLE_MARGIN_X - ix1, y0 + 8 + (12 - (bottom - top)) / 2 - top, grey, 0);
+        DrawStr(&sNormal, Ascii("v" CTR_COOP_VERSION), W - TITLE_MARGIN_X - ix1, y0 - 16 + (COOP_CREDIT_H - (bottom - top)) / 2 - top, grey, 0);
     }
 }
 

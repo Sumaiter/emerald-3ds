@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define CTR_COOP_VERSION "0.1.0"
+
 void CtrCoop_Toggle(void);
 bool CtrCoop_IsEnabled(void);
 bool CtrCoop_UseCustomGraphicsId(void);

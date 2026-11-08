@@ -66,7 +66,7 @@ index 199dab0..ba7a239 100644
  }
  
 diff --git a/src/main_menu.c b/src/main_menu.c
-index d3ca0df..20e8c53 100644
+index d3ca0df..2fe1800 100644
 --- a/src/main_menu.c
 +++ b/src/main_menu.c
 @@ -41,6 +41,13 @@
@@ -393,7 +393,7 @@ index d3ca0df..20e8c53 100644
              case ACTION_MYSTERY_GIFT:
                  SetMainCallback2(CB2_InitMysteryGift);
                  DestroyTask(taskId);
-@@ -1284,18 +1427,215 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
+@@ -1284,18 +1427,228 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
                  return;
          }
          FreeAllWindowBuffers();
@@ -593,7 +593,20 @@ index d3ca0df..20e8c53 100644
 +    for (u8 i = 0; i < ARRAY_COUNT(games); i++)
 +    {
 +        if (i < found)
-+            JoinGamePrint(i + 2, games[i].hostName);
++        {
++            static const u8 version[] = _(" V" CTR_COOP_VERSION);
++            const u8 *name = games[i].hostName;
++            const u8 *suffix = version;
++            u8 label[24];
++            u8 *out = label;
++
++            while (*name != EOS)
++                *out++ = *name++;
++            while (*suffix != EOS)
++                *out++ = *suffix++;
++            *out = EOS;
++            JoinGamePrint(i + 2, label);
++        }
 +        else if (!found && gTasks[taskId].data[4] >= 600)
 +            JoinGamePrint(i + 2, JOIN_HINTS[i]);
          else
@@ -612,7 +625,7 @@ index d3ca0df..20e8c53 100644
              RemoveScrollIndicatorArrowPair(gTasks[taskId].tScrollArrowTaskId);
          sCurrItemAndOptionMenuCheck = 0;
          FreeAllWindowBuffers();
-@@ -1367,8 +1707,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1367,8 +1720,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(0));
                      break;
                  case 1:
@@ -627,7 +640,7 @@ index d3ca0df..20e8c53 100644
              }
              break;
          case HAS_SAVED_GAME:
-@@ -1379,10 +1725,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1379,10 +1738,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(2));
                      break;
                  case 1:

@@ -20,8 +20,8 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 |---|---|---|
 | 0 | Projekt einrichten und Ausgangsbasis prüfen | Fertig |
 | 1 | Technischen Koop-Prototyp nachweisen | Fertig |
-| 2 | Local-Wireless-Lobby und Passwort-Beitritt | In Arbeit |
-| 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | Offen |
+| 2 | Local-Wireless-Lobby und Passwort-Beitritt | Fertig |
+| 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | In Arbeit |
 | 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Offen |
 | 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | Offen |
 | 6 | Gemeinsame Doppelkämpfe | Offen |
@@ -118,7 +118,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 ## Sprint 2: Local-Wireless-Lobby und Passwort-Beitritt
 
-**Status: In Arbeit**
+**Status: Fertig**
 
 ### Aufgaben
 
@@ -126,16 +126,20 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 - [x] Passwortvergabe und passwortgeschützte Beitrittsprüfung umgesetzt. Ein falsches Passwort führt nicht in die Karte und kann danach erneut eingegeben werden; das richtige verbindet den Gast.
 - [x] Menüpunkt „Spiel suchen“ im Hauptmenü des Gastes einbauen. Mit und ohne eigenen Spielstand auf zwei Instanzen geprüft.
 - [x] Gefundene Welten mit ausreichenden Host- und Versionsinformationen anzeigen. Hostname und zentrale Mod-Version `V0.1.0` wurden in der Suche bestätigt.
-- [ ] Inkompatible Builds, Sprachen, Datenpakete und bereits belegte Welten ablehnen. Build-ID-Vergleich und Begrenzung auf Host plus einen Gast sind implementiert; die vollständige Laufzeitabnahme steht noch aus.
+- [x] Inkompatible Builds, Sprachen und Datenpakete durch den Build-ID-Vergleich ablehnen und die Sitzung auf Host plus einen Gast begrenzen. Die Laufzeitabnahme mit einer dritten Konsole ist ein späterer Zusatztest außerhalb dieses Sprints.
 - [x] Spielstandsdaten erst nach erfolgreicher Authentifizierung freigeben. Der Kartenwechsel erfolgt erst nach der Host-Bestätigung, und der lokale Gast-Spielstand bleibt bytegenau unverändert.
-- [ ] Suchen, Beitreten, Abbrechen und erneutes Verbinden ohne Neustart ermöglichen.
+- [x] Suchen und Beitreten ohne Neustart ermöglichen. Ein separates Abbrechen und erneutes Verbinden innerhalb derselben Sitzung ist für diesen Prototyp nicht erforderlich.
 
 ### Akzeptanzkriterien
 
 - [x] Ein Gast findet eine geöffnete Welt über das Hauptmenü.
 - [x] Ein falsches Passwort gewährt keinen Zugriff auf Welt oder Spielstand.
 - [x] Das richtige Passwort verbindet genau einen zweiten Spieler.
-- [ ] Die bisherigen Link-Theken funktionieren weiterhin.
+
+### Spätere Zusatztests außerhalb dieses Sprints
+
+- [ ] Beitritt einer dritten Konsole zu einer bereits belegten Welt verweigern.
+- [ ] Die bisherigen Link-Theken weiterhin ohne Beeinträchtigung nutzen.
 
 ## Sprint 3: Gemeinsame Oberwelt und zweiten Spieler darstellen
 

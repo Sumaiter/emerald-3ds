@@ -1,3 +1,0 @@
-# Only for tools/locale_research/ (regenerating a locale manifest); not needed
-# to build the game or by the player's builder.
-pyelftools>=0.31

@@ -1,4 +1,0 @@
-# Fim do efeito do REPELENTE.
-
-[Text_RepelWoreOff] 0919c0c0e4
-O efeito do REPELENTE acabou…$

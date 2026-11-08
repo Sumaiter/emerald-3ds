@@ -3,6 +3,7 @@
 #include "3ds_coop_protocol.h"
 #include "3ds_coop_profile.h"
 #include "3ds_local.h"
+#include "3ds_log.h"
 #include "characters.h"
 #include "constants/event_objects.h"
 #include "constants/event_object_movement.h"
@@ -10,6 +11,7 @@
 #include "event_object_movement.h"
 #include "field_player_avatar.h"
 #include "fieldmap.h"
+#include "overworld.h"
 #include "sound.h"
 #include "constants/songs.h"
 
@@ -21,6 +23,11 @@ static struct
     bool authSent;
     bool authRejected;
     bool peerAuthenticated;
+    uint8_t peerName[CTR_COOP_PLAYER_NAME_SIZE];
+    bool spawnValid;
+    bool joinWarpPending;
+    uint16_t joinWarpFrames;
+    CtrCoopSnapshot spawn;
     uint32_t joinToken;
     uint32_t generation;
     bool haveLastSent;
@@ -41,9 +48,182 @@ static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 
 static void ClearRemote(void)
 {
+    if (sCoop.joinWarpPending)
+        CtrLog_Write(CTR_LOG_GAME, "coop: join warp interrupted");
     sCoop.peerId = 0;
     sCoop.remoteValid = false;
     sCoop.haveApplied = false;
+    sCoop.spawnValid = false;
+    sCoop.joinWarpPending = false;
+    memset(sCoop.peerName, 0xFF, sizeof(sCoop.peerName));
+}
+
+#define SPAWN_TABLE_MAGIC 0x5350
+#define SPAWN_TABLE_VERSION 1
+#define SPAWN_RECORD_COUNT 4
+
+struct SpawnRecord
+{
+    uint8_t name[CTR_COOP_PLAYER_NAME_SIZE];
+    uint8_t used;
+    uint8_t mapGroup;
+    uint8_t mapNum;
+    uint16_t mapLayoutId;
+    int16_t x;
+    int16_t y;
+    uint8_t facing;
+    uint8_t graphicsId;
+    uint8_t reserved[3];
+};
+
+struct SpawnTable
+{
+    uint16_t magic;
+    uint16_t version;
+    struct SpawnRecord records[SPAWN_RECORD_COUNT];
+};
+
+static const uint8_t sDefaultGuestName[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
+
+static bool LocalSnapshot(CtrCoopSnapshot *out);
+
+static void GuestName(uint8_t *out)
+{
+    const struct CtrCoopProfile *profile = CtrCoopProfile_Get();
+
+    if (profile->guestNameLength > 0 && profile->guestNameLength <= CTR_COOP_GUEST_NAME_LENGTH)
+        memcpy(out, profile->guestName, CTR_COOP_PLAYER_NAME_SIZE);
+    else
+        memcpy(out, sDefaultGuestName, CTR_COOP_PLAYER_NAME_SIZE);
+}
+
+static struct SpawnTable *SpawnTable(void)
+{
+    if (gSaveBlock1Ptr == NULL)
+        return NULL;
+    return (struct SpawnTable *)gSaveBlock1Ptr->unused_3598;
+}
+
+static struct SpawnTable *ValidSpawnTable(void)
+{
+    struct SpawnTable *table = SpawnTable();
+
+    if (table == NULL)
+        return NULL;
+    if (table->magic != SPAWN_TABLE_MAGIC || table->version != SPAWN_TABLE_VERSION)
+    {
+        memset(table, 0, sizeof(*table));
+        table->magic = SPAWN_TABLE_MAGIC;
+        table->version = SPAWN_TABLE_VERSION;
+    }
+    return table;
+}
+
+static struct SpawnRecord *FindSpawnRecord(const uint8_t *name, bool create)
+{
+    struct SpawnTable *table = ValidSpawnTable();
+    struct SpawnRecord *freeRecord = NULL;
+
+    if (table == NULL)
+        return NULL;
+    for (u8 i = 0; i < SPAWN_RECORD_COUNT; i++)
+    {
+        if (table->records[i].used && memcmp(table->records[i].name, name, CTR_COOP_PLAYER_NAME_SIZE) == 0)
+            return &table->records[i];
+        if (!table->records[i].used && freeRecord == NULL)
+            freeRecord = &table->records[i];
+    }
+    if (!create || freeRecord == NULL)
+        return NULL;
+    freeRecord->used = TRUE;
+    memcpy(freeRecord->name, name, CTR_COOP_PLAYER_NAME_SIZE);
+    return freeRecord;
+}
+
+static void SnapshotFromRecord(CtrCoopSnapshot *snapshot, const struct SpawnRecord *record)
+{
+    *snapshot = (CtrCoopSnapshot){0};
+    snapshot->mapGroup = record->mapGroup;
+    snapshot->mapNum = record->mapNum;
+    snapshot->mapLayoutId = record->mapLayoutId;
+    snapshot->x = record->x;
+    snapshot->y = record->y;
+    snapshot->facing = record->facing;
+    snapshot->graphicsId = record->graphicsId;
+    snapshot->movementActionId = GetFaceDirectionMovementAction(record->facing);
+}
+
+static void StoreSpawnRecord(const CtrCoopSnapshot *snapshot)
+{
+    struct SpawnRecord *record = FindSpawnRecord(sCoop.peerName, TRUE);
+    bool changed;
+
+    if (record == NULL)
+        return;
+    changed = record->mapGroup != snapshot->mapGroup || record->mapNum != snapshot->mapNum
+           || record->mapLayoutId != snapshot->mapLayoutId || record->x != snapshot->x
+           || record->y != snapshot->y || record->facing != snapshot->facing
+           || record->graphicsId != snapshot->graphicsId;
+    record->mapGroup = snapshot->mapGroup;
+    record->mapNum = snapshot->mapNum;
+    record->mapLayoutId = snapshot->mapLayoutId;
+    record->x = snapshot->x;
+    record->y = snapshot->y;
+    record->facing = snapshot->facing;
+    record->graphicsId = snapshot->graphicsId;
+    if (changed)
+        CtrLog_Write(CTR_LOG_GAME, "coop: store %02x%02x%02x map %u.%u layout %u at %d,%d facing %u gfx %u",
+            record->name[0], record->name[1], record->name[2], record->mapGroup, record->mapNum,
+            record->mapLayoutId, record->x, record->y, record->facing, record->graphicsId);
+}
+
+static void SendGuestIdentity(uint16_t to)
+{
+    uint8_t name[CTR_COOP_PLAYER_NAME_SIZE];
+    uint8_t packet[CTR_COOP_IDENTITY_SIZE];
+
+    GuestName(name);
+    CtrLog_Write(CTR_LOG_GAME, "coop: identify as %02x%02x%02x", name[0], name[1], name[2]);
+    if (CtrCoopProtocol_EncodeIdentity(name, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void SendHostSpawn(uint16_t to)
+{
+    struct SpawnRecord *record = FindSpawnRecord(sCoop.peerName, FALSE);
+    CtrCoopSnapshot spawn;
+    uint8_t packet[CTR_COOP_SPAWN_SIZE];
+
+    if (record != NULL)
+        SnapshotFromRecord(&spawn, record);
+    else if (!LocalSnapshot(&spawn))
+        return;
+    spawn.movementActionId = GetFaceDirectionMovementAction(spawn.facing);
+    CtrLog_Write(CTR_LOG_GAME, "coop: send %s spawn for %02x%02x%02x map %u.%u layout %u at %d,%d facing %u gfx %u",
+        record != NULL ? "saved" : "host", sCoop.peerName[0], sCoop.peerName[1], sCoop.peerName[2],
+        spawn.mapGroup, spawn.mapNum, spawn.mapLayoutId, spawn.x, spawn.y, spawn.facing, spawn.graphicsId);
+    if (CtrCoopProtocol_EncodeSpawn(&spawn, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+bool CtrCoop_EnterHostWorld(void)
+{
+    CtrCoopSnapshot old;
+
+    if (!sCoop.spawnValid)
+        return FALSE;
+    sCoop.spawnValid = FALSE;
+    sCoop.joinWarpPending = true;
+    sCoop.joinWarpFrames = 0;
+    sCoop.generation = LocalLink_Generation();
+    if (LocalSnapshot(&old))
+        CtrLog_Write(CTR_LOG_GAME, "coop: join warp from map %u.%u at %d,%d to map %u.%u at %d,%d",
+            old.mapGroup, old.mapNum, old.x, old.y, sCoop.spawn.mapGroup, sCoop.spawn.mapNum,
+            sCoop.spawn.x, sCoop.spawn.y);
+    SetWarpDestination(sCoop.spawn.mapGroup, sCoop.spawn.mapNum, -1,
+        sCoop.spawn.x - MAP_OFFSET, sCoop.spawn.y - MAP_OFFSET);
+    WarpIntoMap();
+    return TRUE;
 }
 
 static bool RemoteObjectValid(void)
@@ -232,7 +412,7 @@ static void StartSession(bool searchOnly)
 
 void CtrCoop_Toggle(void)
 {
-    if (sCoop.wanted || LocalLink_GetSessionKind() == LOCAL_KIND_COOP)
+    if (sCoop.wanted)
         CtrCoop_Stop();
     else if (!CtrCoopProfile_HasHostPassword())
         PlaySE(SE_FAILURE);
@@ -304,7 +484,7 @@ uint8_t CtrCoop_GetSessionState(void)
     if (sCoop.authRejected)
         return LOCAL_SESSION_AUTH_FAILED;
     state = LocalLink_GetSession();
-    if (sCoop.guest && state == LOCAL_SESSION_IN && !sCoop.authenticated)
+    if (sCoop.guest && state == LOCAL_SESSION_IN && (!sCoop.authenticated || !sCoop.spawnValid))
         return LOCAL_SESSION_SEARCHING;
     return state;
 }
@@ -377,6 +557,25 @@ void CtrCoop_OverworldFrame(void)
         RemoveRemoteObject();
         return;
     }
+    if (sCoop.guest && sCoop.joinWarpPending)
+    {
+        if (sCoop.joinWarpFrames++ % 60 == 0)
+            CtrLog_Write(CTR_LOG_GAME, "coop: join wait actual map %u.%u layout %u at %d,%d target map %u.%u layout %u at %d,%d save %d,%d",
+                local.mapGroup, local.mapNum, local.mapLayoutId, local.x, local.y,
+                sCoop.spawn.mapGroup, sCoop.spawn.mapNum, sCoop.spawn.mapLayoutId, sCoop.spawn.x, sCoop.spawn.y,
+                gSaveBlock1Ptr->pos.x, gSaveBlock1Ptr->pos.y);
+        if (!CtrCoopProtocol_SameMap(&local, &sCoop.spawn)
+         || local.x != sCoop.spawn.x || local.y != sCoop.spawn.y)
+        {
+            RemoveRemoteObject();
+            return;
+        }
+        ObjectEventTurn(&gObjectEvents[gPlayerAvatar.objectEventId], sCoop.spawn.facing);
+        sCoop.joinWarpPending = false;
+        CtrLog_Write(CTR_LOG_GAME, "coop: join warp complete at %d,%d", local.x, local.y);
+        local.facing = sCoop.spawn.facing;
+        local.movementActionId = GetFaceDirectionMovementAction(local.facing);
+    }
     UpdateRemoteObject(&local);
     if (!sCoop.wanted || state != LOCAL_SESSION_IN)
         return;
@@ -426,6 +625,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         {
             sCoop.authenticated = true;
             sCoop.authRejected = false;
+            SendGuestIdentity(from);
         }
         else
         {
@@ -436,12 +636,33 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         }
         return true;
     }
+    if (data[0] == CTR_COOP_IDENTITY_PACKET)
+    {
+        if (sCoop.guest || !sCoop.peerAuthenticated)
+            return true;
+        if (CtrCoopProtocol_DecodeIdentity(data, len, sCoop.peerName))
+            SendHostSpawn(from);
+        return true;
+    }
+    if (data[0] == CTR_COOP_SPAWN_PACKET)
+    {
+        if (!sCoop.guest || !sCoop.authenticated)
+            return true;
+        if (CtrCoopProtocol_DecodeSpawn(data, len, &remote))
+        {
+            sCoop.spawn = remote;
+            sCoop.spawnValid = true;
+        }
+        return true;
+    }
     if (data[0] != CTR_COOP_PEER_PACKET)
         return false;
     if ((sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerAuthenticated))
         return true;
     if (!CtrCoopProtocol_Decode(data, len, &remote))
         return true;
+    if (!sCoop.guest)
+        StoreSpawnRecord(&remote);
     sCoop.peerId = from;
     sCoop.remote = remote;
     sCoop.remoteValid = true;
@@ -452,9 +673,13 @@ void CtrCoop_PeerLeft(uint16_t id)
 {
     if (sCoop.peerId == id || sCoop.peerId == 0)
     {
+        bool restart = !sCoop.guest && sCoop.wanted;
+
         ClearRemote();
         sCoop.peerAuthenticated = false;
         sCoop.authSent = false;
+        if (restart)
+            LocalLink_StartSession(LOCAL_KIND_COOP);
     }
 }
 

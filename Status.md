@@ -143,12 +143,15 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 ## Sprint 3: Gemeinsame Oberwelt und zweiten Spieler darstellen
 
-**Status: Offen**
+**Status: In Arbeit**
+
+Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Namensbasierte Spawnpakete und Host-Spielstandeinträge sind implementiert, aber der Beitritts-Warp und die darauffolgende Synchronisation sind aktuell fehlerhaft. Die genaue Diagnose und der nächste Test stehen in `HANDOFF.md`.
 
 ### Aufgaben
 
-- [ ] Zweite Spielfigur mit eigenem Charakter, Namen und Spielerzustand integrieren.
-- [ ] Bewegungsdaten so übertragen und zwischenspeichern, dass veraltete Positionen keine Verzögerung aufbauen.
+- [x] Zweite Spielfigur mit eigenem Charakter und Namen sowie Basis-Bewegungsdaten integrieren.
+- [x] Bewegungsdaten mit Heartbeat, Validierung und Verlustbehandlung übertragen; dies wurde in Sprint 1 bestätigt.
+- [ ] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren.
 - [ ] Kartenwechsel, Warps, Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren.
 - [ ] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen.
 - [ ] Spawn beim Host auf einem freien, begehbaren Nachbarfeld ermöglichen.
@@ -284,4 +287,4 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 ## Aktueller Gesamtstand
 
-Die Projekteinrichtung und die reproduzierbare deutsche Baseline sind fertig. In Sprint 1 sind Protokoll, Koop-Sitzung, Optionsaktion, RFU-Demultiplexing, Overworld-Avatar und der reproduzierbare Engine-Patch implementiert. Der deutsche ARM-Build, das installierbare Releasepaket, die vollständige englische Baseline-Suite, die Koop- und Builder-Tests sowie der Release-Audit bestehen. Die Zwei-Instanzen- und Hardwareprüfung stehen noch aus; Sprint 1 ist daher nicht abgeschlossen.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Identitäts- und Spawnpakete, namensbasierte Host-Spielstandeinträge und der automatische Host-Neustart nach einem Gastwechsel sind implementiert. Der aktuelle Beitritts-Warp und die Synchronisation danach funktionieren jedoch noch nicht zuverlässig; Host und Gast können sich im fehlerhaften Zustand nicht sehen. `HANDOFF.md` enthält die Diagnose und den nächsten Test, `SETUP.md` die Ersteinrichtung. Es gibt noch keine spielbare Alpha.

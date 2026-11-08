@@ -66,7 +66,7 @@ index 199dab0..ba7a239 100644
  }
  
 diff --git a/src/main_menu.c b/src/main_menu.c
-index d3ca0df..2fe1800 100644
+index d3ca0df..ca40323 100644
 --- a/src/main_menu.c
 +++ b/src/main_menu.c
 @@ -41,6 +41,13 @@
@@ -120,7 +120,7 @@ index d3ca0df..2fe1800 100644
  
  #define MENU_LEFT_ERROR 2
  #define MENU_TOP_ERROR 15
-@@ -503,9 +517,32 @@ static const struct WindowTemplate sWindowTemplates_MainMenu[] =
+@@ -503,8 +517,31 @@ static const struct WindowTemplate sWindowTemplates_MainMenu[] =
          .paletteNum = 15,
          .baseBlock = 0x16D
      },
@@ -135,9 +135,9 @@ index d3ca0df..2fe1800 100644
 +        .baseBlock = 0x1A1
 +    },
 +#endif
-     DUMMY_WIN_TEMPLATE
- };
- 
++    DUMMY_WIN_TEMPLATE
++};
++
 +#ifdef PLATFORM_3DS
 +static const struct WindowTemplate sWindowTemplates_JoinMenu[] =
 +{
@@ -146,13 +146,12 @@ index d3ca0df..2fe1800 100644
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 9, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0x69},
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 13, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0x9D},
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 17, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0xD1},
-+    DUMMY_WIN_TEMPLATE
-+};
+     DUMMY_WIN_TEMPLATE
+ };
 +#endif
-+
+ 
  static const struct WindowTemplate sNewGameBirchSpeechTextWindows[] =
  {
-     {
 @@ -543,6 +580,52 @@ static const u16 sMainMenuTextPal[] = INCBIN_U16("graphics/interface/main_menu_t
  
  static const u8 sTextColor_Headers[] = {TEXT_DYNAMIC_COLOR_1, TEXT_DYNAMIC_COLOR_2, TEXT_DYNAMIC_COLOR_3};
@@ -393,7 +392,7 @@ index d3ca0df..2fe1800 100644
              case ACTION_MYSTERY_GIFT:
                  SetMainCallback2(CB2_InitMysteryGift);
                  DestroyTask(taskId);
-@@ -1284,18 +1427,228 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
+@@ -1284,18 +1427,234 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
                  return;
          }
          FreeAllWindowBuffers();
@@ -522,6 +521,12 @@ index d3ca0df..2fe1800 100644
 +        OpenJoinPassword(taskId);
 +}
 +
++static void ContinueJoinedGame(void)
++{
++    CtrCoop_EnterHostWorld();
++    CB2_ContinueSavedGame();
++}
++
 +static void Task_JoinGameSearch(u8 taskId)
 +{
 +    struct CtrCoopFoundGame games[3];
@@ -549,7 +554,7 @@ index d3ca0df..2fe1800 100644
 +    {
 +        gPlttBufferUnfaded[0] = RGB_BLACK;
 +        gPlttBufferFaded[0] = RGB_BLACK;
-+        SetMainCallback2(CB2_ContinueSavedGame);
++        SetMainCallback2(ContinueJoinedGame);
 +        DestroyTask(taskId);
 +        return;
 +    }
@@ -625,7 +630,7 @@ index d3ca0df..2fe1800 100644
              RemoveScrollIndicatorArrowPair(gTasks[taskId].tScrollArrowTaskId);
          sCurrItemAndOptionMenuCheck = 0;
          FreeAllWindowBuffers();
-@@ -1367,8 +1720,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1367,8 +1726,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(0));
                      break;
                  case 1:
@@ -640,7 +645,7 @@ index d3ca0df..2fe1800 100644
              }
              break;
          case HAS_SAVED_GAME:
-@@ -1379,10 +1738,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1379,10 +1744,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(2));
                      break;
                  case 1:

@@ -26,6 +26,7 @@ uint8_t CtrCoop_GetSessionState(void);
 int CtrCoop_GetFoundGames(struct CtrCoopFoundGame *games, int max);
 void CtrCoop_MenuFrame(void);
 void CtrCoop_OverworldFrame(void);
+bool CtrCoop_EnterHostWorld(void);
 bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len);
 void CtrCoop_PeerLeft(uint16_t id);
 void CtrCoop_SoftReset(void);

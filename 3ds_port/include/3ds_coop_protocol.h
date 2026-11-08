@@ -7,8 +7,13 @@
 #define CTR_COOP_PEER_PACKET 8
 #define CTR_COOP_AUTH_PACKET 9
 #define CTR_COOP_AUTH_RESULT_PACKET 10
+#define CTR_COOP_IDENTITY_PACKET 11
+#define CTR_COOP_SPAWN_PACKET 12
 #define CTR_COOP_AUTH_PACKET_SIZE 6
 #define CTR_COOP_AUTH_RESULT_SIZE 3
+#define CTR_COOP_IDENTITY_SIZE 10
+#define CTR_COOP_SPAWN_SIZE 13
+#define CTR_COOP_PLAYER_NAME_SIZE 8
 #define CTR_COOP_PROTOCOL_VERSION 2
 #define CTR_COOP_GRAPHICS_ID_MAX 238
 #define CTR_COOP_PACKET_SIZE 13
@@ -47,6 +52,10 @@ bool CtrCoopProtocol_EncodeAuth(const uint8_t *password, uint8_t *out, uint16_t 
 bool CtrCoopProtocol_DecodeAuth(const uint8_t *data, uint16_t size, uint8_t *password);
 bool CtrCoopProtocol_EncodeAuthResult(bool accepted, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodeAuthResult(const uint8_t *data, uint16_t size, bool *accepted);
+bool CtrCoopProtocol_EncodeIdentity(const uint8_t *name, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeIdentity(const uint8_t *data, uint16_t size, uint8_t *name);
+bool CtrCoopProtocol_EncodeSpawn(const CtrCoopSnapshot *snapshot, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeSpawn(const uint8_t *data, uint16_t size, CtrCoopSnapshot *out);
 bool CtrCoopProtocol_SameMap(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b);
 bool CtrCoopProtocol_ShouldSend(const CtrCoopSnapshot *last, const CtrCoopSnapshot *current, uint16_t framesSinceLast);
 CtrCoopApply CtrCoopProtocol_PlanMovement(const CtrCoopSnapshot *snapshot,

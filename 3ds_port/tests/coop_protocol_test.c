@@ -143,6 +143,29 @@ static void TestAuthentication(void)
     CHECK(!CtrCoopProtocol_DecodeAuthResult(result, sizeof(result), &accepted), "invalid auth result rejected");
 }
 
+static void TestSpawnIdentity(void)
+{
+    static const uint8_t name[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
+    CtrCoopSnapshot original = Base(), decoded;
+    uint8_t decodedName[CTR_COOP_PLAYER_NAME_SIZE];
+    uint8_t identity[CTR_COOP_IDENTITY_SIZE];
+    uint8_t spawn[CTR_COOP_SPAWN_SIZE];
+
+    CHECK(CtrCoopProtocol_EncodeIdentity(name, identity, sizeof(identity)), "identity encodes");
+    CHECK(CtrCoopProtocol_DecodeIdentity(identity, sizeof(identity), decodedName), "identity decodes");
+    CHECK(memcmp(name, decodedName, sizeof(name)) == 0, "player name roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeIdentity(identity, sizeof(identity) - 1, decodedName), "short identity rejected");
+    identity[0]++;
+    CHECK(!CtrCoopProtocol_DecodeIdentity(identity, sizeof(identity), decodedName), "wrong identity type rejected");
+    CHECK(CtrCoopProtocol_EncodeSpawn(&original, spawn, sizeof(spawn)), "spawn encodes");
+    CHECK(CtrCoopProtocol_DecodeSpawn(spawn, sizeof(spawn), &decoded), "spawn decodes");
+    CHECK(!CtrCoopProtocol_ShouldSend(&original, &decoded, 0), "spawn preserves every field");
+    CHECK(spawn[0] == CTR_COOP_SPAWN_PACKET, "spawn type on wire");
+    CHECK(!CtrCoopProtocol_Decode(spawn, sizeof(spawn), &decoded), "spawn is not accepted as movement packet");
+    spawn[12] = CTR_COOP_GRAPHICS_ID_MAX + 1;
+    CHECK(!CtrCoopProtocol_DecodeSpawn(spawn, sizeof(spawn), &decoded), "invalid spawn graphics rejected");
+}
+
 int main(void)
 {
     TestRoundtrip();
@@ -151,6 +174,7 @@ int main(void)
     TestSendSchedule();
     TestMovementPlan();
     TestAuthentication();
+    TestSpawnIdentity();
     if (sFailures != 0)
     {
         printf("%d co-op protocol tests failed\n", sFailures);

@@ -17,7 +17,14 @@
 #include <stdint.h>
 
 #define LOCAL_MAX_PEERS 8    /* a session holds 5; room to spare */
+#define LOCAL_MAX_FOUND 16
 #define LOCAL_ADVERT_SIZE 24 /* a Wireless Adapter's broadcast data */
+
+struct LocalFoundSession
+{
+    uint32_t token;
+    uint8_t hostName[8];
+};
 
 struct LocalPeer
 {
@@ -59,9 +66,16 @@ uint8_t LocalLink_PollEvent(struct LocalEvent *ev);
 uint32_t LocalLink_Milliseconds(void);
 
 /* Sessions. LocalLink_StartSession leaves the current one and joins the
- * nearby session of that kind (LOCAL_KIND_*), or hosts one if there is none;
- * LocalLink_GetSession says how that went (LOCAL_SESSION_*). */
+ * nearby session of that kind (LOCAL_KIND_*), or hosts one if there is none.
+ * LocalLink_JoinSession only looks and never hosts. DiscoverSessions updates
+ * the list of nearby sessions without joining one. LocalLink_GetSession says
+ * how that went (LOCAL_SESSION_*). */
 void LocalLink_StartSession(uint8_t kind);
+void LocalLink_SetHostName(const uint8_t *name);
+void LocalLink_SetHostPassword(const uint8_t *password);
+void LocalLink_JoinSession(uint8_t kind, uint32_t token, const uint8_t *password);
+void LocalLink_DiscoverSessions(uint8_t kind);
+int LocalLink_GetFoundSessions(struct LocalFoundSession *out, int max);
 void LocalLink_LeaveSession(void);
 uint8_t LocalLink_GetSession(void);
 uint8_t LocalLink_GetSessionKind(void);

@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include "global.h"
+#include "3ds_coop.h"
 #include "3ds_local.h"
 #include "local_link.h"
 #include "3ds_log.h"
@@ -1248,9 +1249,15 @@ void PortRfu_Frame(void)
     while (LocalLink_PollEvent(&ev))
     {
         if (ev.type == LOCAL_EV_RECV)
-            HandlePeerMessage(ev.id, ev.data, ev.len);
+        {
+            if (!CtrCoop_HandlePacket(ev.id, ev.data, ev.len))
+                HandlePeerMessage(ev.id, ev.data, ev.len);
+        }
         else if (ev.type == LOCAL_EV_LEFT)
+        {
+            CtrCoop_PeerLeft(ev.id);
             PeerGone(ev.id, REASON_LINK_LOSS);
+        }
     }
     FinishLeaving();
 

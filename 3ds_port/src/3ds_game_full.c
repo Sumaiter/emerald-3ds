@@ -75,6 +75,7 @@
 #include "port_prof.h"
 
 #include "3ds_battle_hud.h"
+#include "3ds_coop.h"
 #include "3ds_platform.h"
 #include "3ds_video.h"
 #include "3ds_assets.h"
@@ -189,6 +190,7 @@ void CtrGame_SoftReset(void)
     /* Port state that belongs to the running game lives outside the restored
      * sections: the bottom screen's would keep acting as if in the field. */
     CtrBottom_SoftReset();
+    CtrCoop_SoftReset();
     /* The follower's buffers are malloc'd and only pointed to from the game's
      * data, which the copy below puts back to NULL: freed first, or leaked. */
     FollowerMon_ReleaseAll();

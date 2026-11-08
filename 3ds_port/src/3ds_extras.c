@@ -6,6 +6,7 @@
 #include <string.h>
 #include "global.h"
 #include "3ds_locale.h"
+#include "3ds_coop.h"
 #include "3ds_extras.h"
 #include "3ds_randomizer.h"
 #include "3ds_nuzlocke_ui.h"
@@ -211,6 +212,7 @@ const CtrExtra gCtrExtras[] =
     /* Features add their lines here. */
     {CTR_EXTRAS_SCREEN(CTR_EXTRAS_OPTIONS, 1), CTR_TEXT("3D WORLD", "MUNDO 3D", "MONDE 3D", "MONDO 3D", "MUNDO 3D", "3D-WELT", "3D ワールド"), "voxel_stereo", 3, 0, sVoxelStereo, NULL, NULL, NULL},
     {CTR_EXTRAS_SCREEN(CTR_EXTRAS_OPTIONS, 1), CTR_TEXT("3D DEPTH", "PROFUNDIDAD 3D", "PROFONDEUR 3D", "PROFOND. 3D", "PROFUNDIDADE 3D", "3D-TIEFE", "3D おくゆき"), "voxel_depth", 7, 3, sVoxelDepths, NULL, NULL, NULL},
+    {CTR_EXTRAS_SCREEN(CTR_EXTRAS_OPTIONS, 1), CTR_TEXT("LOCAL CO-OP", "COOP. LOCAL", "COOP. LOCALE", "COOP. LOCALE", "COOP. LOCAL", "LOKALER KOOP", "ローカル協力"), "local_coop", 2, 0, gCtrExtrasOffOn, CtrCoop_Toggle, NULL, NULL},
     {CTR_EXTRAS_ENHANCEMENTS, CTR_TEXT("SPEED", "VELOC. JUEGO", "VITESSE", "VELOCITÀ", "VELOCIDADE", "TEMPO", "スピード"), "speed", 0, 0, NULL, NULL, SpeedStep, SpeedText},
     /* The game and the music keep real time on a slow frame; the sound
      * engine mixes on the DSP's clock (3ds_platform.c, 3ds_audio.c). */
@@ -268,8 +270,11 @@ const unsigned gCtrExtraCount = ARRAY_COUNT(gCtrExtras) - 1;
 
 int CtrExtras_Value(const CtrExtra *extra)
 {
-    int value = CtrSettings_GetInt(extra->key, extra->fallback);
+    int value;
 
+    if (strcmp(extra->key, "local_coop") == 0)
+        return CtrCoop_IsEnabled();
+    value = CtrSettings_GetInt(extra->key, extra->fallback);
     return value >= 0 && value < extra->count ? value : extra->fallback;
 }
 

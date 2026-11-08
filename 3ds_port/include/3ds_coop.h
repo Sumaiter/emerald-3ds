@@ -1,0 +1,30 @@
+#ifndef CTR_COOP_H
+#define CTR_COOP_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+void CtrCoop_Toggle(void);
+bool CtrCoop_IsEnabled(void);
+bool CtrCoop_UseCustomGraphicsId(void);
+uint8_t CtrCoop_LocalGraphicsId(void);
+struct CtrCoopFoundGame
+{
+    uint32_t token;
+    uint8_t hostName[8];
+};
+
+void CtrCoop_Search(void);
+void CtrCoop_PrepareJoin(uint32_t token);
+void CtrCoop_JoinPrepared(void);
+void CtrCoop_JoinGame(uint32_t token, const uint8_t *password);
+void CtrCoop_Stop(void);
+uint8_t CtrCoop_GetSessionState(void);
+int CtrCoop_GetFoundGames(struct CtrCoopFoundGame *games, int max);
+void CtrCoop_MenuFrame(void);
+void CtrCoop_OverworldFrame(void);
+bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len);
+void CtrCoop_PeerLeft(uint16_t id);
+void CtrCoop_SoftReset(void);
+
+#endif // CTR_COOP_H

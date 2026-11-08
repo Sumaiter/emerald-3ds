@@ -53,6 +53,7 @@ static const OptRowDef sRowsSystem[] = {
     EXTRA_ROW("speed"),
     EXTRA_ROW("audio_clock"),
     GAME_ROW(OPT_FPS, CTR_TEXT("SHOW FPS", "MOSTRAR FPS", "AFFICH. FPS", "MOSTRA FPS", "MOSTRAR FPS", "FPS ZEIGEN", "FPS ひょうじ")),
+    EXTRA_ROW("local_coop"),
 };
 static const OptRowDef sRows3d[] = {
     GAME_ROW(OPT_VOXEL, "VOXEL 3D"),

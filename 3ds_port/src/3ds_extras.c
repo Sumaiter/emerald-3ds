@@ -268,12 +268,34 @@ const CtrExtra gCtrExtras[] =
 /* The last line only keeps the array from being empty. */
 const unsigned gCtrExtraCount = ARRAY_COUNT(gCtrExtras) - 1;
 
+static bool GuestGameplayOptionLocked(const CtrExtra *extra)
+{
+    static const char *const hostOnlyKeys[] = {
+        "exp_catch", "exp_share", "trade_evo", "field_hms", "visible_wild",
+        "infinite_tms", "move_split", "day_night", "clock_speed", "clock_sync",
+        "timed_encounters",
+    };
+
+    if (!CtrCoop_GuestSaveBlocked())
+        return FALSE;
+    if (CTR_EXTRAS_TAB(extra->page) == CTR_EXTRAS_CHEATS)
+        return TRUE;
+    if (strcmp(extra->key, CTR_NUZLOCKE_KEY) == 0 || strncmp(extra->key, "rand_", 5) == 0)
+        return TRUE;
+    for (unsigned i = 0; i < ARRAY_COUNT(hostOnlyKeys); i++)
+        if (strcmp(extra->key, hostOnlyKeys[i]) == 0)
+            return TRUE;
+    return FALSE;
+}
+
 int CtrExtras_Value(const CtrExtra *extra)
 {
     int value;
 
     if (strcmp(extra->key, "local_coop") == 0)
         return CtrCoop_IsEnabled();
+    if (GuestGameplayOptionLocked(extra))
+        return extra->fallback;
     value = CtrSettings_GetInt(extra->key, extra->fallback);
     return value >= 0 && value < extra->count ? value : extra->fallback;
 }
@@ -282,6 +304,11 @@ int CtrExtras_Value(const CtrExtra *extra)
  * runs instead. */
 void CtrExtras_Step(const CtrExtra *extra, int direction)
 {
+    if (GuestGameplayOptionLocked(extra))
+    {
+        PlaySE(SE_FAILURE);
+        return;
+    }
     if (extra->count == 0)
     {
         if (extra->act)

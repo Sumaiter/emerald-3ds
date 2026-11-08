@@ -290,6 +290,11 @@ void CtrCoop_Stop(void)
     LocalLink_LeaveSession();
 }
 
+bool CtrCoop_GuestSaveBlocked(void)
+{
+    return sCoop.wanted && sCoop.guest;
+}
+
 uint8_t CtrCoop_GetSessionState(void)
 {
     uint8_t state;
@@ -363,6 +368,8 @@ void CtrCoop_OverworldFrame(void)
         sCoop.haveLastSent = false;
         ClearRemote();
     }
+    if (!sCoop.remoteValid)
+        RemoveRemoteObject();
     if ((sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerAuthenticated))
         return;
     if (!LocalSnapshot(&local))

@@ -19,6 +19,7 @@ void CtrCoop_PrepareJoin(uint32_t token);
 void CtrCoop_JoinPrepared(void);
 void CtrCoop_JoinGame(uint32_t token, const uint8_t *password);
 void CtrCoop_Stop(void);
+bool CtrCoop_GuestSaveBlocked(void);
 uint8_t CtrCoop_GetSessionState(void);
 int CtrCoop_GetFoundGames(struct CtrCoopFoundGame *games, int max);
 void CtrCoop_MenuFrame(void);

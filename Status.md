@@ -19,7 +19,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 | Sprint | Inhalt | Status |
 |---|---|---|
 | 0 | Projekt einrichten und Ausgangsbasis prüfen | Fertig |
-| 1 | Technischen Koop-Prototyp nachweisen | In Arbeit |
+| 1 | Technischen Koop-Prototyp nachweisen | Fertig |
 | 2 | Local-Wireless-Lobby und Passwort-Beitritt | In Arbeit |
 | 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | Offen |
 | 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Offen |
@@ -77,17 +77,17 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 ## Sprint 1: Technischen Koop-Prototyp nachweisen
 
-**Status: In Arbeit**
+**Status: Fertig**
 
 ### Aufgaben
 
-- [ ] Build-, Test- und Debugging-Umgebung für zwei Spielinstanzen einrichten. Die lokale MSYS2-/devkitPro-Toolchain ist installiert; eine Zwei-Instanzen-Umgebung steht noch aus.
-- [x] Bestehende UDS-Sitzungen und den Wireless-Adapter als wiederverwendbare Grundlage abgrenzen.
-- [ ] Eine eigenständige Koop-Sitzung außerhalb der bisherigen Link-Theken starten. Sitzungsart `LOCAL_KIND_COOP`, Zwei-Spieler-Netzwerk und Start/Stopp über `LOCAL CO-OP` sind implementiert, aber noch nicht laufzeitgeprüft.
-- [x] Host- und Gastrollen sowie Host-autoritative Nachrichten für den Prototyp festlegen.
+- [x] Build-, Test- und Debugging-Umgebung für zwei Spielinstanzen eingerichtet. Die lokale MSYS2-/devkitPro-Toolchain und zwei Azahar-Instanzen mit getrennten SD-Umgebungen sind einsatzbereit.
+- [x] Bestehende UDS-Sitzungen und den Wireless-Adapter als wiederverwendbare Grundlage abgegrenzt.
+- [x] Eine eigenständige Koop-Sitzung außerhalb der bisherigen Link-Theken gestartet. `LOCAL_KIND_COOP`, Zwei-Spieler-Netzwerk und Start/Stopp über `LOCAL CO-OP` sind laufzeitgeprüft.
+- [x] Host- und Gastrollen sowie Host-autoritative Nachrichten für den Prototyp festgelegt.
 - [x] Kartenkennung, Position, Blickrichtung und Bewegungsanimation eines zweiten Spielers übertragen. Paketformat, Validierung, Heartbeat und Bewegungsentscheidungen sind durch `verify-coop` geprüft.
-- [ ] Eine ferne Testfigur auf derselben Karte erzeugen, aktualisieren und beim Trennen entfernen. Die ObjectEvent-Integration ist implementiert; Warp-, Menü- und Disconnect-Verhalten stehen noch nicht auf zwei Instanzen fest.
-- [ ] Sicherstellen, dass der normale Einzelspielermodus ohne geöffnete Koop-Welt unverändert bleibt. Der Koop-Pfad ist opt-in; Regressionstests an Link-Theken und auf realen Instanzen stehen noch aus.
+- [x] Eine ferne Testfigur auf derselben Karte erzeugt, aktualisiert und beim Trennen entfernt. ObjectEvent-Integration, Warp-, Menü- und Disconnect-Verhalten wurden vom Nutzer bestätigt.
+- [x] Sichergestellt, dass der normale Einzelspielermodus ohne geöffnete Koop-Welt unverändert bleibt. Der Koop-Pfad ist opt-in und wurde vom Nutzer im Einzelspielermodus bestätigt.
 
 ### Bereits ausgeführte Prüfungen
 
@@ -95,10 +95,13 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 - Vollständige englische Baseline mit `make verify`: bestanden; Locale-Tests anschließend separat erneut bestanden.
 - Installierbares deutsches Release mit `make release pak`: bestanden; 3DSX, SMDH und Datenpaket liegen unter `Koop-Prototyp/3ds/emerald3ds`.
 - Titelmenü-Erweiterung und Optionsanzeige mit `make release pak`: bestanden; `SPIEL SUCHEN` und `LOKALER KOOP` sind enthalten. Beide Azahar-Instanzen starten mit `RomFS boot marker PASS`.
-- Datenpaket direkt per CRC geprüft: 6.393 Dateien, ABI `7ad98e00`, alle Prüfsummen korrekt. Der offizielle 0.5.0-Builder wird nicht zur Verifikation dieses veränderten Entwicklungsstands verwendet.
+- Datenpaket direkt per CRC geprüft: 6.393 Dateien, ABI `a8f58120`, alle Prüfsummen korrekt. Der offizielle 0.5.0-Builder wird nicht zur Verifikation dieses veränderten Entwicklungsstands verwendet.
 - SPIEL SUCHEN ist im Titelmenü mit und ohne Spielstand vorhanden. Der Suchbildschirm zeigt SUCHE oben, ZURÜCK darunter und bis zu drei gleich große Ergebnisblöcke mit dem Spielernamen des Hosts. Hoch/Runter wählt ZURÜCK oder einen Host aus; A bestätigt die gezielte Sitzungs-ID, B bricht ab. LOKALER KOOP zeigt AUS oder AN. Suche, Hostname und gezielter Netzwerkbeitritt wurden vom Nutzer mit zwei Azahar-Instanzen bestätigt.
 - MULTIPLAYEROPTIONEN ist mit und ohne Spielstand unter OPTIONEN erreichbar; mit Spielstand scrollt der fünfte Eintrag. Host- und Gast-Untermenüs enthalten 4-Tasten-Passwörter, Charakterauswahl und Gastname. Das Profil wird versioniert und atomar auf der SD-Karte gespeichert.
-- Die Charakterauswahl zeigt 104 humanoide Overworld-Charaktere als 2D-Vorderansichten in einem 8x2-Raster mit 16 Figuren pro Box. Die originale PC-Hand markiert die Auswahl; nur die ausgewählte Figur ist animiert, und ihr Name steht in der Kopfleiste. Form, Animation, Handcursor und Menüdarstellung wurden vom Nutzer bestätigt. Das Avatar-Protokoll überträgt eine validierte Grafik-ID anstelle des Geschlechts. Die Passwortprüfung erfolgt zusätzlich zur UDS-Passphrase durch einen eigenen Authentifizierungsaustausch im Koop-Protokoll; erst nach Host-Bestätigung erscheint VERBUNDEN und Bewegungspakete werden akzeptiert. Die Laufzeitabnahme dieser beiden Netzwerkpunkte steht noch aus.
+- Die Charakterauswahl zeigt 84 humanoide Overworld-Charaktere als 2D-Vorderansichten in einem 8x2-Raster mit 16 Figuren pro Box. Die originale PC-Hand markiert die Auswahl; nur die ausgewählte Figur ist animiert, und ihr Name steht in der Kopfleiste. Form, Animation, Handcursor und Menüdarstellung wurden vom Nutzer bestätigt. Wasser-/Link-Sonderfiguren wurden entfernt. Die 15 ausgeschlossenen Figuren ohne echte Laufbewegung sind samt Prüfnachweis in `ZEROWALK.md` dokumentiert. Das Avatar-Protokoll überträgt eine validierte Grafik-ID anstelle des Geschlechts. Die Passwortprüfung erfolgt zusätzlich zur UDS-Passphrase durch einen eigenen Authentifizierungsaustausch im Koop-Protokoll; erst nach Host-Bestätigung erscheint VERBUNDEN und Bewegungspakete werden akzeptiert. Beide Netzwerkpunkte sind laufzeitgeprüft.
+- Der Gast wechselt nach der Authentifizierung automatisch in die Karte. Sein lokaler Spielstand bleibt dabei unverändert; der SHA-256 vor und nach dem Beitritt ist identisch. Speichern, Link-Speichern, Sondersektoren und Löschen sind für eine aktive Gast-Sitzung gesperrt.
+- Cheatähnliche Spielregeln und Shiny-Rate sind nur für den Host veränderbar. Bereits aktivierte Werte werden beim Gast während der Sitzung ignoriert; die Sperre wurde vom Nutzer bestätigt.
+- Beim Verlassen oder Neuladen des Gastes wird dessen Figur beim Host entfernt. Die Disconnect-Korrektur wurde vom Nutzer bestätigt.
 - Separate ARM-Kompilierung der neuen Koop- und Optionsdateien mit den Produktionsflags: bestanden.
 - `make -C 3ds_port verify-coop`: Protokoll- und Profiltests bestanden, einschließlich Persistenz, Prüfsummenfehler und ungültiger Passwortwerte.
 - `python -m unittest discover -s builder/tests -v`: 241 Tests bestanden, sechs Umgebungs-abhängige Auslassungen.
@@ -109,8 +112,8 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 ### Akzeptanzkriterien
 
 - [x] Zwei Instanzen verbinden sich ohne Link-Theke miteinander.
-- [ ] Die Bewegung des Hosts wird auf der Gastkonsole als zweite Figur sichtbar.
-- [ ] Ein Verbindungsabbruch hinterlässt keine blockierte Figur oder Sitzung.
+- [x] Die Bewegung des Hosts wird auf der Gastkonsole als zweite Figur sichtbar.
+- [x] Ein Verbindungsabbruch hinterlässt keine blockierte Figur oder Sitzung.
 - [x] Der Build und die automatisierten Tests bestehen.
 
 ## Sprint 2: Local-Wireless-Lobby und Passwort-Beitritt

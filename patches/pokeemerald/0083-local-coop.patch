@@ -66,7 +66,7 @@ index 199dab0..ba7a239 100644
  }
  
 diff --git a/src/main_menu.c b/src/main_menu.c
-index d3ca0df..d8cbe19 100644
+index d3ca0df..20e8c53 100644
 --- a/src/main_menu.c
 +++ b/src/main_menu.c
 @@ -41,6 +41,13 @@
@@ -120,7 +120,7 @@ index d3ca0df..d8cbe19 100644
  
  #define MENU_LEFT_ERROR 2
  #define MENU_TOP_ERROR 15
-@@ -503,8 +517,31 @@ static const struct WindowTemplate sWindowTemplates_MainMenu[] =
+@@ -503,9 +517,32 @@ static const struct WindowTemplate sWindowTemplates_MainMenu[] =
          .paletteNum = 15,
          .baseBlock = 0x16D
      },
@@ -135,9 +135,9 @@ index d3ca0df..d8cbe19 100644
 +        .baseBlock = 0x1A1
 +    },
 +#endif
-+    DUMMY_WIN_TEMPLATE
-+};
-+
+     DUMMY_WIN_TEMPLATE
+ };
+ 
 +#ifdef PLATFORM_3DS
 +static const struct WindowTemplate sWindowTemplates_JoinMenu[] =
 +{
@@ -146,12 +146,13 @@ index d3ca0df..d8cbe19 100644
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 9, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0x69},
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 13, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0x9D},
 +    {.bg = 0, .tilemapLeft = MENU_LEFT, .tilemapTop = 17, .width = MENU_WIDTH, .height = 2, .paletteNum = 15, .baseBlock = 0xD1},
-     DUMMY_WIN_TEMPLATE
- };
++    DUMMY_WIN_TEMPLATE
++};
 +#endif
- 
++
  static const struct WindowTemplate sNewGameBirchSpeechTextWindows[] =
  {
+     {
 @@ -543,6 +580,52 @@ static const u16 sMainMenuTextPal[] = INCBIN_U16("graphics/interface/main_menu_t
  
  static const u8 sTextColor_Headers[] = {TEXT_DYNAMIC_COLOR_1, TEXT_DYNAMIC_COLOR_2, TEXT_DYNAMIC_COLOR_3};
@@ -392,7 +393,7 @@ index d3ca0df..d8cbe19 100644
              case ACTION_MYSTERY_GIFT:
                  SetMainCallback2(CB2_InitMysteryGift);
                  DestroyTask(taskId);
-@@ -1284,18 +1427,207 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
+@@ -1284,18 +1427,215 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
                  return;
          }
          FreeAllWindowBuffers();
@@ -544,6 +545,14 @@ index d3ca0df..d8cbe19 100644
 +        OpenJoinPassword(taskId);
 +        return;
 +    }
++    if (state == LOCAL_SESSION_IN && gSaveFileStatus != SAVE_STATUS_EMPTY && gSaveFileStatus != SAVE_STATUS_NO_FLASH)
++    {
++        gPlttBufferUnfaded[0] = RGB_BLACK;
++        gPlttBufferFaded[0] = RGB_BLACK;
++        SetMainCallback2(CB2_ContinueSavedGame);
++        DestroyTask(taskId);
++        return;
++    }
 +    if (state != LOCAL_SESSION_IN)
 +    {
 +        if (JOY_NEW(DPAD_UP) && selected > 0)
@@ -603,7 +612,7 @@ index d3ca0df..d8cbe19 100644
              RemoveScrollIndicatorArrowPair(gTasks[taskId].tScrollArrowTaskId);
          sCurrItemAndOptionMenuCheck = 0;
          FreeAllWindowBuffers();
-@@ -1367,8 +1699,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1367,8 +1707,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(0));
                      break;
                  case 1:
@@ -618,7 +627,7 @@ index d3ca0df..d8cbe19 100644
              }
              break;
          case HAS_SAVED_GAME:
-@@ -1379,10 +1717,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1379,10 +1725,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(2));
                      break;
                  case 1:
@@ -639,10 +648,10 @@ index d3ca0df..d8cbe19 100644
              break;
 diff --git b/src/multiplayer_menu.c b/src/multiplayer_menu.c
 new file mode 100644
-index 0000000..650118c
+index 0000000..4ba7140
 --- /dev/null
 +++ b/src/multiplayer_menu.c
-@@ -0,0 +1,850 @@
+@@ -0,0 +1,830 @@
 +#include "global.h"
 +#include "multiplayer_menu.h"
 +#ifdef PLATFORM_3DS
@@ -840,8 +849,6 @@ index 0000000..650118c
 +    {OBJ_EVENT_GFX_WOMAN_3, _("WOMAN 3")},
 +    {OBJ_EVENT_GFX_POKEFAN_M, _("POKEFAN M")},
 +    {OBJ_EVENT_GFX_WOMAN_4, _("WOMAN 4")},
-+    {OBJ_EVENT_GFX_COOK, _("COOK")},
-+    {OBJ_EVENT_GFX_OLD_MAN, _("OLD MAN")},
 +    {OBJ_EVENT_GFX_OLD_WOMAN, _("OLD WOMAN")},
 +    {OBJ_EVENT_GFX_CAMPER, _("CAMPER")},
 +    {OBJ_EVENT_GFX_PICNICKER, _("PICNICKER")},
@@ -853,8 +860,6 @@ index 0000000..650118c
 +    {OBJ_EVENT_GFX_SCHOOL_KID_M, _("SCHOOL KID M")},
 +    {OBJ_EVENT_GFX_MANIAC, _("MANIAC")},
 +    {OBJ_EVENT_GFX_HEX_MANIAC, _("HEX MANIAC")},
-+    {OBJ_EVENT_GFX_SWIMMER_M, _("SWIMMER M")},
-+    {OBJ_EVENT_GFX_SWIMMER_F, _("SWIMMER F")},
 +    {OBJ_EVENT_GFX_BLACK_BELT, _("BLACK BELT")},
 +    {OBJ_EVENT_GFX_BEAUTY, _("BEAUTY")},
 +    {OBJ_EVENT_GFX_SCIENTIST_1, _("SCIENTIST 1")},
@@ -890,32 +895,16 @@ index 0000000..650118c
 +    {OBJ_EVENT_GFX_AQUA_MEMBER_F, _("AQUA MEMBER F")},
 +    {OBJ_EVENT_GFX_MAGMA_MEMBER_M, _("MAGMA MEMBER M")},
 +    {OBJ_EVENT_GFX_MAGMA_MEMBER_F, _("MAGMA MEMBER F")},
-+    {OBJ_EVENT_GFX_SIDNEY, _("SIDNEY")},
-+    {OBJ_EVENT_GFX_PHOEBE, _("PHOEBE")},
-+    {OBJ_EVENT_GFX_GLACIA, _("GLACIA")},
-+    {OBJ_EVENT_GFX_DRAKE, _("DRAKE")},
-+    {OBJ_EVENT_GFX_ROXANNE, _("ROXANNE")},
-+    {OBJ_EVENT_GFX_BRAWLY, _("BRAWLY")},
-+    {OBJ_EVENT_GFX_WATTSON, _("WATTSON")},
-+    {OBJ_EVENT_GFX_FLANNERY, _("FLANNERY")},
 +    {OBJ_EVENT_GFX_NORMAN, _("NORMAN")},
-+    {OBJ_EVENT_GFX_WINONA, _("WINONA")},
-+    {OBJ_EVENT_GFX_LIZA, _("LIZA")},
-+    {OBJ_EVENT_GFX_TATE, _("TATE")},
 +    {OBJ_EVENT_GFX_WALLACE, _("WALLACE")},
 +    {OBJ_EVENT_GFX_STEVEN, _("STEVEN")},
 +    {OBJ_EVENT_GFX_WALLY, _("WALLY")},
 +    {OBJ_EVENT_GFX_LITTLE_BOY_3, _("LITTLE BOY 3")},
-+    {OBJ_EVENT_GFX_HOT_SPRINGS_OLD_WOMAN, _("OLD WOMAN")},
-+    {OBJ_EVENT_GFX_GAMEBOY_KID, _("GAMEBOY KID")},
 +    {OBJ_EVENT_GFX_ARCHIE, _("ARCHIE")},
 +    {OBJ_EVENT_GFX_MAXIE, _("MAXIE")},
 +    {OBJ_EVENT_GFX_MOM, _("MOM")},
-+    {OBJ_EVENT_GFX_LINK_BRENDAN, _("LINK BRENDAN")},
-+    {OBJ_EVENT_GFX_LINK_MAY, _("LINK MAY")},
 +    {OBJ_EVENT_GFX_JUAN, _("JUAN")},
 +    {OBJ_EVENT_GFX_SCOTT, _("SCOTT")},
-+    {OBJ_EVENT_GFX_MYSTERY_GIFT_MAN, _("MYSTERY GIFT MAN")},
 +    {OBJ_EVENT_GFX_RED, _("RED")},
 +    {OBJ_EVENT_GFX_LEAF, _("LEAF")},
 +    {OBJ_EVENT_GFX_BRANDON, _("BRANDON")},
@@ -1493,3 +1482,82 @@ index 0000000..650118c
 +    CB2_InitMultiplayerMenu();
 +}
 +#endif
+diff --git a/src/save.c b/src/save.c
+index f75e629..fd10099 100644
+--- a/src/save.c
++++ b/src/save.c
+@@ -16,6 +16,7 @@
+ #ifdef PLATFORM_3DS
+ #include "clock.h"
+ #include "3ds_clock_store.h"
++#include "3ds_coop.h"
+ #include "3ds_daynight.h"
+ #endif
+ #if defined(PLATFORM_3DS) && defined(PORT_BRIDGE)
+@@ -118,6 +119,10 @@ void ClearSaveData(void)
+ {
+     u16 i;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return;
++#endif
+     // Clear the full save two sectors at a time
+     for (i = 0; i < SECTORS_COUNT / 2; i++)
+     {
+@@ -746,6 +751,8 @@ u8 HandleSavingData(u8 saveType)
+     u8 *tempAddr;
+ 
+ #ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return SAVE_STATUS_ERROR;
+     if (CtrDayNight_Active())
+         DoTimeBasedEvents();
+ #endif
+@@ -811,6 +818,13 @@ u8 HandleSavingData(u8 saveType)
+ 
+ u8 TrySavingData(u8 saveType)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++    {
++        gSaveAttemptStatus = SAVE_STATUS_ERROR;
++        return SAVE_STATUS_ERROR;
++    }
++#endif
+     if (gFlashMemoryPresent != TRUE)
+     {
+         gSaveAttemptStatus = SAVE_STATUS_ERROR;
+@@ -885,6 +899,10 @@ bool8 LinkFullSave_SetLastSectorSignature(void)
+ 
+ bool8 WriteSaveBlock2(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return TRUE;
++#endif
+     if (gFlashMemoryPresent != TRUE)
+         return TRUE;
+ 
+@@ -908,6 +926,10 @@ bool8 WriteSaveBlock2(void)
+ bool8 WriteSaveBlock1Sector(void)
+ {
+     u8 finished = FALSE;
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return TRUE;
++#endif
+     u16 sectorId = ++gIncrementalSectorId; // Because WriteSaveBlock2 will have been called prior, this will be SECTOR_ID_SAVEBLOCK1_START
+     if (sectorId <= SECTOR_ID_SAVEBLOCK1_END)
+     {
+@@ -1025,6 +1047,10 @@ u32 TryWriteSpecialSaveSector(u8 sector, u8 *src)
+     u8 *savData;
+     void *savDataBuffer;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return SAVE_STATUS_ERROR;
++#endif
+     if (sector != SECTOR_ID_TRAINER_HILL && sector != SECTOR_ID_RECORDED_BATTLE)
+         return SAVE_STATUS_ERROR;
+ 

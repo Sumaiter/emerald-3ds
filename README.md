@@ -1,53 +1,53 @@
 # Emerald 3DS – Local Co-op Mod
 
-Experimenteller Local-Wireless-Koop-Mod für [ZallaxDev/emerald-3ds](https://github.com/ZallaxDev/emerald-3ds).
+Experimenteller Local-Wireless-Koop-Mod von **Sumaiter**, basierend auf [Emerald 3DS by Zallax and contributors](https://github.com/ZallaxDev/emerald-3ds).
 
-Dieses Repository ist **kein eigenständiger Fork und kein vollständiger Quellcode des Originalprojekts**. `main` enthält ausschließlich Dateien, die für den Mod geändert oder neu angelegt wurden. Unveränderte Originaldateien, ROMs, Spielstände, Datenpakete und Build-Artefakte sind nicht enthalten.
+Dieser Fork enthält den vollständigen Originalquelltext sowie die Änderungen des Mods. Er ist **kein offizielles Projekt von ZallaxDev** und steht nicht unter dessen Schirmherrschaft oder Empfehlung.
 
-## Auf das Originalprojekt anwenden
-
-Die geprüfte Basis ist **Emerald 3DS v0.5.0**, Commit `bcae4b70dac61419fc933084084469f6cfbe344b`.
-
-```sh
-git clone https://github.com/ZallaxDev/emerald-3ds.git
-cd emerald-3ds
-git checkout bcae4b70dac61419fc933084084469f6cfbe344b
-git switch -c feature/local-coop
-git remote add mod https://github.com/Sumaiter/emerald-3ds.git
-git fetch mod main
-git checkout mod/main -- .
-```
-
-Der letzte Befehl legt nur die Mod-Dateien über diese Basis. Die übrigen Originaldateien bleiben erhalten. Kein `git merge mod/main` ausführen: Das Overlay enthält absichtlich keine Kopien unveränderter Originaldateien.
-
-Danach gelten die Build- und Installationsanweisungen des Originalprojekts. Für einen deutschen Build wird eine eigene, unveränderte deutsche Smaragd-ROM benötigt:
-
-```sh
-python tools/bootstrap.py --make --german-rom smaragd.gba
-```
-
-Die ROM wird ausschließlich lokal gelesen und gehört weder in dieses Repository noch in einen Commit des Originalprojekts.
-
-## Enthalten
+## Geänderte und neue Funktionen
 
 - Local-Wireless-/UDS-Suche und gezielter Beitritt über eine Sitzungs-ID
 - separate Passwort-Authentifizierung im Koop-Protokoll
 - versionierte Host-/Gast-Profile
 - Übertragung von Position, Blickrichtung, Animation und Avatar-Grafik
 - Menüs für Host, Gast und Passwort
-- Charakterauswahl mit 104 Originalfiguren, Namen und PC-Handcursor
+- Charakterauswahl mit 84 Originalfiguren, Namen und PC-Handcursor
+- Spielstandschreiben und cheatähnliche Spielregeln nur für den Host
+- Entfernen der Gastfigur beim Verbindungsabbruch
+- Titelzeile `Coop by Sumaiter` und separate Mod-Version
 - Protokoll- und Profiltests
-- Patch `patches/pokeemerald/0083-local-coop.patch` für die Engine-Integration
-- aktueller Arbeitsstand und verbleibende Laufzeitprüfungen in `Status.md`
+- Integrationspatch `patches/pokeemerald/0083-local-coop.patch`
 
-Der Mod ist noch keine spielbare Vollversion. Insbesondere die Oberwelt-, Disconnect- und Einzelspieler-Laufzeittests aus Sprint 1 stehen noch aus. Die weiteren Sprints sind in `Status.md` aufgeführt.
+Ausgeschlossene Figuren ohne echte Laufbewegung sind in `ZEROWALK.md` dokumentiert. Der aktuelle Entwicklungsstand und die übrigen Sprints stehen in `Status.md`.
+
+## Bauen
+
+Die geprüfte Originalbasis ist **Emerald 3DS v0.5.0**, Commit `bcae4b70dac61419fc933084084469f6cfbe344b`.
+
+```sh
+git clone https://github.com/Sumaiter/emerald-3ds.git
+cd emerald-3ds
+python tools/bootstrap.py --make --german-rom smaragd.gba
+```
+
+Für den deutschen Build wird eine eigene, unveränderte deutsche Smaragd-ROM benötigt. Die ROM wird ausschließlich lokal gelesen. ROMs, Spielstände, Datenpakete und Build-Artefakte gehören nicht in einen Commit.
 
 ## Prüfen
 
-Nach dem Anwenden auf die Originalbasis:
-
 ```sh
 make -C 3ds_port verify-coop
+python -m unittest discover -s builder/tests -v
+python tools/release_audit.py --repo . --strict
 ```
 
-Vor einem Veröffentlichen werden zusätzlich der vollständige Original-Build, die Original-Tests und `python tools/release_audit.py --repo . --strict` ausgeführt.
+Vor einer Veröffentlichung wird außerdem der vollständige 3DS-Build ausgeführt.
+
+## Lizenz und Hinweise
+
+Die Originalarbeit von **Zallax and contributors** und die Modifikationen werden unter [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) geteilt:
+
+- Namensnennung von Emerald 3DS by Zallax and contributors und Verweis auf das Originalprojekt
+- keine kommerzielle Nutzung, kein Verkauf und keine monetarisierten Builds oder Bundles
+- Weitergabe abgeleiteter Werke unter derselben Lizenz
+
+`LICENSE-PORT.md` und `NOTICE.md` bleiben erhalten und beschreiben Umfang und Drittkomponenten. Pokémon-Code, Grafiken, Texte und andere Spieldaten werden dadurch nicht neu lizenziert und sind nicht Bestandteil dieses Repositorys.

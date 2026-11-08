@@ -5,4 +5,5 @@
 - Keine lediglich internen Hintergrund-Agent-Tasks verwenden, die nicht in Paseos Subagents-Ansicht erscheinen.
 - Dem Subagenten eine eigenständige Aufgabe, das Arbeitsverzeichnis, relevante Pfade, bereits bekannte Ergebnisse und klare Grenzen mitgeben.
 - `notifyOnFinish` aktivieren, damit das Hauptergebnis automatisch zurückgemeldet wird. Den Nutzer beim Start kurz über Aufgabe und Sichtbarkeit informieren.
+- Ohne ausdrückliche Vorgabe des Nutzers darf die Denkstufe eines Subagenten höchstens der des Hauptagenten entsprechen. Verlangt der Nutzer ausdrücklich eine bestimmte Stufe, gilt diese Vorgabe auch dann, wenn sie höher ist.
 - Die Arbeit eines Subagenten nicht unnötig parallel im Hauptagenten wiederholen und nicht fortlaufend abfragen; auf die Abschlussmeldung warten.

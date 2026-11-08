@@ -125,11 +125,12 @@ struct AppData
     uint8_t reserved[2];
     uint32_t token; /* the host's, at random: which of two lone hosts moves */
     uint8_t build[BUILD_ID_SIZE]; /* the host's build (engine/build_id.bin) */
+    uint8_t hostName[8];
 };
 
 /* Ours, and the passphrase made with it. */
 static uint8_t sBuildId[BUILD_ID_SIZE];
-static char sPassphrase[sizeof(PASSPHRASE) + 2 * 16 + 2];
+static char sPassphrase[sizeof(PASSPHRASE) + 2 * 16 + 8];
 
 enum
 {
@@ -175,8 +176,13 @@ static struct
 
     /* Asked for by the game, done by the thread. */
     bool startAsked, leaveAsked;
+    bool askedJoinOnly, askedDiscoverOnly;
     volatile bool woke; /* the system woke from sleep: the service starts again */
     uint8_t askedKind;
+    uint32_t askedToken;
+    uint8_t hostName[8];
+    uint8_t hostPassword[4];
+    uint8_t joinPassword[4];
 
     uint8_t state; /* LOCAL_SESSION_* */
     uint8_t kind;
@@ -191,6 +197,8 @@ static struct
 
     struct Node nodes[NODE_SLOTS];
     uint16_t nodeMask; /* nodes in the session, us included */
+    struct LocalFoundSession found[LOCAL_MAX_FOUND];
+    uint32_t foundSeenMs[LOCAL_MAX_FOUND];
 
     /* Our adapter's broadcast. */
     uint8_t advertHosting, advertNextSlot, hasAdvert;
@@ -653,7 +661,19 @@ static const char *BuildHex(char *out, const uint8_t *id)
     return out;
 }
 
-static int SessionCheck(const udsNetworkScanInfo *net, uint8_t kind, uint32_t *token)
+static void SetPassphrase(const uint8_t *password)
+{
+    int n = snprintf(sPassphrase, sizeof(sPassphrase), "%s ", PASSPHRASE);
+
+    for (int i = 0; i < 16 && n + 2 < (int)sizeof(sPassphrase); i++)
+        n += snprintf(sPassphrase + n, sizeof(sPassphrase) - n, "%02x", sBuildId[i]);
+    if (password)
+        for (int i = 0; i < 4 && n + 1 < (int)sizeof(sPassphrase); i++)
+            sPassphrase[n++] = '0' + password[i];
+    sPassphrase[n] = '\0';
+}
+
+static int SessionCheck(const udsNetworkScanInfo *net, uint8_t kind, uint32_t *token, uint8_t *hostName)
 {
     struct AppData app = {0};   /* a short beacon leaves the rest unread */
     size_t size = 0;
@@ -680,11 +700,14 @@ static int SessionCheck(const udsNetworkScanInfo *net, uint8_t kind, uint32_t *t
     }
     if (token)
         *token = app.token;
+    if (hostName)
+        memcpy(hostName, app.hostName, sizeof(app.hostName));
     return net->network.total_nodes < net->network.max_nodes ? SESSION_YES : SESSION_NO;
 }
 
 static bool Connect(const udsNetworkScanInfo *net)
 {
+    SetPassphrase(sL.askedKind == LOCAL_KIND_COOP ? sL.joinPassword : NULL);
     Result ret = udsConnectNetwork(&net->network, sPassphrase, strlen(sPassphrase) + 1, &sL.bind,
                                    UDS_BROADCAST_NETWORKNODEID, UDSCONTYPE_Client, DATA_CHANNEL,
                                    UDS_DEFAULT_RECVBUFSIZE);
@@ -711,8 +734,36 @@ static bool SearchCancelled(void)
     return cancelled;
 }
 
+static void RememberFound(uint32_t token, const uint8_t *hostName)
+{
+    uint32_t now = LocalLink_Milliseconds();
+    int freeSlot = -1, oldest = 0;
+
+    LightLock_Lock(&sL.lock);
+    for (int i = 0; i < LOCAL_MAX_FOUND; i++)
+    {
+        if (sL.foundSeenMs[i] && sL.found[i].token == token)
+        {
+            sL.foundSeenMs[i] = now;
+            memcpy(sL.found[i].hostName, hostName, sizeof(sL.found[i].hostName));
+            LightLock_Unlock(&sL.lock);
+            return;
+        }
+        if (!sL.foundSeenMs[i] && freeSlot < 0)
+            freeSlot = i;
+        if (sL.foundSeenMs[i] < sL.foundSeenMs[oldest])
+            oldest = i;
+    }
+    if (freeSlot < 0)
+        freeSlot = oldest;
+    sL.found[freeSlot].token = token;
+    memcpy(sL.found[freeSlot].hostName, hostName, sizeof(sL.found[freeSlot].hostName));
+    sL.foundSeenMs[freeSlot] = now;
+    LightLock_Unlock(&sL.lock);
+}
+
 /* otherBuild: a session of this counter of another build was seen. */
-static bool JoinNearby(uint8_t kind, uint32_t lookMs, bool *otherBuild)
+static bool JoinNearby(uint8_t kind, uint32_t lookMs, bool *otherBuild, bool discoverOnly, uint32_t joinToken, bool *authFailed)
 {
     int failures = 0;
 
@@ -736,14 +787,27 @@ static bool JoinNearby(uint8_t kind, uint32_t lookMs, bool *otherBuild)
         }
         for (size_t i = 0; i < total; i++)
         {
-            int check = SessionCheck(&nets[i], kind, NULL);
+            uint32_t token = 0;
+            uint8_t hostName[8] = {0};
+            int check = SessionCheck(&nets[i], kind, &token, hostName);
 
             if (check == SESSION_OTHER)
                 *otherBuild = true;
-            else if (check == SESSION_YES && Connect(&nets[i]))
+            else if (check == SESSION_YES && discoverOnly)
+                RememberFound(token, hostName);
+            else if (check == SESSION_YES && (!joinToken || token == joinToken))
             {
-                free(nets);
-                return true;
+                if (Connect(&nets[i]))
+                {
+                    free(nets);
+                    return true;
+                }
+                if (joinToken)
+                {
+                    *authFailed = true;
+                    free(nets);
+                    return false;
+                }
             }
         }
         free(nets);
@@ -754,12 +818,14 @@ static bool JoinNearby(uint8_t kind, uint32_t lookMs, bool *otherBuild)
 static bool HostSession(uint8_t kind)
 {
     udsNetworkStruct net;
-    struct AppData app = {{0}, PROTOCOL_VERSION, kind, {0, 0}, sL.token, {0}};
+    struct AppData app = {{0}, PROTOCOL_VERSION, kind, {0, 0}, sL.token, {0}, {0}};
     Result ret;
 
     memcpy(app.magic, kMagic, sizeof(kMagic));
     memcpy(app.build, sBuildId, BUILD_ID_SIZE);
-    udsGenerateDefaultNetworkStruct(&net, COMM_ID, 0, MAX_NODES);
+    memcpy(app.hostName, sL.hostName, sizeof(app.hostName));
+    SetPassphrase(kind == LOCAL_KIND_COOP ? sL.hostPassword : NULL);
+    udsGenerateDefaultNetworkStruct(&net, COMM_ID, 0, kind == LOCAL_KIND_COOP ? 2 : MAX_NODES);
     ret = udsCreateNetwork(&net, sPassphrase, strlen(sPassphrase) + 1, &sL.bind, DATA_CHANNEL,
                            UDS_DEFAULT_RECVBUFSIZE);
     if (R_FAILED(ret))
@@ -879,7 +945,7 @@ static void MergeAlone(void)
     {
         uint32_t token = 0;
 
-        if (SessionCheck(&nets[i], sL.kind, &token) != SESSION_YES || token == sL.token)
+        if (SessionCheck(&nets[i], sL.kind, &token, NULL) != SESSION_YES || token == sL.token)
             continue;
         if (nets[i].network.total_nodes <= 1 && token > sL.token)
             continue;
@@ -905,9 +971,9 @@ static void MergeAlone(void)
     TakeNetwork(!found);
 }
 
-static void StartSession(uint8_t kind)
+static void StartSession(uint8_t kind, bool joinOnly, bool discoverOnly, uint32_t joinToken)
 {
-    bool in, otherBuild = false;
+    bool in, otherBuild = false, authFailed = false;
 
     LeaveNetwork(false);
     EndSession(LOCAL_SESSION_SEARCHING);
@@ -917,15 +983,25 @@ static void StartSession(uint8_t kind)
         return;
     }
     CtrLog_Write(CTR_LOG_GAME, "local: looking for a session of kind %u", kind);
-    in = JoinNearby(kind, SEARCH_MS + (uint32_t)(rand() % SEARCH_JITTER_MS), &otherBuild);
+    in = JoinNearby(kind, SEARCH_MS + (uint32_t)(rand() % SEARCH_JITTER_MS), &otherBuild, discoverOnly, joinToken, &authFailed);
     /* Still searching: the thread's next pass deals with what came. */
     if (!in && SearchCancelled())
         return;
+    if (!in && authFailed)
+    {
+        EndSession(LOCAL_SESSION_AUTH_FAILED);
+        return;
+    }
     if (!in && otherBuild)
     {
         /* Hosting, we would wait for players who can't come: the ones nearby
          * have another build. */
         EndSession(LOCAL_SESSION_OTHER_BUILD);
+        return;
+    }
+    if (!in && (joinOnly || discoverOnly))
+    {
+        EndSession(LOCAL_SESSION_NONE);
         return;
     }
     if (!in)
@@ -1004,8 +1080,9 @@ static void LocalThread(void *unused)
     srand((unsigned)svcGetSystemTick() ^ sL.token);
     while (!sL.quit)
     {
-        bool start, leave;
+        bool start, leave, joinOnly, discoverOnly;
         uint8_t kind;
+        uint32_t joinToken;
 
         if (sL.woke)
         {
@@ -1015,7 +1092,10 @@ static void LocalThread(void *unused)
         LightLock_Lock(&sL.lock);
         start = sL.startAsked;
         leave = sL.leaveAsked;
+        joinOnly = sL.askedJoinOnly;
+        discoverOnly = sL.askedDiscoverOnly;
         kind = sL.askedKind;
+        joinToken = sL.askedToken;
         sL.startAsked = sL.leaveAsked = false;
         /* Searching from now: a session that just ended (EndSession(NONE))
          * left NONE here, which the game read as a failed search. */
@@ -1025,7 +1105,7 @@ static void LocalThread(void *unused)
 
         if (start)
         {
-            StartSession(kind);
+            StartSession(kind, joinOnly, discoverOnly, joinToken);
         }
         else if (leave)
         {
@@ -1273,17 +1353,86 @@ uint8_t LocalLink_PollEvent(struct LocalEvent *ev)
     return got;
 }
 
-void LocalLink_StartSession(uint8_t kind)
+static void RequestSession(uint8_t kind, bool joinOnly, bool discoverOnly, uint32_t joinToken, const uint8_t *password)
 {
     if (!sL.ready)
         return;
     LightLock_Lock(&sL.lock);
     sL.startAsked = true;
     sL.leaveAsked = false;
+    sL.askedJoinOnly = joinOnly;
+    sL.askedDiscoverOnly = discoverOnly;
     sL.askedKind = kind;
+    sL.askedToken = joinToken;
+    if (password)
+        memcpy(sL.joinPassword, password, sizeof(sL.joinPassword));
+    else
+        memset(sL.joinPassword, 0, sizeof(sL.joinPassword));
     sL.state = LOCAL_SESSION_SEARCHING;
     LightLock_Unlock(&sL.lock);
     Wake();
+}
+
+void LocalLink_StartSession(uint8_t kind)
+{
+    RequestSession(kind, false, false, 0, NULL);
+}
+
+void LocalLink_SetHostName(const uint8_t *name)
+{
+    if (!sL.ready)
+        return;
+    LightLock_Lock(&sL.lock);
+    if (name)
+        memcpy(sL.hostName, name, sizeof(sL.hostName));
+    else
+        memset(sL.hostName, 0, sizeof(sL.hostName));
+    LightLock_Unlock(&sL.lock);
+}
+
+void LocalLink_SetHostPassword(const uint8_t *password)
+{
+    if (!sL.ready)
+        return;
+    LightLock_Lock(&sL.lock);
+    if (password)
+        memcpy(sL.hostPassword, password, sizeof(sL.hostPassword));
+    else
+        memset(sL.hostPassword, 0, sizeof(sL.hostPassword));
+    LightLock_Unlock(&sL.lock);
+}
+
+void LocalLink_JoinSession(uint8_t kind, uint32_t token, const uint8_t *password)
+{
+    RequestSession(kind, true, false, token, password);
+}
+
+void LocalLink_DiscoverSessions(uint8_t kind)
+{
+    RequestSession(kind, false, true, 0, NULL);
+}
+
+int LocalLink_GetFoundSessions(struct LocalFoundSession *out, int max)
+{
+    uint32_t now = LocalLink_Milliseconds();
+    int count = 0;
+
+    if (!sL.ready)
+        return 0;
+    LightLock_Lock(&sL.lock);
+    for (int i = 0; i < LOCAL_MAX_FOUND && count < max; i++)
+    {
+        if (!sL.foundSeenMs[i])
+            continue;
+        if (now - sL.foundSeenMs[i] > 10000)
+        {
+            sL.foundSeenMs[i] = 0;
+            continue;
+        }
+        out[count++] = sL.found[i];
+    }
+    LightLock_Unlock(&sL.lock);
+    return count;
 }
 
 void LocalLink_LeaveSession(void)
@@ -1291,6 +1440,8 @@ void LocalLink_LeaveSession(void)
     if (!sL.ready)
         return;
     LightLock_Lock(&sL.lock);
+    memset(sL.found, 0, sizeof(sL.found));
+    memset(sL.foundSeenMs, 0, sizeof(sL.foundSeenMs));
     if (sL.state == LOCAL_SESSION_IN || sL.state == LOCAL_SESSION_SEARCHING || sL.startAsked)
     {
         sL.leaveAsked = true;

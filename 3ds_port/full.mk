@@ -82,6 +82,7 @@ BACKEND_SRCS += src/3ds_nuzlocke_game.c
 # Local wireless play: the emulated Wireless Adapter the game's link code
 # talks to (its radio is src/3ds_local.c).
 BACKEND_SRCS += src/3ds_rfu_adapter.c
+BACKEND_SRCS += src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_profile.c
 BACKEND_SRCS += src/3ds_encounter_tables.c
 # The seeded species randomizer, off by default (include/3ds_randomizer.h).
 BACKEND_SRCS += src/3ds_randomizer.c src/3ds_randomizer_core.c

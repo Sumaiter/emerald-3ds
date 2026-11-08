@@ -1,0 +1,3 @@
+# Upstream patches must retain LF endings for git apply on Windows.
+*.patch text eol=lf -whitespace
+/3ds_port/romfs/boot.txt text eol=lf

@@ -1,5 +1,17 @@
+diff --git a/include/constants/event_objects.h b/include/constants/event_objects.h
+index 60a2304..91ed8df 100644
+--- a/include/constants/event_objects.h
++++ b/include/constants/event_objects.h
+@@ -300,6 +300,7 @@
+ // in regular offline play, five for linked players while playing Berry Blender, and one for an invisible object that
+ // can be spawned for the camera to track instead of the player. Additionally, the value 0 is reserved as an "empty" indicator.
+ #define LOCALID_NONE                         0
++#define LOCALID_COOP_PLAYER                126
+ #define LOCALID_CAMERA                     127
+ #define LOCALID_BERRY_BLENDER_PLAYER_END   240 // This will use 5 (MAX_RFU_PLAYERS) IDs ending at 240, i.e. 236-240
+ #define LOCALID_PLAYER                     255
 diff --git a/include/constants/local_link.h b/include/constants/local_link.h
-index ac4f0e1..8d60c0b 100644
+index f06273c..8d60c0b 100644
 --- a/include/constants/local_link.h
 +++ b/include/constants/local_link.h
 @@ -10,6 +10,7 @@
@@ -10,6 +22,13 @@ index ac4f0e1..8d60c0b 100644
  
  // Which counter a session is for: players only meet others at the same kind
  // of counter, as the GBA's wireless features only see their own kind.
+@@ -20,5 +21,6 @@
+ #define LOCAL_KIND_BERRY_BLENDER  4 // Lilycove Contest Hall's Berry Blenders
+ #define LOCAL_KIND_CONTEST        5 // Lilycove Contest Hall's link contest receptionist
+ #define LOCAL_KIND_BATTLE_TOWER   6 // Battle Tower link multi battles
++#define LOCAL_KIND_COOP           7 // free-roaming two-player prototype
+ 
+ #endif // GUARD_CONSTANTS_LOCAL_LINK_H
 diff --git b/include/multiplayer_menu.h b/include/multiplayer_menu.h
 new file mode 100644
 index 0000000..cab66fd

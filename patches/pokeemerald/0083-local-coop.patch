@@ -392,7 +392,7 @@ index d3ca0df..ca40323 100644
              case ACTION_MYSTERY_GIFT:
                  SetMainCallback2(CB2_InitMysteryGift);
                  DestroyTask(taskId);
-@@ -1284,18 +1427,234 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
+@@ -1284,18 +1427,236 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
                  return;
          }
          FreeAllWindowBuffers();
@@ -514,6 +514,7 @@ index d3ca0df..ca40323 100644
 +
 +static void JoinSelectedGame(u8 taskId, uint32_t token)
 +{
++    gTasks[taskId].data[6] = 1;
 +    CtrCoop_PrepareJoin(token);
 +    if (CtrCoopProfile_HasGuestPassword())
 +        CtrCoop_JoinGame(token, CtrCoopProfile_Get()->guestPassword);
@@ -525,6 +526,7 @@ index d3ca0df..ca40323 100644
 +{
 +    CtrCoop_EnterHostWorld();
 +    CB2_ContinueSavedGame();
++    InitMap();
 +}
 +
 +static void Task_JoinGameSearch(u8 taskId)
@@ -558,7 +560,7 @@ index d3ca0df..ca40323 100644
 +        DestroyTask(taskId);
 +        return;
 +    }
-+    if (state != LOCAL_SESSION_IN)
++    if (state != LOCAL_SESSION_IN && gTasks[taskId].data[6] == 0)
 +    {
 +        if (JOY_NEW(DPAD_UP) && selected > 0)
 +            selected--;
@@ -630,7 +632,7 @@ index d3ca0df..ca40323 100644
              RemoveScrollIndicatorArrowPair(gTasks[taskId].tScrollArrowTaskId);
          sCurrItemAndOptionMenuCheck = 0;
          FreeAllWindowBuffers();
-@@ -1367,8 +1726,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1367,8 +1728,14 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(0));
                      break;
                  case 1:
@@ -645,7 +647,7 @@ index d3ca0df..ca40323 100644
              }
              break;
          case HAS_SAVED_GAME:
-@@ -1379,10 +1744,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+@@ -1379,10 +1746,16 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
                      SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(2));
                      break;
                  case 1:

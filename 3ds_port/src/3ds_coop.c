@@ -8,9 +8,14 @@
 #include "constants/event_objects.h"
 #include "constants/event_object_movement.h"
 #include "constants/local_link.h"
+#include "constants/layouts.h"
+#include "constants/map_groups.h"
+#include "decoration_inventory.h"
 #include "event_object_movement.h"
 #include "field_player_avatar.h"
 #include "fieldmap.h"
+#include "item.h"
+#include "load_save.h"
 #include "overworld.h"
 #include "sound.h"
 #include "constants/songs.h"
@@ -24,9 +29,13 @@ static struct
     bool authRejected;
     bool peerAuthenticated;
     uint8_t peerName[CTR_COOP_PLAYER_NAME_SIZE];
+    bool savePrepared;
+    bool saveReady;
+    bool peerSaveReady;
+    uint32_t saveOffset;
+    uint32_t saveChecksum;
     bool spawnValid;
     bool joinWarpPending;
-    uint16_t joinWarpFrames;
     CtrCoopSnapshot spawn;
     uint32_t joinToken;
     uint32_t generation;
@@ -41,6 +50,10 @@ static struct
     CtrCoopSnapshot applied;
 } sCoop = {.objectEventId = OBJECT_EVENTS_COUNT};
 
+#define CTR_COOP_SAVE_SIZE (sizeof(struct SaveBlock2) + sizeof(struct SaveBlock1) + sizeof(struct PokemonStorage))
+
+static uint8_t sSaveData[CTR_COOP_SAVE_SIZE];
+
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
     return !CtrCoopProtocol_ShouldSend(a, b, 0);
@@ -53,6 +66,11 @@ static void ClearRemote(void)
     sCoop.peerId = 0;
     sCoop.remoteValid = false;
     sCoop.haveApplied = false;
+    sCoop.savePrepared = false;
+    sCoop.saveReady = false;
+    sCoop.peerSaveReady = false;
+    sCoop.saveOffset = 0;
+    sCoop.saveChecksum = 0;
     sCoop.spawnValid = false;
     sCoop.joinWarpPending = false;
     memset(sCoop.peerName, 0xFF, sizeof(sCoop.peerName));
@@ -188,6 +206,122 @@ static void SendGuestIdentity(uint16_t to)
         LocalLink_Send(to, packet, sizeof(packet));
 }
 
+static void SendSaveRequest(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_REQUEST_SIZE];
+
+    if (CtrCoopProtocol_EncodeSaveRequest(offset, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void PrepareHostSave(uint16_t to)
+{
+    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint32_t offset = 0;
+
+    if (gSaveBlock2Ptr == NULL || gSaveBlock1Ptr == NULL || gPokemonStoragePtr == NULL)
+        return;
+    memcpy(sSaveData + offset, gSaveBlock2Ptr, sizeof(*gSaveBlock2Ptr));
+    offset += sizeof(*gSaveBlock2Ptr);
+    memcpy(sSaveData + offset, gSaveBlock1Ptr, sizeof(*gSaveBlock1Ptr));
+    offset += sizeof(*gSaveBlock1Ptr);
+    memcpy(sSaveData + offset, gPokemonStoragePtr, sizeof(*gPokemonStoragePtr));
+    sCoop.saveOffset = 0;
+    sCoop.saveChecksum = CtrCoopProtocol_Checksum(sSaveData, sizeof(sSaveData));
+    sCoop.savePrepared = true;
+    if (CtrCoopProtocol_EncodeSaveBegin(sizeof(sSaveData), sCoop.saveChecksum, packet, sizeof(packet)))
+    {
+        CtrLog_Write(CTR_LOG_GAME, "coop: host save begin %lu bytes checksum %08lx",
+            (unsigned long)sizeof(sSaveData), (unsigned long)sCoop.saveChecksum);
+        LocalLink_Send(to, packet, sizeof(packet));
+    }
+}
+
+static void SendHostSaveChunk(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint16_t size;
+
+    if (!sCoop.savePrepared || offset >= sizeof(sSaveData))
+        return;
+    size = sizeof(sSaveData) - offset;
+    if (size > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        size = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (CtrCoopProtocol_EncodeSaveChunk(offset, sSaveData + offset, size, packet, CTR_COOP_SAVE_CHUNK_HEADER + size))
+        LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+}
+
+static void ApplyHostSave(void)
+{
+    uint32_t offset = 0;
+
+    memcpy(gSaveBlock2Ptr, sSaveData + offset, sizeof(*gSaveBlock2Ptr));
+    offset += sizeof(*gSaveBlock2Ptr);
+    memcpy(gSaveBlock1Ptr, sSaveData + offset, sizeof(*gSaveBlock1Ptr));
+    offset += sizeof(*gSaveBlock1Ptr);
+    memcpy(gPokemonStoragePtr, sSaveData + offset, sizeof(*gPokemonStoragePtr));
+    SetBagItemsPointers();
+    SetDecorationInventoriesPointers();
+    CopyPartyAndObjectsFromSave();
+    LoadPlayerBag();
+}
+
+static void HandleSaveBegin(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint32_t totalSize, checksum;
+
+    if (!CtrCoopProtocol_DecodeSaveBegin(data, len, &totalSize, &checksum) || totalSize != sizeof(sSaveData))
+        return;
+    sCoop.savePrepared = true;
+    sCoop.saveReady = false;
+    sCoop.saveOffset = 0;
+    sCoop.saveChecksum = checksum;
+    SendSaveRequest(from, 0);
+}
+
+static void HandleSaveChunk(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint16_t got, expected;
+    uint8_t ready[CTR_COOP_SAVE_READY_SIZE] = {CTR_COOP_SAVE_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
+
+    if (!sCoop.savePrepared || sCoop.saveReady || sCoop.saveOffset >= sizeof(sSaveData))
+        return;
+    if (!CtrCoopProtocol_DecodeSaveChunk(data, len, sCoop.saveOffset,
+            sSaveData + sCoop.saveOffset, sizeof(sSaveData) - sCoop.saveOffset, &got))
+        return;
+    expected = sizeof(sSaveData) - sCoop.saveOffset;
+    if (expected > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        expected = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (got != expected)
+        return;
+    sCoop.saveOffset += got;
+    if (sCoop.saveOffset < sizeof(sSaveData))
+    {
+        SendSaveRequest(from, sCoop.saveOffset);
+        return;
+    }
+    if (CtrCoopProtocol_Checksum(sSaveData, sizeof(sSaveData)) != sCoop.saveChecksum)
+    {
+        CtrLog_Write(CTR_LOG_ERROR, "coop: host save checksum mismatch");
+        CtrCoop_Stop();
+        return;
+    }
+    ApplyHostSave();
+    sCoop.saveReady = true;
+    CtrLog_Write(CTR_LOG_GAME, "coop: host save applied %lu bytes", (unsigned long)sCoop.saveOffset);
+    LocalLink_Send(from, ready, sizeof(ready));
+}
+
+static void SetFirstSpawn(CtrCoopSnapshot *spawn)
+{
+    spawn->mapGroup = MAP_GROUP(MAP_LITTLEROOT_TOWN);
+    spawn->mapNum = MAP_NUM(MAP_LITTLEROOT_TOWN);
+    spawn->mapLayoutId = LAYOUT_LITTLEROOT_TOWN;
+    spawn->x = 19;
+    spawn->y = 16;
+    spawn->facing = DIR_SOUTH;
+}
+
 static void SendHostSpawn(uint16_t to)
 {
     struct SpawnRecord *record = FindSpawnRecord(sCoop.peerName, FALSE);
@@ -195,12 +329,18 @@ static void SendHostSpawn(uint16_t to)
     uint8_t packet[CTR_COOP_SPAWN_SIZE];
 
     if (record != NULL)
+    {
         SnapshotFromRecord(&spawn, record);
-    else if (!LocalSnapshot(&spawn))
-        return;
+    }
+    else
+    {
+        if (!LocalSnapshot(&spawn))
+            return;
+        SetFirstSpawn(&spawn);
+    }
     spawn.movementActionId = GetFaceDirectionMovementAction(spawn.facing);
     CtrLog_Write(CTR_LOG_GAME, "coop: send %s spawn for %02x%02x%02x map %u.%u layout %u at %d,%d facing %u gfx %u",
-        record != NULL ? "saved" : "host", sCoop.peerName[0], sCoop.peerName[1], sCoop.peerName[2],
+        record != NULL ? "saved" : "Littleroot", sCoop.peerName[0], sCoop.peerName[1], sCoop.peerName[2],
         spawn.mapGroup, spawn.mapNum, spawn.mapLayoutId, spawn.x, spawn.y, spawn.facing, spawn.graphicsId);
     if (CtrCoopProtocol_EncodeSpawn(&spawn, packet, sizeof(packet)))
         LocalLink_Send(to, packet, sizeof(packet));
@@ -210,11 +350,10 @@ bool CtrCoop_EnterHostWorld(void)
 {
     CtrCoopSnapshot old;
 
-    if (!sCoop.spawnValid)
+    if (!sCoop.spawnValid || (sCoop.guest && !sCoop.saveReady))
         return FALSE;
     sCoop.spawnValid = FALSE;
     sCoop.joinWarpPending = true;
-    sCoop.joinWarpFrames = 0;
     sCoop.generation = LocalLink_Generation();
     if (LocalSnapshot(&old))
         CtrLog_Write(CTR_LOG_GAME, "coop: join warp from map %u.%u at %d,%d to map %u.%u at %d,%d",
@@ -484,7 +623,8 @@ uint8_t CtrCoop_GetSessionState(void)
     if (sCoop.authRejected)
         return LOCAL_SESSION_AUTH_FAILED;
     state = LocalLink_GetSession();
-    if (sCoop.guest && state == LOCAL_SESSION_IN && (!sCoop.authenticated || !sCoop.spawnValid))
+    if (sCoop.guest && state == LOCAL_SESSION_IN
+     && (!sCoop.authenticated || !sCoop.saveReady || !sCoop.spawnValid))
         return LOCAL_SESSION_SEARCHING;
     return state;
 }
@@ -550,7 +690,8 @@ void CtrCoop_OverworldFrame(void)
     }
     if (!sCoop.remoteValid)
         RemoveRemoteObject();
-    if ((sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerAuthenticated))
+    if ((sCoop.guest && (!sCoop.authenticated || !sCoop.saveReady))
+     || (!sCoop.guest && (!sCoop.peerAuthenticated || !sCoop.peerSaveReady)))
         return;
     if (!LocalSnapshot(&local))
     {
@@ -559,16 +700,18 @@ void CtrCoop_OverworldFrame(void)
     }
     if (sCoop.guest && sCoop.joinWarpPending)
     {
-        if (sCoop.joinWarpFrames++ % 60 == 0)
-            CtrLog_Write(CTR_LOG_GAME, "coop: join wait actual map %u.%u layout %u at %d,%d target map %u.%u layout %u at %d,%d save %d,%d",
-                local.mapGroup, local.mapNum, local.mapLayoutId, local.x, local.y,
-                sCoop.spawn.mapGroup, sCoop.spawn.mapNum, sCoop.spawn.mapLayoutId, sCoop.spawn.x, sCoop.spawn.y,
-                gSaveBlock1Ptr->pos.x, gSaveBlock1Ptr->pos.y);
         if (!CtrCoopProtocol_SameMap(&local, &sCoop.spawn)
-         || local.x != sCoop.spawn.x || local.y != sCoop.spawn.y)
+         || gSaveBlock1Ptr->pos.x != sCoop.spawn.x - MAP_OFFSET
+         || gSaveBlock1Ptr->pos.y != sCoop.spawn.y - MAP_OFFSET)
         {
             RemoveRemoteObject();
             return;
+        }
+        if (local.x != sCoop.spawn.x || local.y != sCoop.spawn.y)
+        {
+            MoveObjectEventToMapCoords(&gObjectEvents[gPlayerAvatar.objectEventId], sCoop.spawn.x, sCoop.spawn.y);
+            local.x = sCoop.spawn.x;
+            local.y = sCoop.spawn.y;
         }
         ObjectEventTurn(&gObjectEvents[gPlayerAvatar.objectEventId], sCoop.spawn.facing);
         sCoop.joinWarpPending = false;
@@ -641,12 +784,44 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         if (sCoop.guest || !sCoop.peerAuthenticated)
             return true;
         if (CtrCoopProtocol_DecodeIdentity(data, len, sCoop.peerName))
+            PrepareHostSave(from);
+        return true;
+    }
+    if (data[0] == CTR_COOP_SAVE_BEGIN_PACKET)
+    {
+        if (sCoop.guest && sCoop.authenticated)
+            HandleSaveBegin(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_SAVE_REQUEST_PACKET)
+    {
+        uint32_t offset;
+
+        if (sCoop.guest || !sCoop.peerAuthenticated || !sCoop.savePrepared)
+            return true;
+        if (CtrCoopProtocol_DecodeSaveRequest(data, len, &offset))
+            SendHostSaveChunk(from, offset);
+        return true;
+    }
+    if (data[0] == CTR_COOP_SAVE_CHUNK_PACKET)
+    {
+        if (sCoop.guest && sCoop.authenticated)
+            HandleSaveChunk(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_SAVE_READY_PACKET)
+    {
+        if (!sCoop.guest && sCoop.peerAuthenticated && len == CTR_COOP_SAVE_READY_SIZE
+         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        {
+            sCoop.peerSaveReady = true;
             SendHostSpawn(from);
+        }
         return true;
     }
     if (data[0] == CTR_COOP_SPAWN_PACKET)
     {
-        if (!sCoop.guest || !sCoop.authenticated)
+        if (!sCoop.guest || !sCoop.authenticated || !sCoop.saveReady)
             return true;
         if (CtrCoopProtocol_DecodeSpawn(data, len, &remote))
         {
@@ -657,7 +832,8 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (data[0] != CTR_COOP_PEER_PACKET)
         return false;
-    if ((sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerAuthenticated))
+    if ((sCoop.guest && (!sCoop.authenticated || !sCoop.saveReady))
+     || (!sCoop.guest && (!sCoop.peerAuthenticated || !sCoop.peerSaveReady)))
         return true;
     if (!CtrCoopProtocol_Decode(data, len, &remote))
         return true;

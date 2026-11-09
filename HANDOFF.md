@@ -1,30 +1,39 @@
 # Übergabe: Emerald 3DS Local Co-op
 
-Stand: 2026-11-08
+Stand: 2026-11-09
 
-Dieser Stand ist eine Entwicklungsversion, **keine spielbare Alpha**. Sprint 1 und Sprint 2 sind geprüft. Sprint 3 ist in Arbeit und der aktuelle Beitritts-/Spawnablauf ist fehlerhaft.
+Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha**. Sprint 1 und Sprint 2 sind geprüft. Sprint 3 ist in Arbeit; Host-Spielstand, Spawn, Kartenwechsel und Bewegung funktionieren im Emulator.
 
 ## Repository
 
 - Fork: `https://github.com/Sumaiter/emerald-3ds`
 - Original: `https://github.com/ZallaxDev/emerald-3ds`
-- Arbeitsbranch: `main`
-- Letzter veröffentlichter Stand vor dieser Übergabe: `5962cb6 Complete sprint 2 and start sprint 3`
-- Die Sprint-3-Änderungen werden mit dieser Übergabe committed und gepusht.
+- Veröffentlichung und Ersteinrichtung erfolgen über `main`.
+- Letzter Übergabe-Commit: `0cdbc1c Document sprint 3 handoff and PC setup`.
+- Die neueren Snapshot- und Spawn-Änderungen werden mit dieser Übergabe veröffentlicht.
 
-## Was funktioniert und geprüft ist
+## Mit zwei Azahar-Instanzen bestätigt
 
-- Host und Gast verbinden sich über Local Wireless/UDS.
-- Hostname und Mod-Version werden in der Spielsuche angezeigt.
-- Passwortablehnung und Passwort-Authentifizierung funktionieren.
-- Charakterauswahl, Gastname und Host-only-Cheats sind umgesetzt.
-- Der lokale Gast-Spielstand bleibt bytegenau unverändert.
-- Bewegungsübertragung, fremde Figur und Entfernen beim Disconnect wurden in Sprint 1 bestätigt.
-- `make -C 3ds_port verify-coop` besteht für Protokoll und Profil.
-- `make release pak` erzeugt 3DSX und PAK erfolgreich.
-- `patches/pokeemerald/0083-local-coop.patch` ist mit dem Buildbaum abgeglichen.
+- Der Gast lädt seine Welt nicht mehr aus seiner lokalen SAV-Datei.
+- Der Host überträgt `SaveBlock2`, `SaveBlock1` und `PokemonStorage` mit Prüfsumme vollständig in den RAM des Gastes: **53.380 Byte** in 128-Byte-Chunks.
+- Der Gast übernimmt den Zustand erst nach vollständigem Empfang und korrekter Prüfsumme. Party, ObjectEvents, Beutel und Verschlüsselungsschlüssel werden daraus initialisiert.
+- Ein neuer Gastname startet an einem festen, freien Punkt in Wurzelheim, auch wenn der Host sich an einem anderen Ort befindet.
+- Nach Bewegung, Host-Speichern und erneutem Beitritt erscheint der Gast wieder an derselben gespeicherten Position.
+- Kartenwechsel durch Türen funktionieren einschließlich Verschwinden, gemeinsamer Sichtbarkeit und Rejoin an der richtigen Position.
+- Die Karte wird mit `InitMap()` vollständig aufgebaut und nicht mehr aus dem alten gespeicherten Kartenausschnitt des Hosts zusammengesetzt.
+- Host und Gast sehen sich und können sich bewegen.
+- Die lokale Gast-SAV bleibt bytegenau unverändert; vorher und nachher war der SHA-256 identisch.
 
-## Neue, noch nicht abgeschlossene Sprint-3-Arbeit
+Die wichtigen Protokollmeldungen sind `coop: host save applied 53380 bytes` und `coop: join warp complete at X,Y`.
+
+## Verbindliche Spawnregel
+
+- **Neuer Gastname:** fester Spawn in Wurzelheim (`0.9`, Layout `10`, Position `19,16`).
+- **Bekannter Gastname:** immer die letzte unter diesem Namen gespeicherte Position.
+- Es gibt **keine Stadt- oder Spawn-Auswahl**. Ein zwischenzeitlich eingebautes Auswahlmenü wurde auf Nutzerentscheid wieder entfernt.
+- Die Rückkehr von BB ohne dieses Menü ist nach der Entfernung noch nicht erneut bestätigt; das zugrundeliegende Laden des gespeicherten Spawns war zuvor bereits geprüft.
+
+## Implementierung
 
 Geänderte Dateien:
 
@@ -35,54 +44,42 @@ Geänderte Dateien:
 - `3ds_port/tests/coop_protocol_test.c`
 - `patches/pokeemerald/0083-local-coop.patch`
 
-Implementiert sind Identitäts- und Spawnpakete, vier namensbasierte Spawn-Einträge im Host-Spielstand und ein automatischer Neustart der Host-Sitzung nach dem Verlassen eines Gastes. Die Tabelle liegt in `gSaveBlock1Ptr->unused_3598`, hat Magic `0x5350` und Version `1`.
+Das Protokoll hat Version 3. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk und Übernahmebestätigung. Der Host sendet einen Chunk erst nach Anforderung durch den Gast; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
-Die Positionspakete enthalten ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`. `SetWarpDestination()` erwartet dagegen Koordinaten ohne diesen Rand; beim Warp werden daher sieben Felder abgezogen.
+Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
 
-## Aktueller Fehler
+Nach den Karten-Ladeskripten wird die Gastfigur einmalig exakt auf den gespeicherten Spawn gesetzt. Erst danach endet `joinWarpPending` und die normale Bewegungssynchronisation beginnt. `ContinueJoinedGame()` ruft anschließend `InitMap()` auf, damit `LoadSavedMapView()` nicht den alten Host-Ausschnitt mit der neuen Gastposition kombiniert.
 
-Der zuletzt getestete Ablauf ist weiterhin fehlerhaft:
+Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** kann weiterhin abbrechen.
 
-- Der Gast erscheint nicht zuverlässig an der gespeicherten Position.
-- Host und Gast sehen sich nach dem Beitritt nicht.
-- Der Nutzer beschreibt den aktuellen Ablauf als komplett verbuggt.
-- Sprint 3 darf deshalb **nicht** als fertig markiert werden.
+## Noch offen
 
-Die Diagnoseprotokolle zeigten für den Gastnamen `bcbcff` einen gespeicherten Spawn auf Karte `0.9`, Layout `10`, Position `19,16`. Der Host sendet diesen Spawn korrekt. In den fehlerhaften Läufen blieb die Gastposition bei `14,16`, die Save-Position bei `7,9`, und `join warp complete` fehlte.
+- Kollisionen und Interaktionen mit der zweiten Figur festlegen.
+- Laufende Team-, PC-, Item- und Storyänderungen synchronisieren; der vollständige Transfer gilt nur für den Initialzustand beim Beitritt.
+- PC-Sperre, Mehrspieler-Box und Startteam-Auswahl in Sprint 4 umsetzen.
+- Unabhängige Einzelkämpfe und später gemeinsame Doppelkämpfe implementieren.
+- Dritte Konsole und bestehende Link-Theken erneut prüfen.
+- Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
+- Den direkten Beitritt von BB ohne Spawn-Menü nachbestätigen.
 
-Zwei Fehler wurden während der Diagnose behoben:
-
-1. Der Generationszähler der Netzwerksitzung wird nun unmittelbar vor dem Beitritts-Warp aktualisiert.
-2. Positionspakete werden bis zum Erreichen des Beitritts-Spawns zurückgehalten, damit der alte lokale Gast-Spielstand den Host-Eintrag nicht überschreibt.
-
-Der frühere asynchrone `DoWarp()` nach `CB2_ContinueSavedGame()` wurde durch `WarpIntoMap()` **vor** `CB2_ContinueSavedGame()` ersetzt. Dadurch soll der normale Ladevorgang den Beitritts-Spawn nicht mehr verwerfen. **Diese letzte Änderung ist noch nicht erfolgreich laufzeitgeprüft.**
+Sprint 3 darf erst abgeschlossen werden, wenn alle seine Akzeptanzkriterien erfüllt sind.
 
 ## Nächste Arbeitsschritte
 
-1. `SETUP.md` einlesen und zwei getrennte Emulatorprofile mit identischem Build einrichten.
-2. Den aktuellen Stand zunächst nur mit Host-Beitritt testen, noch ohne Team-, PC- oder Kampffunktionen.
-3. In `guest/.../port.log` prüfen:
-   - `coop: send saved spawn ... at X,Y` auf Host-Seite,
-   - `coop: join wait actual ... target ... save ...`,
-   - `coop: join warp complete at X,Y`.
-4. Erwartung für den neuen Ablauf: Save-Position ist `spawn - MAP_OFFSET`, ObjectEvent-Position ist gleich dem Spawn. Danach muss `joinWarpPending` enden und beide Figuren müssen erscheinen.
-5. Falls `join warp complete` weiterhin fehlt, zuerst `CtrCoop_EnterHostWorld()`, `ContinueJoinedGame()` und `CB2_ContinueSavedGame()` prüfen. Keine Team- oder Kampfarbeit beginnen, bevor dieser Basistest stabil ist.
-6. Nach bestandenem Beitritt: Gast bewegen, Host speichern, Gast mit F6 neu verbinden und denselben Spawn prüfen. Erst danach Kartenwechsel und Städte-Spawns testen.
-7. Die temporär ausführlichen `join wait`-Logs nach erfolgreicher Diagnose entfernen oder reduzieren.
-8. `Status.md` und diese Datei nach jedem bestätigten Test aktualisieren.
+1. Den bestätigten Basistest einschließlich Kartenwechsel nicht erneut als offenen Fehler behandeln.
+2. Kollisionen und Interaktionen mit der zweiten Figur festlegen.
+3. Danach mit Sprint 4 und der laufenden Spielstandssynchronisation fortfahren.
+4. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 
-- Quelle liegt im Repository unter `3ds_port/`.
-- Der vollständige decomp-Baum entsteht unter `build/upstream/` und wird nicht committed.
-- Vor einem inkrementellen Build geänderte Portdateien auch nach `build/upstream/3ds_port/` kopieren, sonst können veraltete Objekte verwendet werden.
-- `main_menu.c` wird im Buildbaum geändert; die Änderung muss zusätzlich in `patches/pokeemerald/0083-local-coop.patch` enthalten sein.
-- Nach Patchänderungen `git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0083-local-coop.patch` ausführen.
-- Vor dem Abschluss `make release pak`, `make -C 3ds_port verify-coop`, `git diff --check` und `python tools/release_audit.py --repo . --strict` ausführen.
+- Quelle liegt im Repository unter `3ds_port/`; `build/upstream/` wird nicht committed.
+- Vor einem inkrementellen Build geänderte Portdateien auch nach `build/upstream/3ds_port/` kopieren.
+- `main_menu.c` wird im Buildbaum geändert und muss mit `patches/pokeemerald/0083-local-coop.patch` übereinstimmen.
+- Patchkontrolle: `git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0083-local-coop.patch`.
+- Vor dem Abschluss: `make release pak`, `make -C 3ds_port verify-coop`, `git diff --check` und `python tools/release_audit.py --repo . --strict`.
 - ROMs, Spielstände, PAKs, Build-Artefakte und Emulatorprofile niemals committen oder hochladen.
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-Empfohlener erster Auftrag:
-
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Arbeite an Sprint 3 weiter. Beginne mit dem dort beschriebenen Spawn-/Sync-Basistest und behebe den offenen Fehler. Sprint 1 und 2 nicht als offen behandeln. Keine ROMs, Saves oder Build-Artefakte committen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Arbeite an Sprint 3 weiter. Host-Snapshot, gespeicherter Spawn, Rejoin, Kartenwechsel, Bewegung und Kartendarstellung sind bereits bestätigt. Neue Namen starten in Wurzelheim, alte Namen immer an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Keine ROMs, Saves oder Build-Artefakte committen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

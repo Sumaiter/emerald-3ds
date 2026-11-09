@@ -166,6 +166,45 @@ static void TestSpawnIdentity(void)
     CHECK(!CtrCoopProtocol_DecodeSpawn(spawn, sizeof(spawn), &decoded), "invalid spawn graphics rejected");
 }
 
+static void TestSaveTransfer(void)
+{
+    uint8_t payload[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t decoded[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
+    uint8_t chunk[CTR_COOP_SAVE_CHUNK_MAX];
+    uint32_t totalSize = 257, checksum, offset;
+    uint16_t decodedSize;
+
+    for (uint16_t i = 0; i < sizeof(payload); i++)
+        payload[i] = i;
+    checksum = CtrCoopProtocol_Checksum(payload, sizeof(payload));
+    CHECK(checksum == CtrCoopProtocol_Checksum(payload, sizeof(payload)), "checksum is deterministic");
+    payload[0]++;
+    CHECK(checksum != CtrCoopProtocol_Checksum(payload, sizeof(payload)), "checksum detects changes");
+    payload[0]--;
+
+    CHECK(CtrCoopProtocol_EncodeSaveBegin(totalSize, checksum, begin, sizeof(begin)), "save begin encodes");
+    CHECK(CtrCoopProtocol_DecodeSaveBegin(begin, sizeof(begin), &totalSize, &checksum), "save begin decodes");
+    CHECK(totalSize == 257 && checksum == CtrCoopProtocol_Checksum(payload, sizeof(payload)), "save begin roundtrip");
+    begin[1]++;
+    CHECK(!CtrCoopProtocol_DecodeSaveBegin(begin, sizeof(begin), &totalSize, &checksum), "save begin version rejected");
+    begin[1]--;
+    CHECK(CtrCoopProtocol_EncodeSaveRequest(128, request, sizeof(request)), "save request encodes");
+    CHECK(CtrCoopProtocol_DecodeSaveRequest(request, sizeof(request), &offset) && offset == 128, "request offset roundtrip");
+
+    CHECK(CtrCoopProtocol_EncodeSaveChunk(0, payload, sizeof(payload), chunk, CTR_COOP_SAVE_CHUNK_MAX), "full chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeSaveChunk(chunk, CTR_COOP_SAVE_CHUNK_MAX, 0, decoded, sizeof(decoded), &decodedSize), "full chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decoded, sizeof(payload)) == 0, "full chunk payload roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeSaveChunk(chunk, CTR_COOP_SAVE_CHUNK_MAX, 128, decoded, sizeof(decoded), &decodedSize), "wrong offset rejected");
+    CHECK(!CtrCoopProtocol_DecodeSaveChunk(chunk, CTR_COOP_SAVE_CHUNK_MAX, 0, decoded, 1, &decodedSize), "short output rejected");
+    chunk[7]++;
+    CHECK(!CtrCoopProtocol_DecodeSaveChunk(chunk, CTR_COOP_SAVE_CHUNK_MAX, 0, decoded, sizeof(decoded), &decodedSize), "length mismatch rejected");
+    CHECK(CtrCoopProtocol_EncodeSaveChunk(256, payload, 1, chunk, CTR_COOP_SAVE_CHUNK_HEADER + 1), "last short chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeSaveChunk(chunk, CTR_COOP_SAVE_CHUNK_HEADER + 1, 256, decoded, sizeof(decoded), &decodedSize) && decodedSize == 1, "last short chunk decodes");
+    CHECK(!CtrCoopProtocol_EncodeSaveChunk(0, payload, 0, chunk, sizeof(chunk)), "empty chunk rejected");
+}
+
 int main(void)
 {
     TestRoundtrip();
@@ -175,6 +214,7 @@ int main(void)
     TestMovementPlan();
     TestAuthentication();
     TestSpawnIdentity();
+    TestSaveTransfer();
     if (sFailures != 0)
     {
         printf("%d co-op protocol tests failed\n", sFailures);

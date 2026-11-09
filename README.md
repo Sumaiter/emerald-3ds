@@ -18,7 +18,7 @@ Dieser Fork enthält den vollständigen Originalquelltext sowie die Änderungen 
 - Protokoll- und Profiltests
 - Integrationspatch `patches/pokeemerald/0083-local-coop.patch`
 
-Ausgeschlossene Figuren ohne echte Laufbewegung sind in `ZEROWALK.md` dokumentiert. Der aktuelle Entwicklungsstand und die übrigen Sprints stehen in `Status.md`. Für die Arbeit an einer neuen Sitzung steht die aktuelle Diagnose in `HANDOFF.md`; die Ersteinrichtung auf einem PC beschreibt `SETUP.md`. **Sprint 3 ist aktuell in Arbeit und der Beitritts-/Spawnablauf ist noch fehlerhaft.**
+Ausgeschlossene Figuren ohne echte Laufbewegung sind in `ZEROWALK.md` dokumentiert. Der aktuelle Entwicklungsstand und die übrigen Sprints stehen in `Status.md`. Für die Arbeit an einer neuen Sitzung steht die aktuelle Diagnose in `HANDOFF.md`; die Ersteinrichtung auf einem PC beschreibt `SETUP.md`. **Sprint 3 ist in Arbeit; Host-Snapshot, Spawn, Rejoin und Bewegung funktionieren bereits, weitere Oberweltfunktionen fehlen noch.**
 
 ## Bauen
 

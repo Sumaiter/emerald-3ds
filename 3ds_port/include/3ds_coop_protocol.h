@@ -9,12 +9,22 @@
 #define CTR_COOP_AUTH_RESULT_PACKET 10
 #define CTR_COOP_IDENTITY_PACKET 11
 #define CTR_COOP_SPAWN_PACKET 12
+#define CTR_COOP_SAVE_BEGIN_PACKET 13
+#define CTR_COOP_SAVE_CHUNK_PACKET 14
+#define CTR_COOP_SAVE_REQUEST_PACKET 15
+#define CTR_COOP_SAVE_READY_PACKET 16
 #define CTR_COOP_AUTH_PACKET_SIZE 6
 #define CTR_COOP_AUTH_RESULT_SIZE 3
 #define CTR_COOP_IDENTITY_SIZE 10
 #define CTR_COOP_SPAWN_SIZE 13
+#define CTR_COOP_SAVE_BEGIN_SIZE 10
+#define CTR_COOP_SAVE_REQUEST_SIZE 6
+#define CTR_COOP_SAVE_CHUNK_HEADER 8
+#define CTR_COOP_SAVE_CHUNK_DATA_MAX 128
+#define CTR_COOP_SAVE_CHUNK_MAX (CTR_COOP_SAVE_CHUNK_HEADER + CTR_COOP_SAVE_CHUNK_DATA_MAX)
+#define CTR_COOP_SAVE_READY_SIZE 2
 #define CTR_COOP_PLAYER_NAME_SIZE 8
-#define CTR_COOP_PROTOCOL_VERSION 2
+#define CTR_COOP_PROTOCOL_VERSION 3
 #define CTR_COOP_GRAPHICS_ID_MAX 238
 #define CTR_COOP_PACKET_SIZE 13
 #define CTR_COOP_HEARTBEAT_FRAMES 60
@@ -56,6 +66,14 @@ bool CtrCoopProtocol_EncodeIdentity(const uint8_t *name, uint8_t *out, uint16_t 
 bool CtrCoopProtocol_DecodeIdentity(const uint8_t *data, uint16_t size, uint8_t *name);
 bool CtrCoopProtocol_EncodeSpawn(const CtrCoopSnapshot *snapshot, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodeSpawn(const uint8_t *data, uint16_t size, CtrCoopSnapshot *out);
+bool CtrCoopProtocol_EncodeSaveBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeSaveBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum);
+bool CtrCoopProtocol_EncodeSaveRequest(uint32_t offset, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeSaveRequest(const uint8_t *data, uint16_t size, uint32_t *offset);
+bool CtrCoopProtocol_EncodeSaveChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeSaveChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize);
+uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size);
 bool CtrCoopProtocol_SameMap(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b);
 bool CtrCoopProtocol_ShouldSend(const CtrCoopSnapshot *last, const CtrCoopSnapshot *current, uint16_t framesSinceLast);
 CtrCoopApply CtrCoopProtocol_PlanMovement(const CtrCoopSnapshot *snapshot,

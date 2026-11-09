@@ -1,6 +1,6 @@
 # Status: Emerald 3DS Koop-Mod
 
-Stand: 2026-11-08
+Stand: 2026-11-09
 
 ## Ziel
 
@@ -33,7 +33,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 - Der Host öffnet seinen geladenen Spielstand mit einem Passwort für Local Wireless.
 - Der Gast sucht im Hauptmenü nach Welten in Reichweite, wählt eine aus und gibt deren Passwort ein.
 - Beim ersten Beitritt wartet der Gast gegebenenfalls auf den freien PC, wählt sein Startteam und danach Charakter und Namen.
-- Als Spawnort stehen ein freies Feld beim Host oder eine bereits im Spielstand freigeschaltete Stadt zur Auswahl.
+- Ein neuer Gastname startet an einem festen, freien Punkt in Wurzelheim. Für einen bereits bekannten Gastnamen wird immer seine letzte gespeicherte Position verwendet; es gibt keine Spawn-Auswahl.
 - Beide Spieler verwenden ausschließlich Pokémon, Gegenstände und Fortschritte des gemeinsamen Host-Spielstands.
 - Nur ein Spieler darf gleichzeitig einen PC verwenden. Der andere kann währenddessen normal weiterspielen.
 - Eine neue Mehrspieler-Box enthält pro Spieler eine Reihe für dessen Gruppe von bis zu sechs Pokémon.
@@ -145,26 +145,25 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 **Status: In Arbeit**
 
-Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Namensbasierte Spawnpakete und Host-Spielstandeinträge sind implementiert, aber der Beitritts-Warp und die darauffolgende Synchronisation sind aktuell fehlerhaft. Die genaue Diagnose und der nächste Test stehen in `HANDOFF.md`.
+Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Kollisionen, laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
 
 ### Aufgaben
 
 - [x] Zweite Spielfigur mit eigenem Charakter und Namen sowie Basis-Bewegungsdaten integrieren.
 - [x] Bewegungsdaten mit Heartbeat, Validierung und Verlustbehandlung übertragen; dies wurde in Sprint 1 bestätigt.
-- [ ] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren.
-- [ ] Kartenwechsel, Warps, Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren.
+- [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot, Rejoin und vollständigem Kartenaufbau bestätigt.
+- [x] Kartenwechsel durch Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren; einschließlich Rejoin bestätigt.
+- [x] Neue Gastnamen an einem freien, festen Punkt in Wurzelheim spawnen und für alte Namen immer deren gespeicherte Position ohne Spawn-Auswahl verwenden.
 - [ ] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen.
-- [ ] Spawn beim Host auf einem freien, begehbaren Nachbarfeld ermöglichen.
-- [ ] Spawn in freigeschalteten Städten an sicheren, festgelegten Positionen ermöglichen.
 - [ ] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast bereitstellen.
 - [ ] Menüs und Kampf-/Oberweltzustände pro Spieler getrennt halten.
 
 ### Akzeptanzkriterien
 
-- [ ] Beide Spieler können gleichzeitig und unabhängig auf derselben Karte laufen.
-- [ ] Beide Spieler können sich auf unterschiedlichen Karten aufhalten und später wieder zusammenfinden.
-- [ ] Spawnpunkte befinden sich nicht in Wänden, blockierten Objekten oder ungültigen Kartenbereichen.
-- [ ] Kartenwechsel und Trennungen erzeugen keine dauerhaften Geisterfiguren oder Desynchronisationen.
+- [x] Beide Spieler können gleichzeitig und unabhängig auf derselben Karte laufen.
+- [x] Beide Spieler können sich auf unterschiedlichen Karten aufhalten und später wieder zusammenfinden.
+- [x] Spawnpunkte befinden sich nicht in Wänden, blockierten Objekten oder ungültigen Kartenbereichen.
+- [x] Kartenwechsel und Trennungen erzeugen keine dauerhaften Geisterfiguren oder Desynchronisationen.
 
 ## Sprint 4: Spielerprofil, Mehrspieler-Box und PC-Sperre
 
@@ -287,4 +286,4 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Identitäts- und Spawnpakete, namensbasierte Host-Spielstandeinträge und der automatische Host-Neustart nach einem Gastwechsel sind implementiert. Der aktuelle Beitritts-Warp und die Synchronisation danach funktionieren jedoch noch nicht zuverlässig; Host und Gast können sich im fehlerhaften Zustand nicht sehen. `HANDOFF.md` enthält die Diagnose und den nächsten Test, `SETUP.md` die Ersteinrichtung. Es gibt noch keine spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Der Gast übernimmt beim Beitritt den vollständigen benötigten Host-Spielstand mit Prüfsumme. Neue Namen starten in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Rejoin, Kartenwechsel, Bewegung und vollständige Kartendarstellung sind bestätigt; die lokale Gast-Speicherdatei bleibt unverändert. Kollisionen, laufende Spielstandssynchronisation und die übrigen Sprints stehen noch aus. `HANDOFF.md` enthält den aktuellen Stand, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

@@ -218,9 +218,9 @@ static void TestPcSyncTransfer(void)
     for (uint16_t i = 0; i < sizeof(payload); i++)
         payload[i] = i ^ 0x5A;
     checksum = CtrCoopProtocol_Checksum(payload, sizeof(payload));
-    CHECK(CtrCoopProtocol_EncodePcSyncBegin(34392, checksum, begin, sizeof(begin)), "PC sync begin encodes");
+    CHECK(CtrCoopProtocol_EncodePcSyncBegin(34344, checksum, begin, sizeof(begin)), "PC sync begin encodes");
     CHECK(CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "PC sync begin decodes");
-    CHECK(totalSize == 34392, "PC sync size roundtrip");
+    CHECK(totalSize == 34344, "PC sync size roundtrip");
     begin[0] = CTR_COOP_SAVE_BEGIN_PACKET;
     CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "save begin is not PC sync");
     CHECK(CtrCoopProtocol_EncodePcSyncRequest(128, request, sizeof(request)), "PC sync request encodes");
@@ -297,6 +297,21 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_EncodeLogoutChunk(512, payload, sizeof(payload), chunk, sizeof(chunk)), "logout chunk encodes");
     CHECK(CtrCoopProtocol_DecodeLogoutChunk(chunk, sizeof(chunk), 512, decodedPayload, sizeof(decodedPayload), &decodedSize), "logout chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "logout payload roundtrip");
+    reserve[1]++;
+    CHECK(!CtrCoopProtocol_DecodeBattleReserve(reserve, sizeof(reserve), &trainerId), "reservation version rejected");
+    reserve[1]--;
+    CHECK(!CtrCoopProtocol_DecodeBattleReserve(reserve, sizeof(reserve) - 1, &trainerId), "short reservation rejected");
+    result[0] = CTR_COOP_BATTLE_RESERVE_PACKET;
+    CHECK(!CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted), "reservation request is not result");
+    CHECK(CtrCoopProtocol_EncodeDoubleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "double chunk for invalid tests encodes");
+    CHECK(!CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk), 128, decodedPayload, sizeof(decodedPayload), &decodedSize), "double wrong offset rejected");
+    CHECK(!CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk) - 1, 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "short double chunk rejected");
+    begin[0] = CTR_COOP_LOGOUT_BEGIN_PACKET;
+    CHECK(!CtrCoopProtocol_DecodeLogoutBegin(begin, sizeof(begin) - 1, &totalSize, &checksum), "short logout begin rejected");
+    request[0] = CTR_COOP_BATTLE_REQUEST_PACKET;
+    CHECK(!CtrCoopProtocol_DecodeLogoutRequest(request, sizeof(request), &offset), "battle request is not logout request");
+    chunk[0] = CTR_COOP_LOGOUT_CHUNK_PACKET;
+    CHECK(!CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 512, decodedPayload, sizeof(decodedPayload), &decodedSize), "logout chunk is not battle chunk");
 }
 
 static void TestStoryUpdates(void)

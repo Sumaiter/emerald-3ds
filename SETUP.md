@@ -1,6 +1,17 @@
 # Ersteinrichtung auf einem PC
 
-Diese Anleitung richtet Emerald 3DS mit dem Local-Co-op-Mod unter Windows ein. Der aktuelle Mod ist eine fehlerhafte Entwicklungsversion; der offene Teststand steht in `HANDOFF.md`.
+Diese Anleitung richtet Emerald 3DS mit dem Local-Co-op-Mod unter Windows ein. Der aktuelle Mod ist eine Entwicklungsversion; der offene Teststand steht in `HANDOFF.md`.
+
+## Entwicklungsbranch auswählen
+
+- `main`: Sprint-3-Teststand mit gemeinsamer Oberwelt
+- `sprint-4`: Team-Reihen und PC-Sperren
+- `sprint-5`: unabhängige Einzelkämpfe
+- `sprint-6`: gemeinsame Doppelkämpfe
+- `sprint-7`: Abmeldung und Abbruchbehandlung
+- `sprint-8`: aktuelle Stabilisierung und Testvorbereitung
+
+Beispiel: `git switch sprint-8`. Vor einem Build die Portdateien desselben Branches nach `build/upstream/3ds_port/` kopieren. Keine Spielstände oder ROMs aus einem anderen Branch oder PC übernehmen, ohne vorher eine Sicherung anzulegen.
 
 ## Was zusätzlich zum Repository benötigt wird
 
@@ -120,10 +131,12 @@ azahar-room.exe --room-name "Emerald Koop" \
   --port 24872 --max_members 2
 ```
 
+Ist der Port belegt, beim Raumstart einen freien alternativen Port verwenden, beispielsweise 24873. Beide Clients müssen denselben Port erhalten.
+
 In **beiden** Azahar-Oberflächen im Multiplayer-Menü **Direkt mit Raum verbinden / Direct Connect** wählen:
 
 - Adresse: `127.0.0.1`
-- Port: `24872`
+- Port: `24872` oder den gewählten Alternativport
 - Passwort: leer, sofern keines gesetzt wurde
 
 Danach HOST und GAST jeweils `Emerald3DS.3dsx` starten. Im Spiel öffnet der Host unter Optionen **LOKALER KOOP**; der Gast wählt im Hauptmenü **SPIEL SUCHEN** und gibt das im Hostprofil festgelegte Koop-Passwort ein.
@@ -139,7 +152,14 @@ python tools/release_audit.py --repo . --strict
 git diff --check
 ```
 
-Für den aktuellen Fehler zuerst den Basistest aus `HANDOFF.md` durchführen. Sprint 3 ist noch nicht bestanden.
+Zusätzlich die Engine-Patches in umgekehrter Reihenfolge prüfen:
+
+```sh
+git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0084-double-coop.patch
+git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0083-local-coop.patch
+```
+
+Die manuellen Beitritts-, Kampf-, PC-, Abmelde- und Regressionstests stehen in `HANDOFF.md`. Die aktuelle interaktive Abnahme ist noch nicht bestanden; reale 3DS-/2DS- und Voxel-Tests sind ebenfalls noch ausstehend.
 
 ## Was nicht mit umgezogen wird
 

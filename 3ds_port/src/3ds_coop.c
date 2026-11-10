@@ -237,6 +237,11 @@ struct CoopSaveExtension
     uint16_t storageVersion;
 };
 
+STATIC_ASSERT(sizeof(struct CoopSaveExtension) <= sizeof(((struct SaveBlock1 *)0)->unused_3598), CoopExtensionFitsSaveBlock);
+STATIC_ASSERT(sizeof(struct PokemonStorage) == 33744, OriginalStorageSizeUnchanged);
+STATIC_ASSERT(sizeof(struct SaveBlock2) + sizeof(struct SaveBlock1) + sizeof(struct PokemonStorage) == 53380, InitialSnapshotSize);
+STATIC_ASSERT(DOUBLE_SETUP_SIZE == 1232, DoubleSetupSize);
+
 static const uint8_t sDefaultGuestName[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
 
 static struct CoopSaveExtension *SaveExtension(void)

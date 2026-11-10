@@ -13,6 +13,7 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 - Sprint 5 baut auf diesem Stand auf und wird auf `sprint-5` entwickelt: unabhängige Kämpfe, Trainerreservierung und Battle-Ergebnissynchronisation.
 - Sprint 6 wird auf `sprint-6` entwickelt: gemeinsame Doppelkämpfe mit dem bestehenden Link-Controller und einem Koop-eigenen Start-Handshake.
 - Sprint 7 wird auf `sprint-7` entwickelt: bestätigte Abmeldung, Abbruchbehandlung, Sperrenbereinigung und sicherer Wiederbeitritt.
+- Sprint 8 wird auf `sprint-8` entwickelt: automatisierte Stabilisierung, Azahar- und Hardwaretests. Die interaktive Abnahme ist derzeit durch den gesperrten Desktop blockiert.
 - Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von allen Branches gemeinsam verwendet.
 
 ## Mit zwei Azahar-Instanzen bestätigt
@@ -59,7 +60,7 @@ Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magi
 - Reihe 1 (Indizes `0–5`) spiegelt die Host-Gruppe, Reihe 2 (Indizes `6–11`) die Gast-Gruppe. Während der jeweiligen Anmeldung sind diese Reihen gegen Entnahme, Ablegen, Tausch, Freilassen und Mehrfachverschieben gesperrt. Die übrigen drei Reihen bleiben normal nutzbar.
 - Der Gast erhält beim Beitritt nicht die Host-Gruppe, sondern seine gespeicherte Gast-Reihe. `SavePlayerParty()` ist für den Gast gesperrt, damit die Host-Gruppe in `SaveBlock1` erhalten bleibt. Die lokale SAV-Datei des Gastes wird weiterhin nicht verändert.
 - Nach der Spielstandübernahme öffnet sich der PC für die Startteam-Auswahl. Mindestens ein Pokémon ist Pflicht. Erst nach bestätigter Übernahme sendet der Host den Spawn und der Beitrittsbildschirm öffnet die Welt.
-- Ein PC-Abschluss überträgt **34.392 Byte**: vollständiger `PokemonStorage` plus sechs vollständige Party-Pokémon. Die Gegenseite übernimmt den Speicher erst nach vollständigem Empfang und Prüfsumme, aktualisiert die Reihe des Absenders und bestätigt danach. Erst diese Bestätigung gibt die PC-Sperre frei.
+- Ein PC-Abschluss überträgt **34.344 Byte**: vollständiger `PokemonStorage` plus sechs vollständige Party-Pokémon. Die Gegenseite übernimmt den Speicher erst nach vollständigem Empfang und Prüfsumme, aktualisiert die Reihe des Absenders und bestätigt danach. Erst diese Bestätigung gibt die PC-Sperre frei.
 - Diese neuen Abläufe sind gebaut und hostseitig auf Protokollebene getestet. Die vollständige Emulatorabnahme mit Teamwahl, Rejoin, gesperrten Reihen und Abbrüchen steht noch aus.
 
 Nach den Karten-Ladeskripten wird die Gastfigur einmalig exakt auf den gespeicherten Spawn gesetzt. Erst danach endet `joinWarpPending` und die normale Bewegungssynchronisation beginnt. `ContinueJoinedGame()` ruft anschließend `InitMap()` auf, damit `LoadSavedMapView()` nicht den alten Host-Ausschnitt mit der neuen Gastposition kombiniert.
@@ -118,6 +119,14 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Ein Wiederbeitritt ersetzt den RAM-Zustand durch einen vollständigen geprüften Host-Snapshot. Dadurch entstehen keine doppelten Figuren, Gruppen oder Belohnungen und keine lokale Gast-SAV wird verändert.
 - Die Abnahme mit ordentlicher Abmeldung, F6, Abbrüchen während PC- und Battle-Transfers, Doppelkämpfen und Wiederbeitritt steht noch aus.
 
+## Sprint 8: Stabilisierung und Tests
+
+- Compile-Zeit-Prüfungen sichern die Größen der Speicherweiterung, Original-Speicherblöcke, des initialen Snapshots und des Doppelkampf-Setups. Dabei wurde die Dokumentation des PC-Transfers von 34.392 auf **34.344 Byte** korrigiert; der Code verwendet bereits die richtigen `sizeof`-Werte.
+- Protokolltests decken nun zusätzlich kurze Pakete, falsche Typen, Versionen und Offsets ab.
+- Identische 3DSX- und PAK-Dateien wurden auf beide Azahar-SD-Umgebungen kopiert und deren Spielstände vorher gesichert. Ein privater Raum wurde auf Port 24873 geöffnet; Port 24872 war durch einen älteren Raum belegt.
+- Der Desktop ist gesperrt. Deshalb konnten die Fenster nicht bedient und Beitritt, Kämpfe, PC, Abmeldung und Regressionen nicht interaktiv abgenommen werden. Die von diesem Testlauf gestarteten Prozesse wurden beendet.
+- Reale 3DS-/2DS-Tests, Old-/New-3DS- und Voxel-Prüfungen sowie längere Spielsitzungen stehen noch aus. Es gibt weiterhin keine vollständig abgenommene spielbare Alpha.
+
 ## Noch offen
 
 - Nicht kampfbedingte Teamänderungen außerhalb des PCs, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe, Kampfergebnisse und der Initialzustand werden bereits übertragen.
@@ -130,7 +139,7 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
 - Durchlässigkeit, unabhängige Menüs und Szenario-Synchronisation aus Sprint 3 ebenfalls abnehmen.
 
-Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
+Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind. Sprint 8 bleibt bis zur vollständigen Emulator- und Hardwareabnahme in Arbeit.
 
 ## Nächste Arbeitsschritte
 
@@ -142,7 +151,8 @@ Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen w
 6. Dieselbe Trainer-ID zeitgleich anfordern, danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
 7. Auf `sprint-6` Doppelkämpfe von beiden Seiten auslösen, Züge und Wechsel getrennt steuern, Fang und Whiteout prüfen sowie den Fallback bei zu großer Entfernung testen.
 8. Auf `sprint-7` ordentliche Abmeldung mit Team-Rückgabe, F6, Transferabbrüche, Doppelkampfabbruch und Wiederbeitritt prüfen.
-9. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+9. Nach Entsperren des Desktops auf `sprint-8` den privaten Raum erneut starten und die vollständige Zwei-Instanzen-Abnahme einschließlich Regressionen durchführen; anschließend reale Konsolen und Voxel testen.
+10. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 
@@ -155,4 +165,4 @@ Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen w
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5`, für gemeinsame Doppelkämpfe `sprint-6` und für Abmeldung und Abbrüche `sprint-7` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5`, für gemeinsame Doppelkämpfe `sprint-6`, für Abmeldung und Abbrüche `sprint-7` und für Stabilisierung und Hardwaretests `sprint-8` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die interaktive Abnahme ist durch den gesperrten Desktop blockiert und muss nach dem Entsperren fortgesetzt werden.

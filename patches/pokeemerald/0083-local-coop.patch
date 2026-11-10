@@ -1581,3 +1581,24 @@ index f75e629..fd10099 100644
      if (sector != SECTOR_ID_TRAINER_HILL && sector != SECTOR_ID_RECORDED_BATTLE)
          return SAVE_STATUS_ERROR;
  
+diff --git a/src/event_object_movement.c b/src/event_object_movement.c
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -33,6 +33,7 @@
+ #include "constants/event_objects.h"
+ #include "constants/field_effects.h"
+ #include "constants/items.h"
++#include "constants/local_link.h"
+ #include "constants/mauville_old_man.h"
+ #include "constants/trainer_types.h"
+ #include "constants/union_room.h"
+@@ -5013,6 +5014,8 @@ static bool8 DoesObjectCollideWithObjectAt(struct ObjectEvent *objectEvent, s16
+         if (FollowerMon_IsFollower(curObject)
+          && (objectEvent->isPlayer || objectEvent->trainerType != TRAINER_TYPE_NONE))
+             continue;
++        if (curObject->localId == LOCALID_COOP_PLAYER)
++            continue;
+ #endif
+         if (curObject->active && curObject != objectEvent)
+         {
+

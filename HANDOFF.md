@@ -52,9 +52,15 @@ Nach den Karten-Ladeskripten wird die Gastfigur einmalig exakt auf den gespeiche
 
 Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** kann weiterhin abbrechen.
 
+## Kollisionen und Menüs
+
+- `LOCALID_COOP_PLAYER` ist im zentralen Kollisionscheck ausgenommen: Die Verbindungsfigur blockiert keine Bewegung. Terrain, NPCs und normale Kollisionen bleiben unverändert.
+- Die Figur besitzt kein NPC-Script; ein Dialog wird nicht ausgelöst.
+- Menüs, Beutel, PC und Kämpfe verwenden getrennte Engine-Callbacks und keine gemeinsamen Menüzustände im Koop-Modul.
+- Diese neuen Regeln sind gebaut, aber noch nicht vom Nutzer im Laufzeittest bestätigt.
+
 ## Noch offen
 
-- Kollisionen und Interaktionen mit der zweiten Figur festlegen.
 - Laufende Team-, PC-, Item- und Storyänderungen synchronisieren; der vollständige Transfer gilt nur für den Initialzustand beim Beitritt.
 - PC-Sperre, Mehrspieler-Box und Startteam-Auswahl in Sprint 4 umsetzen.
 - Unabhängige Einzelkämpfe und später gemeinsame Doppelkämpfe implementieren.

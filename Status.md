@@ -145,7 +145,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 **Status: In Arbeit**
 
-Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Kollisionen, laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
+Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Die Koop-Figur blockiert weder Bewegung noch NPC-Dialoge. Menüs und Kämpfe verwenden weiterhin getrennte Engine-Zustände pro Konsole; deren Laufzeittest steht noch aus. Laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
 
 ### Aufgaben
 
@@ -154,9 +154,9 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 - [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot, Rejoin und vollständigem Kartenaufbau bestätigt.
 - [x] Kartenwechsel durch Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren; einschließlich Rejoin bestätigt.
 - [x] Neue Gastnamen an einem freien, festen Punkt in Wurzelheim spawnen und für alte Namen immer deren gespeicherte Position ohne Spawn-Auswahl verwenden.
-- [ ] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen.
-- [ ] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast bereitstellen.
-- [ ] Menüs und Kampf-/Oberweltzustände pro Spieler getrennt halten.
+- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: `LOCALID_COOP_PLAYER` blockiert keine Bewegung und besitzt kein NPC-Script; der Laufzeittest steht noch aus.
+- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als initialen Snapshot bereitstellen; laufende Änderungen gehören zu Sprint 4.
+- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks getrennt halten; der Laufzeittest steht noch aus.
 
 ### Akzeptanzkriterien
 

@@ -7,6 +7,7 @@
 #include "3ds_log.h"
 #include "characters.h"
 #include "battle.h"
+#include "battle_main.h"
 #include "battle_setup.h"
 #include "constants/battle.h"
 #include "constants/coins.h"
@@ -22,10 +23,12 @@
 #include "field_player_avatar.h"
 #include "fieldmap.h"
 #include "item.h"
+#include "link.h"
 #include "load_save.h"
 #include "money.h"
 #include "overworld.h"
 #include "pokemon_storage_system.h"
+#include "random.h"
 #include "sound.h"
 #include "constants/songs.h"
 
@@ -69,6 +72,13 @@ static struct
     uint32_t battleReceiveSize;
     uint32_t battleReceiveOffset;
     uint32_t battleReceiveChecksum;
+    uint8_t doubleState;
+    bool doubleInitiator;
+    uint16_t doubleRetry;
+    uint32_t doubleSendOffset;
+    uint32_t doubleSendChecksum;
+    uint32_t doubleReceiveOffset;
+    uint32_t doubleReceiveChecksum;
     uint32_t saveOffset;
     uint32_t saveChecksum;
     bool spawnValid;
@@ -103,12 +113,26 @@ static struct
 #define BATTLE_ITEM_RECORD_SIZE 4
 #define BATTLE_ITEM_SLOTS (PC_ITEMS_COUNT + BAG_ITEMS_COUNT + BAG_KEYITEMS_COUNT + BAG_POKEBALLS_COUNT + BAG_TMHM_COUNT + BAG_BERRIES_COUNT)
 #define CTR_COOP_BATTLE_DATA_MAX (BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE + TOTAL_BOXES_COUNT * IN_BOX_COUNT * BATTLE_STORAGE_RECORD_SIZE + 4096)
+#define DOUBLE_STATE_IDLE 0
+#define DOUBLE_STATE_WAIT_ACCEPT 1
+#define DOUBLE_STATE_WAIT_START 2
+#define DOUBLE_STATE_SENDING 3
+#define DOUBLE_STATE_RECEIVING 4
+#define DOUBLE_STATE_ACTIVE 5
+#define DOUBLE_HEADER_SIZE 32
+#define DOUBLE_SETUP_SIZE (DOUBLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE * 2)
 
 static uint8_t sSaveData[CTR_COOP_SAVE_SIZE] ALIGNED(4);
 static uint8_t sBattleSendData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
 static uint8_t sBattleReceiveData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
+static uint8_t sDoubleSendData[DOUBLE_SETUP_SIZE] ALIGNED(4);
+static uint8_t sDoubleReceiveData[DOUBLE_SETUP_SIZE] ALIGNED(4);
 static struct SaveBlock1 sBattleSaveBaseline;
 static struct PokemonStorage sBattleStorageBaseline;
+static struct Pokemon sDoubleLocalParty[PARTY_SIZE];
+static struct Pokemon sRemoteParty[PARTY_SIZE];
+static bool sRemotePartyValid;
+static uint32_t sDoubleOriginalFlags;
 
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
@@ -144,6 +168,10 @@ static void ClearRemote(void)
     sCoop.battleRetry = 0;
     sCoop.battleSendState = BATTLE_SYNC_IDLE;
     sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
+    sCoop.doubleState = DOUBLE_STATE_IDLE;
+    sCoop.doubleInitiator = false;
+    sCoop.doubleRetry = 0;
+    sRemotePartyValid = false;
     sCoop.saveOffset = 0;
     sCoop.saveChecksum = 0;
     sCoop.spawnValid = false;
@@ -444,6 +472,8 @@ static void ApplyHostSave(void)
     SetDecorationInventoriesPointers();
     CopyPartyAndObjectsFromSave();
     LoadPlayerBag();
+    memcpy(sRemoteParty, gSaveBlock1Ptr->playerParty, sizeof(sRemoteParty));
+    sRemotePartyValid = true;
     LoadPartyRow(CTR_COOP_STORAGE_GUEST_ROW, gPlayerParty);
     ResetStoryBaseline();
 }
@@ -747,6 +777,240 @@ bool CtrCoop_StorageBoxRestricted(uint8_t boxId)
     return CtrCoopStorage_BoxRestricted(hostActive, guestActive, boxId);
 }
 
+bool CtrCoop_IsDoubleBattle(void)
+{
+    return sCoop.doubleState == DOUBLE_STATE_ACTIVE;
+}
+
+bool CtrCoop_IsDoubleInitiator(void)
+{
+    return sCoop.doubleInitiator;
+}
+
+uint8_t CtrCoop_LocalMultiplayerId(void)
+{
+    return sCoop.guest ? 1 : 0;
+}
+
+static bool DoublePeerAvailable(void)
+{
+    CtrCoopSnapshot local;
+
+    if (!sCoop.wanted || !sCoop.remoteValid || sCoop.battleActive || sCoop.battleReservePending
+     || sCoop.pcOpen || sCoop.doubleState != DOUBLE_STATE_IDLE || !LocalSnapshot(&local))
+        return false;
+    return CtrCoopProtocol_SameMap(&local, &sCoop.remote)
+        && abs(local.x - sCoop.remote.x) <= 3 && abs(local.y - sCoop.remote.y) <= 3;
+}
+
+static void WriteDouble32(uint8_t *data, uint32_t offset, uint32_t value)
+{
+    data[offset] = value & 0xFF;
+    data[offset + 1] = (value >> 8) & 0xFF;
+    data[offset + 2] = (value >> 16) & 0xFF;
+    data[offset + 3] = value >> 24;
+}
+
+static uint32_t ReadDouble32(const uint8_t *data, uint32_t offset)
+{
+    return data[offset] | ((uint32_t)data[offset + 1] << 8)
+        | ((uint32_t)data[offset + 2] << 16) | ((uint32_t)data[offset + 3] << 24);
+}
+
+static void SendDoubleRequest(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_DOUBLE_REQUEST_SIZE] = {
+        CTR_COOP_DOUBLE_REQUEST_PACKET, CTR_COOP_PROTOCOL_VERSION,
+        sCoop.battleTrainerId & 0xFF, sCoop.battleTrainerId >> 8
+    };
+
+    if (LocalLink_GetPeers(peers, 1) != 0)
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+}
+
+static void SendDoubleBegin(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+
+    if (sCoop.doubleState != DOUBLE_STATE_SENDING || LocalLink_GetPeers(peers, 1) == 0)
+        return;
+    if (CtrCoopProtocol_EncodeDoubleBegin(DOUBLE_SETUP_SIZE, sCoop.doubleSendChecksum, packet, sizeof(packet)))
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+}
+
+static void BuildDoubleParty(uint8_t *out)
+{
+    struct Pokemon hostParty[PARTY_SIZE];
+    struct Pokemon guestParty[PARTY_SIZE];
+
+    memcpy(sDoubleLocalParty, gPlayerParty, sizeof(sDoubleLocalParty));
+    if (sCoop.guest)
+    {
+        memcpy(guestParty, gPlayerParty, sizeof(guestParty));
+        if (sRemotePartyValid)
+            memcpy(hostParty, sRemoteParty, sizeof(hostParty));
+        else
+            LoadPartyRow(CTR_COOP_STORAGE_HOST_ROW, hostParty);
+    }
+    else
+    {
+        memcpy(hostParty, gPlayerParty, sizeof(hostParty));
+        if (sRemotePartyValid)
+            memcpy(guestParty, sRemoteParty, sizeof(guestParty));
+        else
+            LoadPartyRow(CTR_COOP_STORAGE_GUEST_ROW, guestParty);
+    }
+    if (!sRemotePartyValid)
+    {
+        memcpy(sRemoteParty, sCoop.guest ? hostParty : guestParty, sizeof(sRemoteParty));
+        sRemotePartyValid = true;
+    }
+    memcpy(out, hostParty, sizeof(struct Pokemon) * MULTI_PARTY_SIZE);
+    memcpy(out + sizeof(struct Pokemon) * MULTI_PARTY_SIZE, guestParty, sizeof(struct Pokemon) * MULTI_PARTY_SIZE);
+}
+
+static void ConfigureDoubleBattle(const uint8_t *data)
+{
+    uint32_t flags = ReadDouble32(data, 0);
+
+    sDoubleOriginalFlags = flags & ~(BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI | BATTLE_TYPE_IS_MASTER | BATTLE_TYPE_LINK_IN_BATTLE);
+    memcpy(gEnemyParty, data + DOUBLE_HEADER_SIZE, sizeof(gEnemyParty));
+    memcpy(gPlayerParty, data + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty), sizeof(gPlayerParty));
+    gPlayerPartyCount = CalculatePlayerPartyCount();
+    gBattleTypeFlags = flags;
+    if (!sCoop.guest)
+        gBattleTypeFlags |= BATTLE_TYPE_IS_MASTER;
+    else
+        gBattleTypeFlags &= ~BATTLE_TYPE_IS_MASTER;
+    gRngValue = ReadDouble32(data, 4);
+    gTrainerBattleOpponent_A = data[8] | ((uint16_t)data[9] << 8);
+    gTrainerBattleOpponent_B = data[10] | ((uint16_t)data[11] << 8);
+    gMain.savedCallback = (MainCallback)(uintptr_t)ReadDouble32(data, 12);
+    gBattleEnvironment = data[16];
+    gWirelessCommType = 1;
+    gReceivedRemoteLinkPlayers = 1;
+    memset(gLinkPlayers, 0, sizeof(gLinkPlayers));
+    gLinkPlayers[0].id = 0;
+    gLinkPlayers[0].version = VERSION_EMERALD;
+    gLinkPlayers[1].id = 1;
+    gLinkPlayers[1].version = VERSION_EMERALD;
+    sCoop.doubleState = DOUBLE_STATE_ACTIVE;
+    SetMainCallback2(CB2_InitBattle);
+}
+
+static void PrepareDoubleSetup(void)
+{
+    uint32_t flags = gBattleTypeFlags | BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI;
+
+    sDoubleOriginalFlags = gBattleTypeFlags;
+    if (!sCoop.guest)
+        flags |= BATTLE_TYPE_IS_MASTER;
+    else
+        flags &= ~BATTLE_TYPE_IS_MASTER;
+    WriteDouble32(sDoubleSendData, 0, flags);
+    WriteDouble32(sDoubleSendData, 4, Random());
+    sDoubleSendData[8] = gTrainerBattleOpponent_A & 0xFF;
+    sDoubleSendData[9] = gTrainerBattleOpponent_A >> 8;
+    sDoubleSendData[10] = gTrainerBattleOpponent_B & 0xFF;
+    sDoubleSendData[11] = gTrainerBattleOpponent_B >> 8;
+    WriteDouble32(sDoubleSendData, 12, (uintptr_t)gMain.savedCallback);
+    sDoubleSendData[16] = gBattleEnvironment;
+    memset(sDoubleSendData + 17, 0, DOUBLE_HEADER_SIZE - 17);
+    memcpy(sDoubleSendData + DOUBLE_HEADER_SIZE, gEnemyParty, sizeof(gEnemyParty));
+    BuildDoubleParty(sDoubleSendData + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty));
+    sCoop.doubleSendOffset = 0;
+    sCoop.doubleSendChecksum = CtrCoopProtocol_Checksum(sDoubleSendData, DOUBLE_SETUP_SIZE);
+    sCoop.doubleState = DOUBLE_STATE_SENDING;
+    sCoop.doubleRetry = 0;
+    SendDoubleBegin();
+}
+
+static void SendDoubleRequestData(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_REQUEST_SIZE];
+
+    if (CtrCoopProtocol_EncodeDoubleRequestData(offset, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void SendDoubleChunk(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint16_t size;
+
+    if (sCoop.doubleState != DOUBLE_STATE_SENDING || offset >= DOUBLE_SETUP_SIZE)
+        return;
+    size = DOUBLE_SETUP_SIZE - offset;
+    if (size > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        size = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (CtrCoopProtocol_EncodeDoubleChunk(offset, sDoubleSendData + offset, size, packet, CTR_COOP_SAVE_CHUNK_HEADER + size))
+        LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+}
+
+static void HandleDoubleRequest(uint16_t from)
+{
+    uint8_t packet[CTR_COOP_DOUBLE_CONTROL_SIZE] = {
+        DoublePeerAvailable() ? CTR_COOP_DOUBLE_ACCEPT_PACKET : CTR_COOP_DOUBLE_DECLINE_PACKET,
+        CTR_COOP_PROTOCOL_VERSION
+    };
+
+    if (packet[0] == CTR_COOP_DOUBLE_ACCEPT_PACKET)
+    {
+        sCoop.doubleInitiator = false;
+        sCoop.doubleState = DOUBLE_STATE_WAIT_START;
+        sCoop.doubleRetry = 0;
+    }
+    LocalLink_Send(from, packet, sizeof(packet));
+}
+
+static void HandleDoubleBegin(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint32_t totalSize, checksum;
+
+    if (sCoop.doubleState != DOUBLE_STATE_WAIT_START
+     || !CtrCoopProtocol_DecodeDoubleBegin(data, len, &totalSize, &checksum)
+     || totalSize != DOUBLE_SETUP_SIZE)
+        return;
+    sCoop.doubleReceiveOffset = 0;
+    sCoop.doubleReceiveChecksum = checksum;
+    sCoop.doubleState = DOUBLE_STATE_RECEIVING;
+    SendDoubleRequestData(from, 0);
+}
+
+static void HandleDoubleChunk(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint16_t got, expected;
+    uint8_t ready[CTR_COOP_DOUBLE_CONTROL_SIZE] = {CTR_COOP_DOUBLE_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
+
+    if (sCoop.doubleState != DOUBLE_STATE_RECEIVING || sCoop.doubleReceiveOffset >= DOUBLE_SETUP_SIZE)
+        return;
+    if (!CtrCoopProtocol_DecodeDoubleChunk(data, len, sCoop.doubleReceiveOffset,
+            sDoubleReceiveData + sCoop.doubleReceiveOffset, DOUBLE_SETUP_SIZE - sCoop.doubleReceiveOffset, &got))
+        return;
+    expected = DOUBLE_SETUP_SIZE - sCoop.doubleReceiveOffset;
+    if (expected > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        expected = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (got != expected)
+        return;
+    sCoop.doubleReceiveOffset += got;
+    if (sCoop.doubleReceiveOffset < DOUBLE_SETUP_SIZE)
+    {
+        SendDoubleRequestData(from, sCoop.doubleReceiveOffset);
+        return;
+    }
+    if (CtrCoopProtocol_Checksum(sDoubleReceiveData, DOUBLE_SETUP_SIZE) != sCoop.doubleReceiveChecksum)
+    {
+        sCoop.doubleReceiveOffset = 0;
+        SendDoubleRequestData(from, 0);
+        return;
+    }
+    memcpy(sDoubleLocalParty, gPlayerParty, sizeof(sDoubleLocalParty));
+    ConfigureDoubleBattle(sDoubleReceiveData);
+    LocalLink_Send(from, ready, sizeof(ready));
+}
+
 static void SendBattleResult(void);
 static void SendBattleBegin(void);
 static void SendFlagUpdate(uint16_t to, uint16_t id, bool value);
@@ -763,32 +1027,55 @@ static bool BeginLocalBattle(void)
     return true;
 }
 
+static bool BeginBattleOrDouble(void)
+{
+    if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE))
+        return BeginLocalBattle();
+    if (sCoop.doubleState == DOUBLE_STATE_ACTIVE)
+        return BeginLocalBattle();
+    if (sCoop.doubleState != DOUBLE_STATE_IDLE)
+    {
+        if (sCoop.doubleRetry != 0)
+            sCoop.doubleRetry--;
+        return false;
+    }
+    if (!DoublePeerAvailable())
+        return BeginLocalBattle();
+    sCoop.doubleInitiator = true;
+    sCoop.doubleState = DOUBLE_STATE_WAIT_ACCEPT;
+    sCoop.doubleRetry = 0;
+    SendDoubleRequest();
+    return false;
+}
+
 bool CtrCoop_BattleStart(void)
 {
     uint8_t packet[CTR_COOP_BATTLE_RESERVE_SIZE];
     struct LocalPeer peers[1];
     uint16_t trainerId;
 
+    if (sCoop.doubleState == DOUBLE_STATE_ACTIVE)
+        return BeginLocalBattle();
     if (sCoop.battleActive || !sCoop.wanted || (gBattleTypeFlags & BATTLE_TYPE_LINK))
         return true;
     if (sCoop.battleSendState != BATTLE_SYNC_IDLE || sCoop.battleReleasePending)
         return false;
     sCoop.battleTrainerId = 0;
     if (!(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
-        return BeginLocalBattle();
+        return BeginBattleOrDouble();
     trainerId = gTrainerBattleOpponent_A;
     if (trainerId == 0)
-        return BeginLocalBattle();
+        return BeginBattleOrDouble();
     sCoop.battleTrainerId = trainerId;
     if (!sCoop.guest)
     {
         if (sCoop.peerTrainerId == trainerId)
             return false;
         sCoop.battleReserved = true;
-        return BeginLocalBattle();
+        return BeginBattleOrDouble();
     }
     if (sCoop.battleReserved)
-        return BeginLocalBattle();
+        return BeginBattleOrDouble();
     if (sCoop.battleReservePending || !sCoop.authenticated || !sCoop.saveReady)
         return false;
     if (sCoop.battleRetry != 0)
@@ -807,11 +1094,37 @@ bool CtrCoop_BattleStart(void)
     return false;
 }
 
+static void RestoreDoubleParty(void)
+{
+    uint8_t ownStart = sCoop.guest ? MULTI_PARTY_SIZE : 0;
+    uint8_t remoteStart = sCoop.guest ? 0 : MULTI_PARTY_SIZE;
+
+    if (sCoop.doubleState != DOUBLE_STATE_ACTIVE)
+        return;
+    for (uint8_t i = 0; i < MULTI_PARTY_SIZE; i++)
+    {
+        sDoubleLocalParty[ownStart + i] = gPlayerParty[ownStart + i];
+        sRemoteParty[remoteStart + i] = gPlayerParty[remoteStart + i];
+    }
+    memcpy(gPlayerParty, sDoubleLocalParty, sizeof(gPlayerParty));
+    gPlayerPartyCount = CalculatePlayerPartyCount();
+    sRemotePartyValid = true;
+}
+
 void CtrCoop_BattleEnd(void)
 {
     if (!sCoop.battleActive)
         return;
+    RestoreDoubleParty();
     SendBattleResult();
+    if (sCoop.doubleState == DOUBLE_STATE_ACTIVE)
+    {
+        sCoop.doubleState = DOUBLE_STATE_IDLE;
+        sCoop.doubleInitiator = false;
+        gBattleTypeFlags = sDoubleOriginalFlags;
+        gWirelessCommType = 0;
+        gReceivedRemoteLinkPlayers = 0;
+    }
     sCoop.battleActive = false;
     sCoop.battleReservePending = false;
     sCoop.battleReserved = false;
@@ -867,6 +1180,15 @@ void CtrCoop_BattleTick(void)
     {
         sCoop.battleRetry = 0;
         SendBattleBegin();
+    }
+    if ((sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT || sCoop.doubleState == DOUBLE_STATE_SENDING)
+     && ++sCoop.doubleRetry >= 120)
+    {
+        sCoop.doubleRetry = 0;
+        if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT)
+            SendDoubleRequest();
+        else
+            SendDoubleBegin();
     }
 }
 
@@ -951,7 +1273,8 @@ static void SendBattleResult(void)
         gSaveBlock1Ptr->playerPartyCount = gPlayerPartyCount;
         memcpy(gSaveBlock1Ptr->playerParty, gPlayerParty, sizeof(gPlayerParty));
     }
-    if (!sCoop.wanted || sCoop.battleSendState != BATTLE_SYNC_IDLE
+    if ((sCoop.doubleState == DOUBLE_STATE_ACTIVE && !sCoop.doubleInitiator)
+     || !sCoop.wanted || sCoop.battleSendState != BATTLE_SYNC_IDLE
      || (sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerSaveReady)
      || LocalLink_GetPeers(peers, 1) == 0)
         return;
@@ -988,7 +1311,7 @@ static void SendBattleResult(void)
     WriteBattle16(8, (uint16_t)coinsDelta);
     WriteBattle16(10, storageCount);
     WriteBattle16(12, itemCount);
-    WriteBattle16(14, 0);
+    WriteBattle16(14, sCoop.doubleState == DOUBLE_STATE_ACTIVE ? 1 : 0);
     sCoop.battleSendSize = offset;
     sCoop.battleSendOffset = 0;
     sCoop.battleSendChecksum = CtrCoopProtocol_Checksum(sBattleSendData, offset);
@@ -1123,30 +1446,35 @@ static bool ApplyBattleResult(void)
         SetBoxMonAt(box, position, incoming);
     }
     offset += storageCount * BATTLE_STORAGE_RECORD_SIZE;
-    for (uint16_t i = 0; i < itemCount; i++)
+    if (ReadBattle16(sBattleReceiveData, 14) == 0)
     {
-        uint16_t itemId = ReadBattle16(sBattleReceiveData, offset);
-        int16_t delta = (int16_t)ReadBattle16(sBattleReceiveData, offset + 2);
+        for (uint16_t i = 0; i < itemCount; i++)
+        {
+            uint16_t itemId = ReadBattle16(sBattleReceiveData, offset);
+            int16_t delta = (int16_t)ReadBattle16(sBattleReceiveData, offset + 2);
 
-        if (delta > 0)
-            AddBagItem(itemId, delta);
-        else if (delta < 0)
-            RemoveBagItem(itemId, -(int32_t)delta);
-        offset += BATTLE_ITEM_RECORD_SIZE;
-    }
-    if ((int32_t)ReadBattle32(sBattleReceiveData, 4) >= 0)
-        AddMoney(&gSaveBlock1Ptr->money, ReadBattle32(sBattleReceiveData, 4));
-    else
-        RemoveMoney(&gSaveBlock1Ptr->money, -(int32_t)ReadBattle32(sBattleReceiveData, 4));
-    {
-        int32_t coins = (int32_t)gSaveBlock1Ptr->coins + (int16_t)ReadBattle16(sBattleReceiveData, 8);
+            if (delta > 0)
+                AddBagItem(itemId, delta);
+            else if (delta < 0)
+                RemoveBagItem(itemId, -(int32_t)delta);
+            offset += BATTLE_ITEM_RECORD_SIZE;
+        }
+        if ((int32_t)ReadBattle32(sBattleReceiveData, 4) >= 0)
+            AddMoney(&gSaveBlock1Ptr->money, ReadBattle32(sBattleReceiveData, 4));
+        else
+            RemoveMoney(&gSaveBlock1Ptr->money, -(int32_t)ReadBattle32(sBattleReceiveData, 4));
+        {
+            int32_t coins = (int32_t)gSaveBlock1Ptr->coins + (int16_t)ReadBattle16(sBattleReceiveData, 8);
 
-        if (coins < 0)
-            coins = 0;
-        else if (coins > MAX_COINS)
-            coins = MAX_COINS;
-        gSaveBlock1Ptr->coins = coins;
+            if (coins < 0)
+                coins = 0;
+            else if (coins > MAX_COINS)
+                coins = MAX_COINS;
+            gSaveBlock1Ptr->coins = coins;
+        }
     }
+    memcpy(sRemoteParty, remoteParty, sizeof(sRemoteParty));
+    sRemotePartyValid = true;
     StorePartyRow(remoteRow, remoteParty);
     return true;
 }
@@ -1259,6 +1587,8 @@ static void ApplyPcSync(uint16_t from)
     const struct Pokemon *remoteParty = (const struct Pokemon *)(sSaveData + sizeof(struct PokemonStorage));
 
     memcpy(gPokemonStoragePtr, sSaveData, sizeof(*gPokemonStoragePtr));
+    memcpy(sRemoteParty, remoteParty, sizeof(sRemoteParty));
+    sRemotePartyValid = true;
     StorePartyRow(remoteRow, remoteParty);
     sCoop.syncState = PC_SYNC_IDLE;
     sCoop.syncOffset = 0;
@@ -1934,6 +2264,55 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             sCoop.battleRetry = 0;
             CtrLog_Write(CTR_LOG_GAME, "coop: battle result confirmed");
         }
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_REQUEST_PACKET)
+    {
+        if (len == CTR_COOP_DOUBLE_REQUEST_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION)
+            HandleDoubleRequest(from);
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_ACCEPT_PACKET)
+    {
+        if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+            PrepareDoubleSetup();
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_DECLINE_PACKET)
+    {
+        if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        {
+            sCoop.doubleState = DOUBLE_STATE_IDLE;
+            sCoop.doubleRetry = 120;
+        }
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_BEGIN_PACKET)
+    {
+        HandleDoubleBegin(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_REQUEST_DATA_PACKET)
+    {
+        uint32_t offset;
+
+        if (sCoop.doubleState == DOUBLE_STATE_SENDING
+         && CtrCoopProtocol_DecodeDoubleRequestData(data, len, &offset))
+            SendDoubleChunk(from, offset);
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_CHUNK_PACKET)
+    {
+        HandleDoubleChunk(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_DOUBLE_READY_PACKET)
+    {
+        if (sCoop.doubleState == DOUBLE_STATE_SENDING && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+            ConfigureDoubleBattle(sDoubleSendData);
         return true;
     }
     if (data[0] == CTR_COOP_FLAG_PACKET)

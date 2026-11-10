@@ -11,6 +11,7 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 - Veröffentlichung und Ersteinrichtung für den Sprint-3-Test erfolgen über `main` (`6fbae82 Make co-op avatar non-blocking`).
 - Sprint 4 wird getrennt auf `sprint-4` entwickelt. Die Koop-Box, Startteam-Auswahl, atomare PC-Übertragung und Reihensperren sind implementiert, aber noch nicht im Emulator abgenommen.
 - Sprint 5 baut auf diesem Stand auf und wird auf `sprint-5` entwickelt: unabhängige Kämpfe, Trainerreservierung und Battle-Ergebnissynchronisation.
+- Sprint 6 wird auf `sprint-6` entwickelt: gemeinsame Doppelkämpfe mit dem bestehenden Link-Controller und einem Koop-eigenen Start-Handshake.
 - Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von allen Branches gemeinsam verwendet.
 
 ## Mit zwei Azahar-Instanzen bestätigt
@@ -44,8 +45,9 @@ Geänderte Dateien:
 - `3ds_port/src/3ds_coop_protocol.c`
 - `3ds_port/tests/coop_protocol_test.c`
 - `patches/pokeemerald/0083-local-coop.patch`
+- `patches/pokeemerald/0084-double-coop.patch`
 
-Das Protokoll hat Version 7. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen, Trainerreservierungen und Battle-Ergebnisse sowie Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
+Das Protokoll hat Version 8. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen, Trainerreservierungen, Battle-Ergebnisse, Doppelkampf-Setup und Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
 Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
 
@@ -95,18 +97,28 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - `ReturnFromBattleToOverworld` startet die Übernahme nach Levelaufstiegen und Evolutionen. Bei Niederlage oder Unentschieden wartet sie bis nach `DoWhiteOut()`, damit Heilung, Geldabzug und Rückkehr enthalten sind.
 - Battle- und PC-Übertragungen besitzen getrennte Puffer und Bestätigungen. Die vollständige Azahar-Abnahme mit gleichzeitigen Kämpfen, Fängen, Whiteout und derselben Trainer-ID steht noch aus.
 
+## Sprint 6: Gemeinsame Doppelkämpfe
+
+- Ein Doppelkampf wird nur gemeinsam gestartet, wenn beide Figuren auf derselben Karte und höchstens drei Felder entfernt sind und kein anderer Kampf, PC oder Handshake aktiv ist. Andernfalls startet der originale Einzelspieler-Doppelkampf.
+- Host und Gast können auslösen. Die Anfrage wird mit Annahme, Ablehnung, Setup-Chunks und Startbestätigung beantwortet; verlorene Startpakete werden wiederholt.
+- Das Setup umfasst **1.232 Byte**: Kampfparameter, gemeinsamer RNG-Start, Gegnergruppe und je drei Pokémon von Host und Gast. Die übrigen drei Plätze jeder Originalgruppe bleiben für die Rückgabe gesichert.
+- Nach dem Setup verwendet die Engine ihre vorhandene Zwei-Spieler-Controller-Anordnung. Der Host steuert die linke Position, der Gast die rechte; beide Gegner bleiben KI-gesteuert. Die ursprüngliche Link-Lobby und das Party-Auswahlmenü werden nicht geöffnet.
+- Züge, Ziele, Wechsel, Items, Ohnmacht, Flucht und Kampfende laufen über den vorhandenen direkten Battle-Kanal innerhalb der Koop-Sitzung. `CloseLink()` wird für Koop nicht aufgerufen.
+- Nach dem Kampf werden die eigenen drei Plätze zurückübernommen. Nur der Auslöser überträgt Belohnungen. Da beide Engines Geld und Items bereits lokal verrechnet haben, überspringt die Bestätigung diese Deltas beim Partner und verhindert Doppelzählungen.
+- Niederlagen warten wie in Sprint 5 auf `DoWhiteOut()`. Die vollständige Abnahme mit beiden Auslösern, Zügen, Wechseln, Fängen, Whiteout und dem Fallback ohne Partner steht noch aus.
+
 ## Noch offen
 
 - Nicht kampfbedingte Teamänderungen außerhalb des PCs, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe, Kampfergebnisse und der Initialzustand werden bereits übertragen.
 - Beim Verbindungsende während einer unbestätigten Übertragung die endgültige Gruppe zuverlässig zurücklegen; die Reihe enthält den letzten bestätigten PC- oder Kampfstand.
 - Den neuen Beitritt mit Startteam-Auswahl, Host-Bestätigung, Rejoin und Abbruch mit zwei Azahar-Instanzen abnehmen.
 - Die Sperren der Host- und Gast-Reihe sowie die Migration eines bereits gefüllten Box-14-Bestands im Emulator prüfen.
-- Unabhängige Einzelkämpfe mit Fang, Niederlage und Trainerreservierung sowie später gemeinsame Doppelkämpfe abnehmen beziehungsweise implementieren.
+- Unabhängige Einzelkämpfe mit Fang, Niederlage und Trainerreservierung sowie gemeinsame Doppelkämpfe mit beiden Auslösern, Wechseln und Whiteout abnehmen.
 - Dritte Konsole und bestehende Link-Theken erneut prüfen.
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
 - Durchlässigkeit, unabhängige Menüs und Szenario-Synchronisation aus Sprint 3 ebenfalls abnehmen.
 
-Sprint 3, Sprint 4 und Sprint 5 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
+Sprint 3, Sprint 4, Sprint 5 und Sprint 6 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
 
 ## Nächste Arbeitsschritte
 
@@ -116,17 +128,18 @@ Sprint 3, Sprint 4 und Sprint 5 dürfen erst abgeschlossen werden, wenn alle ihr
 4. PC-Sperre, atomare Übernahme und gesperrte Spieler-Reihen auf beiden Konsolen testen, anschließend Abbrüche während der Teamwahl und Übertragung prüfen.
 5. Auf `sprint-5` gleichzeitig verschiedene wilde Kämpfe durchführen, einen Fang auf einem vollen Zielplatz prüfen und EP, Items und Geld auf beiden Seiten vergleichen.
 6. Dieselbe Trainer-ID zeitgleich anfordern, danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
-7. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+7. Auf `sprint-6` Doppelkämpfe von beiden Seiten auslösen, Züge und Wechsel getrennt steuern, Fang und Whiteout prüfen sowie den Fallback bei zu großer Entfernung testen.
+8. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 
 - Quelle liegt im Repository unter `3ds_port/`; `build/upstream/` wird nicht committed.
 - Vor einem inkrementellen Build geänderte Portdateien auch nach `build/upstream/3ds_port/` kopieren.
 - `main_menu.c` wird im Buildbaum geändert und muss mit `patches/pokeemerald/0083-local-coop.patch` übereinstimmen.
-- Patchkontrolle: `git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0083-local-coop.patch`.
+- Patchkontrolle zuerst für `0084-double-coop.patch`, danach für `0083-local-coop.patch`, jeweils mit `git -C build/upstream apply --check --reverse` ausführen.
 - Vor dem Abschluss: `make -C build/upstream/3ds_port release pak`, `make -C 3ds_port verify-coop`, `git diff --check` und `python tools/release_audit.py --repo . --strict`.
 - ROMs, Spielstände, PAKs, Build-Artefakte und Emulatorprofile niemals committen oder hochladen.
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4` und für unabhängige Kämpfe `sprint-5` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5` und für gemeinsame Doppelkämpfe `sprint-6` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

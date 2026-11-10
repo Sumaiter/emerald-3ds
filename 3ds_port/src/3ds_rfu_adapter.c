@@ -632,7 +632,17 @@ void PlatformLinkBattleSend(const void *data, u16 size, bool8 toSelf)
 {
     if (toSelf)
         QueuePushMessage(&sBattleQueue, data, size, 0);
-    ChannelSendAll(PEER_BATTLE, data, size, 0);
+    if (CtrCoop_IsDoubleBattle())
+    {
+        struct LocalPeer peers[1];
+
+        if (LocalLink_GetPeers(peers, 1) != 0)
+            ChannelSendTo(PEER_BATTLE, peers[0].id, data, size);
+    }
+    else
+    {
+        ChannelSendAll(PEER_BATTLE, data, size, 0);
+    }
 }
 
 u16 PlatformLinkBattleRecv(void *out, u16 max)

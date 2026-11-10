@@ -216,17 +216,19 @@ Alle Sprint-5-Implementierungen sind kompiliert und auf Protokollebene getestet;
 
 ## Sprint 6: Gemeinsame Doppelkämpfe
 
-**Status: Offen**
+**Status: In Arbeit**
 
 ### Aufgaben
 
-- [ ] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen.
-- [ ] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern.
-- [ ] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben.
-- [ ] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen.
-- [ ] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen.
-- [ ] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende korrekt synchronisieren.
-- [ ] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen.
+- [x] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen: dieselbe Karte, höchstens drei Felder Abstand und kein anderer Kampf, PC oder Handshake.
+- [x] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern: der Start nutzt einen geprüften 1.232-Byte-Setup-Handshake, danach laufen die originalen Controller-Nachrichten über den Koop-Direktkanal.
+- [x] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben: Host steuert die linke und Gast die rechte Position, Gegner bleiben KI-gesteuert.
+- [x] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen; der Auslöser überträgt Belohnungen nur einmal.
+- [x] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen.
+- [x] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende über die vorhandene Link-Controller-Steuerung synchronisieren; Niederlagen werden nach Whiteout übernommen.
+- [x] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen; lokal identische Geld- und Item-Deltas werden beim Partner nicht doppelt angerechnet.
+
+Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet. Die vollständige Abnahme mit gemeinsamen Zügen, Wechseln, Fängen, Whiteout, Host- und Gast-Auslösung sowie dem Fallback ohne Partner steht noch aus.
 
 ### Akzeptanzkriterien
 
@@ -287,4 +289,4 @@ Alle Sprint-5-Implementierungen sind kompiliert und auf Protokollebene getestet;
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Auf `sprint-6` starten Host und Gast gemeinsame Doppelkämpfe nach einer Karten-, Nähe- und Verfügbarkeitsprüfung. Ein bestätigter Setup-Handshake überträgt Gegner, Gruppen und RNG-Start; danach steuern Host und Gast ihre jeweilige Position über den originalen Direkt-Controller. Belohnungen werden nicht doppelt angerechnet und Whiteout wird übernommen. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

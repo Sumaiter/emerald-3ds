@@ -279,6 +279,16 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_EncodeBattleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "battle chunk encodes");
     CHECK(CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "battle chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "battle payload roundtrip");
+    CHECK(CtrCoopProtocol_EncodeDoubleBegin(1232, 0x89ABCDEF, begin, sizeof(begin)), "double begin encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleBegin(begin, sizeof(begin), &totalSize, &checksum) && totalSize == 1232 && checksum == 0x89ABCDEF, "double begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(begin, sizeof(begin), &totalSize, &checksum), "double begin is not battle result");
+    CHECK(CtrCoopProtocol_EncodeDoubleRequestData(128, request, sizeof(request)), "double request encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleRequestData(request, sizeof(request), &offset) && offset == 128, "double request roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleRequest(request, sizeof(request), &offset), "double request is not battle request");
+    CHECK(CtrCoopProtocol_EncodeDoubleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "double chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "double payload roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk is not battle chunk");
 }
 
 static void TestStoryUpdates(void)

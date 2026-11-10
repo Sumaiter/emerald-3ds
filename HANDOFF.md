@@ -1,8 +1,8 @@
 # Übergabe: Emerald 3DS Local Co-op
 
-Stand: 2026-11-09
+Stand: 2026-11-10
 
-Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha**. Sprint 1 und Sprint 2 sind geprüft. Sprint 3 ist in Arbeit; Host-Spielstand, Spawn, Kartenwechsel und Bewegung funktionieren im Emulator.
+Dieser Stand ist eine Entwicklungsversion, **keine vollständig abgenommene spielbare Alpha**. Die Implementierung aller geplanten Sprints ist vorhanden; die interaktive Abnahme erfolgt auf einem separaten Test-PC. Sprint 1 und Sprint 2 sind geprüft. Sprint 3 ist in Arbeit; Host-Spielstand, Spawn, Kartenwechsel und Bewegung funktionieren im Emulator.
 
 ## Repository
 
@@ -13,8 +13,32 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 - Sprint 5 baut auf diesem Stand auf und wird auf `sprint-5` entwickelt: unabhängige Kämpfe, Trainerreservierung und Battle-Ergebnissynchronisation.
 - Sprint 6 wird auf `sprint-6` entwickelt: gemeinsame Doppelkämpfe mit dem bestehenden Link-Controller und einem Koop-eigenen Start-Handshake.
 - Sprint 7 wird auf `sprint-7` entwickelt: bestätigte Abmeldung, Abbruchbehandlung, Sperrenbereinigung und sicherer Wiederbeitritt.
-- Sprint 8 wird auf `sprint-8` entwickelt: automatisierte Stabilisierung, Azahar- und Hardwaretests. Die interaktive Abnahme ist derzeit durch den gesperrten Desktop blockiert.
+- Sprint 8 wird auf `sprint-8` entwickelt: automatisierte Stabilisierung, Azahar- und Hardwaretests. Die interaktive Abnahme erfolgt auf einem separaten Test-PC.
 - Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von allen Branches gemeinsam verwendet.
+
+## Schnellstart auf dem Test-PC
+
+1. Repository klonen und `sprint-8` auschecken:
+
+   ```sh
+   git clone https://github.com/Sumaiter/emerald-3ds.git
+   cd emerald-3ds
+   git switch sprint-8
+   ```
+
+2. Werkzeuge und eine eigene deutsche BPED-ROM außerhalb von Git bereitstellen. `SETUP.md` enthält die genauen Pakete und Pfade.
+3. In der devkitPro-/MSYS2-Shell bauen:
+
+   ```sh
+   python tools/bootstrap.py --make --german-rom "C:/Spiele/Pokemon Smaragd-Edition.gba"
+   make -C build/upstream/3ds_port release pak -j8 PYTHON=python
+   make -C 3ds_port verify-coop
+   python -m unittest discover -s builder/tests -v
+   python tools/release_audit.py --repo . --strict
+   ```
+
+4. **Dieselben** 3DSX-, SMDH- und PAK-Dateien auf beide Azahar-SD-Umgebungen kopieren. Spielstände vorher sichern. ROMs, Saves und Build-Artefakte niemals committen.
+5. Einen privaten Raum starten und beide Instanzen mit demselben Port verbinden. `SETUP.md` beschreibt die Ordner und Direktverbindung. Die genaue Abnahmereihenfolge steht unten bei „Nächste Arbeitsschritte“.
 
 ## Mit zwei Azahar-Instanzen bestätigt
 
@@ -124,7 +148,7 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Compile-Zeit-Prüfungen sichern die Größen der Speicherweiterung, Original-Speicherblöcke, des initialen Snapshots und des Doppelkampf-Setups. Dabei wurde die Dokumentation des PC-Transfers von 34.392 auf **34.344 Byte** korrigiert; der Code verwendet bereits die richtigen `sizeof`-Werte.
 - Protokolltests decken nun zusätzlich kurze Pakete, falsche Typen, Versionen und Offsets ab.
 - Identische 3DSX- und PAK-Dateien wurden auf beide Azahar-SD-Umgebungen kopiert und deren Spielstände vorher gesichert. Ein privater Raum wurde auf Port 24873 geöffnet; Port 24872 war durch einen älteren Raum belegt.
-- Der Desktop ist gesperrt. Deshalb konnten die Fenster nicht bedient und Beitritt, Kämpfe, PC, Abmeldung und Regressionen nicht interaktiv abgenommen werden. Die von diesem Testlauf gestarteten Prozesse wurden beendet.
+- Die interaktive Abnahme wird auf einem separaten Test-PC durchgeführt. Die von diesem Vorbereitungslauf gestarteten Prozesse wurden beendet.
 - Reale 3DS-/2DS-Tests, Old-/New-3DS- und Voxel-Prüfungen sowie längere Spielsitzungen stehen noch aus. Es gibt weiterhin keine vollständig abgenommene spielbare Alpha.
 
 ## Noch offen
@@ -143,16 +167,17 @@ Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen w
 
 ## Nächste Arbeitsschritte
 
-1. Auf `main` Durchlässigkeit, fehlende NPC-Dialoge und unabhängige Menüs testen.
-2. Auf `sprint-4` einen neuen Gast beitreten lassen, ein Startteam wählen und erst nach der Host-Bestätigung die Welt betreten.
-3. Mit demselben Gastnamen erneut beitreten und das gespeicherte Team sowie den Spawn prüfen; die lokale Gast-SAV muss unverändert bleiben.
-4. PC-Sperre, atomare Übernahme und gesperrte Spieler-Reihen auf beiden Konsolen testen, anschließend Abbrüche während der Teamwahl und Übertragung prüfen.
-5. Auf `sprint-5` gleichzeitig verschiedene wilde Kämpfe durchführen, einen Fang auf einem vollen Zielplatz prüfen und EP, Items und Geld auf beiden Seiten vergleichen.
-6. Dieselbe Trainer-ID zeitgleich anfordern, danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
-7. Auf `sprint-6` Doppelkämpfe von beiden Seiten auslösen, Züge und Wechsel getrennt steuern, Fang und Whiteout prüfen sowie den Fallback bei zu großer Entfernung testen.
-8. Auf `sprint-7` ordentliche Abmeldung mit Team-Rückgabe, F6, Transferabbrüche, Doppelkampfabbruch und Wiederbeitritt prüfen.
-9. Nach Entsperren des Desktops auf `sprint-8` den privaten Raum erneut starten und die vollständige Zwei-Instanzen-Abnahme einschließlich Regressionen durchführen; anschließend reale Konsolen und Voxel testen.
-10. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+Alle folgenden Tests erfolgen auf dem separaten Test-PC mit `sprint-8` und demselben Build auf beiden Instanzen:
+
+1. Neuen Gast beitreten lassen, Startteam wählen und erst nach Host-Bestätigung die Welt betreten. Spawn und Bewegung prüfen. Mit demselben Namen erneut beitreten und Team sowie Spawn bestätigen; die lokale Gast-SAV muss bytegenau unverändert bleiben.
+2. Durchlässigkeit, fehlende NPC-Dialoge, unabhängige Menüs sowie Szenario-Flags und -Variablen auf beiden Seiten prüfen.
+3. PC-Sperre, atomare Übernahme und gesperrte Spieler-Reihen testen. Zusätzlich eine gefüllte Box 14 migrieren und Abbrüche während Teamwahl und Übertragung prüfen.
+4. Gleichzeitig verschiedene wilde Einzelkämpfe durchführen, einen Fang auf einem kollidierenden Zielplatz prüfen und EP, Items sowie Geld vergleichen.
+5. Dieselbe Trainer-ID zeitgleich anfordern. Danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
+6. Doppelkämpfe von beiden Seiten auslösen, Züge und Wechsel getrennt steuern, Fang und Whiteout prüfen sowie den Fallback bei zu großer Entfernung testen.
+7. Ordentliche Abmeldung mit Team-Rückgabe, F6, Transferabbrüche und Doppelkampfabbruch prüfen. Beim Wiederbeitritt keine doppelten Figuren, Gruppen oder Belohnungen akzeptieren.
+8. Dritte Konsole, Union Room, Tausch, Minispiele und normale Link-Kämpfe auf Regressionen prüfen. Danach Old 3DS, New 3DS und Voxel-Darstellung testen.
+9. Erst nach bestandener Abnahme `Status.md` und diese Datei aktualisieren und die Ergebnisse auf GitHub veröffentlichen.
 
 ## Build- und Testregeln
 
@@ -165,4 +190,4 @@ Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen w
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5`, für gemeinsame Doppelkämpfe `sprint-6`, für Abmeldung und Abbrüche `sprint-7` und für Stabilisierung und Hardwaretests `sprint-8` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die interaktive Abnahme ist durch den gesperrten Desktop blockiert und muss nach dem Entsperren fortgesetzt werden.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für die vollständige Abnahme `sprint-8` verwenden; die anderen Branches dokumentieren die Entwicklungsschritte. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die interaktive Abnahme erfolgt auf dem separaten Test-PC nach der dortigen Einrichtung.

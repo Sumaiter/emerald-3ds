@@ -38,6 +38,8 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig abgenommene spie
    ```
 
 4. **Dieselben** 3DSX-, SMDH- und PAK-Dateien auf beide Azahar-SD-Umgebungen kopieren. Spielstände vorher sichern. ROMs, Saves und Build-Artefakte niemals committen.
+
+   Zusätzlich steht ein Host-Testspielstand als separates Release-Asset bereit: <https://github.com/Sumaiter/emerald-3ds/releases/tag/test-save-2026-11-10>. Das Release enthält **nur die SAV-Datei**, keine ROM, kein 3DSX und kein PAK. Die Datei heißt beim Herunterladen `emerald3ds.sav` und gehört in die Host-SD-Umgebung.
 5. Einen privaten Raum starten und beide Instanzen mit demselben Port verbinden. `SETUP.md` beschreibt die Ordner und Direktverbindung. Die genaue Abnahmereihenfolge steht unten bei „Nächste Arbeitsschritte“.
 
 ## Mit zwei Azahar-Instanzen bestätigt

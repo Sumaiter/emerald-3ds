@@ -119,6 +119,8 @@ Die drei Build-Dateien auf **beide** emulierten SD-Karten kopieren:
 
 Beide Instanzen müssen denselben 3DSX-Build und dasselbe PAK erhalten, weil die Netzwerkverbindung die Build-ID vergleicht. Für Diagnoseausgaben in jedem Spielverzeichnis eine leere Datei `debug.txt` anlegen. Das Spiel schreibt dann `port.log` und behält die vorherige Sitzung als `port-prev.log`.
 
+Optional kann der Host-Testspielstand aus <https://github.com/Sumaiter/emerald-3ds/releases/tag/test-save-2026-11-10> verwendet werden. Das Release enthält nur die SAV-Datei, keine Spieldateien. Vorhandene Spielstände zuerst sichern und die heruntergeladene Datei als `emerald3ds.sav` im Host-Spielverzeichnis ablegen.
+
 ## 5. Lokalen Mehrspielerraum starten
 
 Für den UDS-Test mit Azahar wird ein Raumprozess benötigt. Die separate Datei `azahar-room.exe` verwenden, nicht `azahar.exe --room`.

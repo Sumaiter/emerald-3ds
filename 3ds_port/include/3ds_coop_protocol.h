@@ -37,6 +37,10 @@
 #define CTR_COOP_DOUBLE_CHUNK_PACKET 38
 #define CTR_COOP_DOUBLE_READY_PACKET 39
 #define CTR_COOP_DOUBLE_DECLINE_PACKET 40
+#define CTR_COOP_LOGOUT_BEGIN_PACKET 41
+#define CTR_COOP_LOGOUT_REQUEST_PACKET 42
+#define CTR_COOP_LOGOUT_CHUNK_PACKET 43
+#define CTR_COOP_LOGOUT_READY_PACKET 44
 #define CTR_COOP_DOUBLE_REQUEST_SIZE 4
 #define CTR_COOP_DOUBLE_CONTROL_SIZE 2
 #define CTR_COOP_BATTLE_RESERVE_SIZE 4
@@ -56,7 +60,7 @@
 #define CTR_COOP_SAVE_CHUNK_MAX (CTR_COOP_SAVE_CHUNK_HEADER + CTR_COOP_SAVE_CHUNK_DATA_MAX)
 #define CTR_COOP_SAVE_READY_SIZE 2
 #define CTR_COOP_PLAYER_NAME_SIZE 8
-#define CTR_COOP_PROTOCOL_VERSION 8
+#define CTR_COOP_PROTOCOL_VERSION 9
 #define CTR_COOP_GRAPHICS_ID_MAX 238
 #define CTR_COOP_PACKET_SIZE 13
 #define CTR_COOP_HEARTBEAT_FRAMES 60
@@ -129,6 +133,13 @@ bool CtrCoopProtocol_EncodeDoubleRequestData(uint32_t offset, uint8_t *out, uint
 bool CtrCoopProtocol_DecodeDoubleRequestData(const uint8_t *data, uint16_t size, uint32_t *offset);
 bool CtrCoopProtocol_EncodeDoubleChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodeDoubleChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize);
+bool CtrCoopProtocol_EncodeLogoutBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeLogoutBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum);
+bool CtrCoopProtocol_EncodeLogoutRequest(uint32_t offset, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeLogoutRequest(const uint8_t *data, uint16_t size, uint32_t *offset);
+bool CtrCoopProtocol_EncodeLogoutChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeLogoutChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
     uint8_t *out, uint16_t outCapacity, uint16_t *outSize);
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size);
 bool CtrCoopProtocol_EncodePcResult(bool accepted, uint8_t *out, uint16_t outSize);

@@ -289,6 +289,14 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "double payload roundtrip");
     CHECK(!CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk is not battle chunk");
+    CHECK(CtrCoopProtocol_EncodeLogoutBegin(600, 0x10203040, begin, sizeof(begin)), "logout begin encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutBegin(begin, sizeof(begin), &totalSize, &checksum) && totalSize == 600 && checksum == 0x10203040, "logout begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeDoubleBegin(begin, sizeof(begin), &totalSize, &checksum), "logout begin is not double setup");
+    CHECK(CtrCoopProtocol_EncodeLogoutRequest(512, request, sizeof(request)), "logout request encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutRequest(request, sizeof(request), &offset) && offset == 512, "logout request roundtrip");
+    CHECK(CtrCoopProtocol_EncodeLogoutChunk(512, payload, sizeof(payload), chunk, sizeof(chunk)), "logout chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutChunk(chunk, sizeof(chunk), 512, decodedPayload, sizeof(decodedPayload), &decodedSize), "logout chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "logout payload roundtrip");
 }
 
 static void TestStoryUpdates(void)

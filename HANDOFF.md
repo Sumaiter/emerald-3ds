@@ -12,6 +12,7 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 - Sprint 4 wird getrennt auf `sprint-4` entwickelt. Die Koop-Box, Startteam-Auswahl, atomare PC-Übertragung und Reihensperren sind implementiert, aber noch nicht im Emulator abgenommen.
 - Sprint 5 baut auf diesem Stand auf und wird auf `sprint-5` entwickelt: unabhängige Kämpfe, Trainerreservierung und Battle-Ergebnissynchronisation.
 - Sprint 6 wird auf `sprint-6` entwickelt: gemeinsame Doppelkämpfe mit dem bestehenden Link-Controller und einem Koop-eigenen Start-Handshake.
+- Sprint 7 wird auf `sprint-7` entwickelt: bestätigte Abmeldung, Abbruchbehandlung, Sperrenbereinigung und sicherer Wiederbeitritt.
 - Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von allen Branches gemeinsam verwendet.
 
 ## Mit zwei Azahar-Instanzen bestätigt
@@ -47,7 +48,7 @@ Geänderte Dateien:
 - `patches/pokeemerald/0083-local-coop.patch`
 - `patches/pokeemerald/0084-double-coop.patch`
 
-Das Protokoll hat Version 8. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen, Trainerreservierungen, Battle-Ergebnisse, Doppelkampf-Setup und Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
+Das Protokoll hat Version 9. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen, Trainerreservierungen, Battle-Ergebnisse, Doppelkampf-Setup, Abmeldung mit Team-Rückgabe und Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
 Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
 
@@ -107,6 +108,16 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Nach dem Kampf werden die eigenen drei Plätze zurückübernommen. Nur der Auslöser überträgt Belohnungen. Da beide Engines Geld und Items bereits lokal verrechnet haben, überspringt die Bestätigung diese Deltas beim Partner und verhindert Doppelzählungen.
 - Niederlagen warten wie in Sprint 5 auf `DoWhiteOut()`. Die vollständige Abnahme mit beiden Auslösern, Zügen, Wechseln, Fängen, Whiteout und dem Fallback ohne Partner steht noch aus.
 
+## Sprint 7: Abmeldung und Abbrüche
+
+- Eine ordentliche Gast-Abmeldung überträgt die aktuelle Gruppe als **600 Byte** mit Prüfsumme. Der Host legt sie in der Gast-Reihe ab und bestätigt; erst danach trennt der Gast. Ein Abbruch vor bestätigtem Startteam verändert die alte Reihe nicht.
+- Die Anforderung wird nach 120 Frames wiederholt. Nach 600 Frames endet der Versuch mit dem letzten bestätigten Stand. Die lokale Gast-SAV bleibt immer unverändert.
+- Bei Verbindungsverlust werden PC-, Trainer-, Logout- und Doppelkampfzustände zurückgesetzt. Empfänger verwerfen unvollständige Transfers; bereits bestätigte Stände bleiben erhalten.
+- Aktive Einzel- und Doppelkämpfe werden sicher als Flucht beendet, nicht durch eine KI fortgesetzt. Die eigenen Gruppenplätze werden zurückgegeben. Ausstehende Reservierungen und Handshakes kehren zur Oberwelt zurück; unbestätigte Belohnungen werden nicht übernommen.
+- Beim Schließen der Host-Welt wird die zuletzt bestätigte vollständige Partnergruppe in die Gast-Reihe gelegt und entsperrt.
+- Ein Wiederbeitritt ersetzt den RAM-Zustand durch einen vollständigen geprüften Host-Snapshot. Dadurch entstehen keine doppelten Figuren, Gruppen oder Belohnungen und keine lokale Gast-SAV wird verändert.
+- Die Abnahme mit ordentlicher Abmeldung, F6, Abbrüchen während PC- und Battle-Transfers, Doppelkämpfen und Wiederbeitritt steht noch aus.
+
 ## Noch offen
 
 - Nicht kampfbedingte Teamänderungen außerhalb des PCs, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe, Kampfergebnisse und der Initialzustand werden bereits übertragen.
@@ -114,11 +125,12 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Den neuen Beitritt mit Startteam-Auswahl, Host-Bestätigung, Rejoin und Abbruch mit zwei Azahar-Instanzen abnehmen.
 - Die Sperren der Host- und Gast-Reihe sowie die Migration eines bereits gefüllten Box-14-Bestands im Emulator prüfen.
 - Unabhängige Einzelkämpfe mit Fang, Niederlage und Trainerreservierung sowie gemeinsame Doppelkämpfe mit beiden Auslösern, Wechseln und Whiteout abnehmen.
+- Abmeldung, F6, Abbrüche während Übertragungen und Wiederbeitritt auf `sprint-7` abnehmen.
 - Dritte Konsole und bestehende Link-Theken erneut prüfen.
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
 - Durchlässigkeit, unabhängige Menüs und Szenario-Synchronisation aus Sprint 3 ebenfalls abnehmen.
 
-Sprint 3, Sprint 4, Sprint 5 und Sprint 6 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
+Sprint 3, Sprint 4, Sprint 5, Sprint 6 und Sprint 7 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
 
 ## Nächste Arbeitsschritte
 
@@ -129,7 +141,8 @@ Sprint 3, Sprint 4, Sprint 5 und Sprint 6 dürfen erst abgeschlossen werden, wen
 5. Auf `sprint-5` gleichzeitig verschiedene wilde Kämpfe durchführen, einen Fang auf einem vollen Zielplatz prüfen und EP, Items und Geld auf beiden Seiten vergleichen.
 6. Dieselbe Trainer-ID zeitgleich anfordern, danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
 7. Auf `sprint-6` Doppelkämpfe von beiden Seiten auslösen, Züge und Wechsel getrennt steuern, Fang und Whiteout prüfen sowie den Fallback bei zu großer Entfernung testen.
-8. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+8. Auf `sprint-7` ordentliche Abmeldung mit Team-Rückgabe, F6, Transferabbrüche, Doppelkampfabbruch und Wiederbeitritt prüfen.
+9. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 
@@ -142,4 +155,4 @@ Sprint 3, Sprint 4, Sprint 5 und Sprint 6 dürfen erst abgeschlossen werden, wen
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5` und für gemeinsame Doppelkämpfe `sprint-6` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4`, für unabhängige Kämpfe `sprint-5`, für gemeinsame Doppelkämpfe `sprint-6` und für Abmeldung und Abbrüche `sprint-7` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

@@ -452,6 +452,37 @@ bool CtrCoopProtocol_DecodeDoubleChunk(const uint8_t *data, uint16_t size, uint3
     return DecodeTransferChunk(CTR_COOP_DOUBLE_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
 }
 
+bool CtrCoopProtocol_EncodeLogoutBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_LOGOUT_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeLogoutBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_LOGOUT_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodeLogoutRequest(uint32_t offset, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferRequest(CTR_COOP_LOGOUT_REQUEST_PACKET, offset, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeLogoutRequest(const uint8_t *data, uint16_t size, uint32_t *offset)
+{
+    return DecodeTransferRequest(CTR_COOP_LOGOUT_REQUEST_PACKET, data, size, offset);
+}
+
+bool CtrCoopProtocol_EncodeLogoutChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_LOGOUT_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeLogoutChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_LOGOUT_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size)
 {
     uint32_t hash = 2166136261u;

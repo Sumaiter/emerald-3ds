@@ -239,17 +239,19 @@ Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet.
 
 ## Sprint 7: Abmeldung, Verbindungsabbrüche und sicheres Speichern
 
-**Status: Offen**
+**Status: In Arbeit**
 
 ### Aufgaben
 
-- [ ] Ordentliche Abmeldung mit vollständiger Rückgabe der Gruppe durchführen.
-- [ ] Unerwartete Verbindungsabbrüche erkennen und nach einer definierten Zeitüberschreitung bereinigen.
-- [ ] Verhalten bei Abbrüchen während Einzel- und Doppelkämpfen festlegen und umsetzen.
-- [ ] Beim Schließen der Host-Welt alle Spieler und Gruppen sicher zurück in die Mehrspieler-Box überführen.
-- [ ] PC- und Anmeldesperren bei Abbrüchen zuverlässig freigeben.
-- [ ] Nur konsistente Zustände speichern und unterbrochene Vorgänge verwerfen oder vollständig wiederherstellen.
-- [ ] Wiederbeitritt nach Abbruch ohne doppelte Figuren, Gruppen oder Belohnungen ermöglichen.
+- [x] Ordentliche Abmeldung mit vollständiger Rückgabe der Gruppe durchführen: 600 Byte in geprüften Chunks, Trennung erst nach Host-Bestätigung, Abbruch der ersten Teamwahl ohne Überschreiben der alten Reihe.
+- [x] Unerwartete Verbindungsabbrüche erkennen und nach einer definierten Zeitüberschreitung bereinigen; Abmeldungen werden nach 120 Frames erneut gesendet und nach 600 Frames mit dem letzten bestätigten Stand beendet.
+- [x] Verhalten bei Abbrüchen während Einzel- und Doppelkämpfen festlegen und umsetzen: sicherer Abbruch als Flucht mit Gruppenrückgabe statt KI-Übernahme; ausstehende Handshakes kehren zur Oberwelt zurück.
+- [x] Beim Schließen der Host-Welt alle Spieler und Gruppen sicher zurück in die Mehrspieler-Box überführen; die zuletzt bestätigte vollständige Partnergruppe wird in deren Reihe gespeichert.
+- [x] PC- und Anmeldesperren bei Abbrüchen zuverlässig freigeben; PC-, Trainer-, Logout- und Doppelkampfzustände werden zurückgesetzt.
+- [x] Nur konsistente Zustände speichern und unterbrochene Vorgänge verwerfen oder vollständig wiederherstellen; Empfänger übernehmen Daten erst nach vollständigem Empfang und korrekter Prüfsumme.
+- [x] Wiederbeitritt nach Abbruch ohne doppelte Figuren, Gruppen oder Belohnungen ermöglichen; der vollständige Host-Snapshot ersetzt den RAM-Zustand des Gastes, nicht dessen lokale SAV.
+
+Alle Sprint-7-Implementierungen sind kompiliert und auf Protokollebene getestet. Die Abnahme mit bestätigter Abmeldung, Abbrüchen während PC- und Battle-Transfers, Doppelkämpfen, F6 und Wiederbeitritt steht noch aus.
 
 ### Akzeptanzkriterien
 
@@ -285,8 +287,7 @@ Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet.
 
 - Dürfen Gäste story-kritische Ereignisse auslösen oder nur normale Trainer und wilde Begegnungen?
 - Wie werden Flucht, Fangversuche und Kampfabbrüche in gemeinsamen Doppelkämpfen behandelt?
-- Soll bei einem Verbindungsabbruch im Doppelkampf eine KI übernehmen oder der Kampf sicher abgebrochen werden?
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Auf `sprint-6` starten Host und Gast gemeinsame Doppelkämpfe nach einer Karten-, Nähe- und Verfügbarkeitsprüfung. Ein bestätigter Setup-Handshake überträgt Gegner, Gruppen und RNG-Start; danach steuern Host und Gast ihre jeweilige Position über den originalen Direkt-Controller. Belohnungen werden nicht doppelt angerechnet und Whiteout wird übernommen. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Auf `sprint-6` starten Host und Gast gemeinsame Doppelkämpfe nach einer Karten-, Nähe- und Verfügbarkeitsprüfung. Ein bestätigter Setup-Handshake überträgt Gegner, Gruppen und RNG-Start; danach steuern Host und Gast ihre jeweilige Position über den originalen Direkt-Controller. Belohnungen werden nicht doppelt angerechnet und Whiteout wird übernommen. Auf `sprint-7` trennt eine ordentliche Abmeldung erst nach bestätigter Team-Rückgabe. Abbrüche beenden aktive Kämpfe sicher als Flucht, setzen alle Sperren zurück und verwerfen unvollständige Transfers; der Wiederbeitritt erfolgt über den vollständigen Host-Snapshot ohne Änderung der lokalen Gast-SAV. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

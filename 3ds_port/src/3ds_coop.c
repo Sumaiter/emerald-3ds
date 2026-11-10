@@ -79,6 +79,12 @@ static struct
     uint32_t doubleSendChecksum;
     uint32_t doubleReceiveOffset;
     uint32_t doubleReceiveChecksum;
+    uint8_t logoutState;
+    uint16_t logoutRetry;
+    uint32_t logoutSendOffset;
+    uint32_t logoutSendChecksum;
+    uint32_t logoutReceiveOffset;
+    uint32_t logoutReceiveChecksum;
     uint32_t saveOffset;
     uint32_t saveChecksum;
     bool spawnValid;
@@ -121,12 +127,17 @@ static struct
 #define DOUBLE_STATE_ACTIVE 5
 #define DOUBLE_HEADER_SIZE 32
 #define DOUBLE_SETUP_SIZE (DOUBLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE * 2)
+#define LOGOUT_STATE_IDLE 0
+#define LOGOUT_STATE_SENDING 1
+#define LOGOUT_STATE_RECEIVING 2
 
 static uint8_t sSaveData[CTR_COOP_SAVE_SIZE] ALIGNED(4);
 static uint8_t sBattleSendData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
 static uint8_t sBattleReceiveData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
 static uint8_t sDoubleSendData[DOUBLE_SETUP_SIZE] ALIGNED(4);
 static uint8_t sDoubleReceiveData[DOUBLE_SETUP_SIZE] ALIGNED(4);
+static uint8_t sLogoutSendData[sizeof(struct Pokemon) * PARTY_SIZE] ALIGNED(4);
+static uint8_t sLogoutReceiveData[sizeof(struct Pokemon) * PARTY_SIZE] ALIGNED(4);
 static struct SaveBlock1 sBattleSaveBaseline;
 static struct PokemonStorage sBattleStorageBaseline;
 static struct Pokemon sDoubleLocalParty[PARTY_SIZE];
@@ -171,6 +182,8 @@ static void ClearRemote(void)
     sCoop.doubleState = DOUBLE_STATE_IDLE;
     sCoop.doubleInitiator = false;
     sCoop.doubleRetry = 0;
+    sCoop.logoutState = LOGOUT_STATE_IDLE;
+    sCoop.logoutRetry = 0;
     sRemotePartyValid = false;
     sCoop.saveOffset = 0;
     sCoop.saveChecksum = 0;
@@ -1013,6 +1026,7 @@ static void HandleDoubleChunk(uint16_t from, const uint8_t *data, uint16_t len)
 
 static void SendBattleResult(void);
 static void SendBattleBegin(void);
+static void TickLogout(void);
 static void SendFlagUpdate(uint16_t to, uint16_t id, bool value);
 
 static bool BeginLocalBattle(void)
@@ -1176,6 +1190,7 @@ static void ReleaseTrainerReservation(void)
 
 void CtrCoop_BattleTick(void)
 {
+    TickLogout();
     if (sCoop.battleSendState == BATTLE_SYNC_SENDING && ++sCoop.battleRetry >= 120)
     {
         sCoop.battleRetry = 0;
@@ -1771,8 +1786,10 @@ void CtrCoop_JoinGame(uint32_t token, const uint8_t *password)
     PlaySE(SE_SUCCESS);
 }
 
-void CtrCoop_Stop(void)
+static void FinishStop(void)
 {
+    if (!sCoop.guest && sRemotePartyValid)
+        StorePartyRow(CTR_COOP_STORAGE_GUEST_ROW, sRemoteParty);
     CtrCoop_ReleasePC();
     sCoop.wanted = false;
     sCoop.authenticated = false;
@@ -1781,6 +1798,130 @@ void CtrCoop_Stop(void)
     sCoop.peerAuthenticated = false;
     ClearRemote();
     LocalLink_LeaveSession();
+}
+
+static void SendLogoutBegin(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+
+    if (sCoop.logoutState != LOGOUT_STATE_SENDING || LocalLink_GetPeers(peers, 1) == 0)
+        return;
+    if (CtrCoopProtocol_EncodeLogoutBegin(sizeof(sLogoutSendData), sCoop.logoutSendChecksum, packet, sizeof(packet)))
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+}
+
+static void SendLogoutRequest(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_REQUEST_SIZE];
+
+    if (CtrCoopProtocol_EncodeLogoutRequest(offset, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void SendLogoutChunk(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint16_t size;
+
+    if (sCoop.logoutState != LOGOUT_STATE_SENDING || offset >= sizeof(sLogoutSendData))
+        return;
+    size = sizeof(sLogoutSendData) - offset;
+    if (size > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        size = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (CtrCoopProtocol_EncodeLogoutChunk(offset, sLogoutSendData + offset, size, packet, CTR_COOP_SAVE_CHUNK_HEADER + size))
+        LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+}
+
+static void HandleLogoutBegin(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint32_t totalSize, checksum;
+
+    if (sCoop.guest || !sCoop.peerAuthenticated || !sCoop.peerSaveReady
+     || sCoop.logoutState != LOGOUT_STATE_IDLE
+     || !CtrCoopProtocol_DecodeLogoutBegin(data, len, &totalSize, &checksum)
+     || totalSize != sizeof(sLogoutReceiveData))
+        return;
+    sCoop.logoutReceiveOffset = 0;
+    sCoop.logoutReceiveChecksum = checksum;
+    sCoop.logoutState = LOGOUT_STATE_RECEIVING;
+    sCoop.logoutRetry = 0;
+    SendLogoutRequest(from, 0);
+}
+
+static void HandleLogoutChunk(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint16_t got, expected;
+    uint8_t ready[CTR_COOP_SAVE_READY_SIZE] = {CTR_COOP_LOGOUT_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
+
+    if (sCoop.guest || sCoop.logoutState != LOGOUT_STATE_RECEIVING
+     || sCoop.logoutReceiveOffset >= sizeof(sLogoutReceiveData))
+        return;
+    if (!CtrCoopProtocol_DecodeLogoutChunk(data, len, sCoop.logoutReceiveOffset,
+            sLogoutReceiveData + sCoop.logoutReceiveOffset,
+            sizeof(sLogoutReceiveData) - sCoop.logoutReceiveOffset, &got))
+        return;
+    expected = sizeof(sLogoutReceiveData) - sCoop.logoutReceiveOffset;
+    if (expected > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        expected = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (got != expected)
+        return;
+    sCoop.logoutReceiveOffset += got;
+    if (sCoop.logoutReceiveOffset < sizeof(sLogoutReceiveData))
+    {
+        SendLogoutRequest(from, sCoop.logoutReceiveOffset);
+        return;
+    }
+    if (CtrCoopProtocol_Checksum(sLogoutReceiveData, sizeof(sLogoutReceiveData)) != sCoop.logoutReceiveChecksum)
+    {
+        sCoop.logoutReceiveOffset = 0;
+        SendLogoutRequest(from, 0);
+        return;
+    }
+    memcpy(sRemoteParty, sLogoutReceiveData, sizeof(sRemoteParty));
+    sRemotePartyValid = true;
+    StorePartyRow(CTR_COOP_STORAGE_GUEST_ROW, sRemoteParty);
+    sCoop.peerTeamReady = false;
+    sCoop.logoutState = LOGOUT_STATE_IDLE;
+    LocalLink_Send(from, ready, sizeof(ready));
+    CtrLog_Write(CTR_LOG_GAME, "coop: guest party returned before logout");
+}
+
+static void TickLogout(void)
+{
+    if (sCoop.logoutState == LOGOUT_STATE_IDLE)
+        return;
+    sCoop.logoutRetry++;
+    if (sCoop.logoutState == LOGOUT_STATE_SENDING && sCoop.logoutRetry % 120 == 0)
+        SendLogoutBegin();
+    if (sCoop.logoutRetry >= 600)
+    {
+        if (sCoop.guest && sCoop.logoutState == LOGOUT_STATE_SENDING)
+            FinishStop();
+        else
+            sCoop.logoutState = LOGOUT_STATE_IDLE;
+    }
+}
+
+void CtrCoop_Stop(void)
+{
+    struct LocalPeer peers[1];
+
+    if (sCoop.guest && sCoop.wanted && sCoop.authenticated && sCoop.saveReady
+     && sCoop.initialTeamCommitted && sCoop.spawnValid
+     && sCoop.logoutState == LOGOUT_STATE_IDLE && LocalLink_GetPeers(peers, 1) != 0)
+    {
+        memcpy(sLogoutSendData, gPlayerParty, sizeof(sLogoutSendData));
+        sCoop.logoutSendOffset = 0;
+        sCoop.logoutSendChecksum = CtrCoopProtocol_Checksum(sLogoutSendData, sizeof(sLogoutSendData));
+        sCoop.logoutState = LOGOUT_STATE_SENDING;
+        sCoop.logoutRetry = 0;
+        SendLogoutBegin();
+        return;
+    }
+    if (sCoop.logoutState == LOGOUT_STATE_SENDING)
+        return;
+    FinishStop();
 }
 
 bool CtrCoop_GuestSaveBlocked(void)
@@ -1797,6 +1938,8 @@ uint8_t CtrCoop_GetSessionState(void)
     if (sCoop.authRejected)
         return LOCAL_SESSION_AUTH_FAILED;
     state = LocalLink_GetSession();
+    if (sCoop.guest && sCoop.logoutState != LOGOUT_STATE_IDLE)
+        return LOCAL_SESSION_SEARCHING;
     if (sCoop.guest && state == LOCAL_SESSION_IN
      && (!sCoop.authenticated || !sCoop.saveReady || !sCoop.initialTeamCommitted
       || sCoop.syncState != PC_SYNC_IDLE || !sCoop.spawnValid))
@@ -1823,6 +1966,7 @@ void CtrCoop_MenuFrame(void)
     struct LocalPeer peers[1];
     uint8_t packet[CTR_COOP_AUTH_PACKET_SIZE];
 
+    TickLogout();
     if (!sCoop.guest || !sCoop.wanted || sCoop.authRejected)
         return;
     if (sCoop.authenticated)
@@ -2315,6 +2459,32 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             ConfigureDoubleBattle(sDoubleSendData);
         return true;
     }
+    if (data[0] == CTR_COOP_LOGOUT_BEGIN_PACKET)
+    {
+        HandleLogoutBegin(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_LOGOUT_REQUEST_PACKET)
+    {
+        uint32_t offset;
+
+        if (sCoop.logoutState == LOGOUT_STATE_SENDING
+         && CtrCoopProtocol_DecodeLogoutRequest(data, len, &offset))
+            SendLogoutChunk(from, offset);
+        return true;
+    }
+    if (data[0] == CTR_COOP_LOGOUT_CHUNK_PACKET)
+    {
+        HandleLogoutChunk(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_LOGOUT_READY_PACKET)
+    {
+        if (sCoop.guest && sCoop.logoutState == LOGOUT_STATE_SENDING
+         && len == CTR_COOP_SAVE_READY_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION)
+            FinishStop();
+        return true;
+    }
     if (data[0] == CTR_COOP_FLAG_PACKET)
     {
         uint16_t id;
@@ -2360,10 +2530,39 @@ void CtrCoop_PeerLeft(uint16_t id)
     if (sCoop.peerId == id || sCoop.peerId == 0)
     {
         bool restart = !sCoop.guest && sCoop.wanted;
+        bool activeBattle = sCoop.battleActive;
+        bool pendingBattle = sCoop.battleReservePending || sCoop.battleReserved
+                          || sCoop.doubleState != DOUBLE_STATE_IDLE;
 
+        if (activeBattle && sCoop.doubleState == DOUBLE_STATE_ACTIVE)
+        {
+            RestoreDoubleParty();
+            gBattleTypeFlags = sDoubleOriginalFlags;
+            gWirelessCommType = 0;
+            gReceivedRemoteLinkPlayers = 0;
+        }
+        if (activeBattle)
+        {
+            StorePartyRow(sCoop.guest ? CTR_COOP_STORAGE_GUEST_ROW : CTR_COOP_STORAGE_HOST_ROW, gPlayerParty);
+            if (!sCoop.guest)
+            {
+                gSaveBlock1Ptr->playerPartyCount = gPlayerPartyCount;
+                memcpy(gSaveBlock1Ptr->playerParty, gPlayerParty, sizeof(gPlayerParty));
+            }
+        }
         ClearRemote();
+        sCoop.battleActive = false;
         sCoop.peerAuthenticated = false;
         sCoop.authSent = false;
+        if (activeBattle)
+        {
+            gBattleOutcome = B_OUTCOME_RAN;
+            SetMainCallback2(CB2_InitEndLinkBattle);
+        }
+        else if (pendingBattle)
+        {
+            SetMainCallback2(gMain.savedCallback);
+        }
         if (restart)
             LocalLink_StartSession(LOCAL_KIND_COOP);
     }

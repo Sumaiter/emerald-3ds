@@ -214,52 +214,52 @@ static uint32_t Get32(const uint8_t *data)
     return data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 }
 
-bool CtrCoopProtocol_EncodeSaveBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+static bool EncodeTransferBegin(uint8_t type, uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
 {
     if (out == NULL || totalSize == 0 || outSize != CTR_COOP_SAVE_BEGIN_SIZE)
         return false;
-    out[0] = CTR_COOP_SAVE_BEGIN_PACKET;
+    out[0] = type;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
     Put32(out + 2, totalSize);
     Put32(out + 6, checksum);
     return true;
 }
 
-bool CtrCoopProtocol_DecodeSaveBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+static bool DecodeTransferBegin(uint8_t type, const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
 {
     if (data == NULL || totalSize == NULL || checksum == NULL || size != CTR_COOP_SAVE_BEGIN_SIZE
-     || data[0] != CTR_COOP_SAVE_BEGIN_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION || Get32(data + 2) == 0)
+     || data[0] != type || data[1] != CTR_COOP_PROTOCOL_VERSION || Get32(data + 2) == 0)
         return false;
     *totalSize = Get32(data + 2);
     *checksum = Get32(data + 6);
     return true;
 }
 
-bool CtrCoopProtocol_EncodeSaveRequest(uint32_t offset, uint8_t *out, uint16_t outSize)
+static bool EncodeTransferRequest(uint8_t type, uint32_t offset, uint8_t *out, uint16_t outSize)
 {
     if (out == NULL || outSize != CTR_COOP_SAVE_REQUEST_SIZE)
         return false;
-    out[0] = CTR_COOP_SAVE_REQUEST_PACKET;
+    out[0] = type;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
     Put32(out + 2, offset);
     return true;
 }
 
-bool CtrCoopProtocol_DecodeSaveRequest(const uint8_t *data, uint16_t size, uint32_t *offset)
+static bool DecodeTransferRequest(uint8_t type, const uint8_t *data, uint16_t size, uint32_t *offset)
 {
     if (data == NULL || offset == NULL || size != CTR_COOP_SAVE_REQUEST_SIZE
-     || data[0] != CTR_COOP_SAVE_REQUEST_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION)
+     || data[0] != type || data[1] != CTR_COOP_PROTOCOL_VERSION)
         return false;
     *offset = Get32(data + 2);
     return true;
 }
 
-bool CtrCoopProtocol_EncodeSaveChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+static bool EncodeTransferChunk(uint8_t type, uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
 {
     if (data == NULL || out == NULL || dataSize == 0 || dataSize > CTR_COOP_SAVE_CHUNK_DATA_MAX
      || outSize != CTR_COOP_SAVE_CHUNK_HEADER + dataSize)
         return false;
-    out[0] = CTR_COOP_SAVE_CHUNK_PACKET;
+    out[0] = type;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
     Put32(out + 2, offset);
     out[6] = dataSize & 0xFF;
@@ -268,7 +268,7 @@ bool CtrCoopProtocol_EncodeSaveChunk(uint32_t offset, const uint8_t *data, uint1
     return true;
 }
 
-bool CtrCoopProtocol_DecodeSaveChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+static bool DecodeTransferChunk(uint8_t type, const uint8_t *data, uint16_t size, uint32_t expectedOffset,
     uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
 {
     uint16_t payload;
@@ -276,13 +276,75 @@ bool CtrCoopProtocol_DecodeSaveChunk(const uint8_t *data, uint16_t size, uint32_
     if (data == NULL || outSize == NULL || size < CTR_COOP_SAVE_CHUNK_HEADER + 1 || size > CTR_COOP_SAVE_CHUNK_MAX)
         return false;
     payload = size - CTR_COOP_SAVE_CHUNK_HEADER;
-    if (out == NULL || outCapacity < payload || data[0] != CTR_COOP_SAVE_CHUNK_PACKET
+    if (out == NULL || outCapacity < payload || data[0] != type
      || data[1] != CTR_COOP_PROTOCOL_VERSION || Get32(data + 2) != expectedOffset
      || (data[6] | ((uint16_t)data[7] << 8)) != payload)
         return false;
     memcpy(out, data + CTR_COOP_SAVE_CHUNK_HEADER, payload);
     *outSize = payload;
     return true;
+}
+
+bool CtrCoopProtocol_EncodeSaveBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_SAVE_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeSaveBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_SAVE_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodeSaveRequest(uint32_t offset, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferRequest(CTR_COOP_SAVE_REQUEST_PACKET, offset, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeSaveRequest(const uint8_t *data, uint16_t size, uint32_t *offset)
+{
+    return DecodeTransferRequest(CTR_COOP_SAVE_REQUEST_PACKET, data, size, offset);
+}
+
+bool CtrCoopProtocol_EncodeSaveChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_SAVE_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeSaveChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_SAVE_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
+bool CtrCoopProtocol_EncodePcSyncBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_PC_SYNC_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePcSyncBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_PC_SYNC_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodePcSyncRequest(uint32_t offset, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferRequest(CTR_COOP_PC_SYNC_REQUEST_PACKET, offset, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePcSyncRequest(const uint8_t *data, uint16_t size, uint32_t *offset)
+{
+    return DecodeTransferRequest(CTR_COOP_PC_SYNC_REQUEST_PACKET, data, size, offset);
+}
+
+bool CtrCoopProtocol_EncodePcSyncChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_PC_SYNC_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePcSyncChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_PC_SYNC_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
 }
 
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size)

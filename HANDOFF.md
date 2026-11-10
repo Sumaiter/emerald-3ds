@@ -8,9 +8,9 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 
 - Fork: `https://github.com/Sumaiter/emerald-3ds`
 - Original: `https://github.com/ZallaxDev/emerald-3ds`
-- Veröffentlichung und Ersteinrichtung erfolgen über `main`.
-- Letzter Übergabe-Commit: `0cdbc1c Document sprint 3 handoff and PC setup`.
-- Die neueren Snapshot- und Spawn-Änderungen werden mit dieser Übergabe veröffentlicht.
+- Veröffentlichung und Ersteinrichtung für den Sprint-3-Test erfolgen über `main` (`6fbae82 Make co-op avatar non-blocking`).
+- Sprint 4 wird getrennt auf `sprint-4` entwickelt. Die Koop-Box, Startteam-Auswahl, atomare PC-Übertragung und Reihensperren sind implementiert, aber noch nicht im Emulator abgenommen.
+- Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von beiden Branches gemeinsam verwendet.
 
 ## Mit zwei Azahar-Instanzen bestätigt
 
@@ -44,9 +44,19 @@ Geänderte Dateien:
 - `3ds_port/tests/coop_protocol_test.c`
 - `patches/pokeemerald/0083-local-coop.patch`
 
-Das Protokoll hat Version 5. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe sowie Änderungen von Story-Flags und Skriptvariablen. Der Host sendet einen Chunk erst nach Anforderung durch den Gast; dadurch läuft die Netzwerk-Warteschlange nicht voll.
+Das Protokoll hat Version 6. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen sowie Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
 Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
+
+## Sprint 4: Speicherformat und Koop-Box
+
+- Die Größe der Original-Spielstände bleibt unverändert. `unused_3598` enthält nach der Spawn-Tabelle den KOOP-Versionsmarker `0x4342`, Version `1`.
+- Box 14 (Index `13`) wird beim ersten Öffnen einer Koop-Welt als **KOOP** reserviert. Alle darin vorhandenen Pokémon werden zuerst in freie Plätze der Boxen 1–13 verschoben. Reicht der Platz nicht, wird die Welt nicht geöffnet und nichts verschoben.
+- Reihe 1 (Indizes `0–5`) spiegelt die Host-Gruppe, Reihe 2 (Indizes `6–11`) die Gast-Gruppe. Während der jeweiligen Anmeldung sind diese Reihen gegen Entnahme, Ablegen, Tausch, Freilassen und Mehrfachverschieben gesperrt. Die übrigen drei Reihen bleiben normal nutzbar.
+- Der Gast erhält beim Beitritt nicht die Host-Gruppe, sondern seine gespeicherte Gast-Reihe. `SavePlayerParty()` ist für den Gast gesperrt, damit die Host-Gruppe in `SaveBlock1` erhalten bleibt. Die lokale SAV-Datei des Gastes wird weiterhin nicht verändert.
+- Nach der Spielstandübernahme öffnet sich der PC für die Startteam-Auswahl. Mindestens ein Pokémon ist Pflicht. Erst nach bestätigter Übernahme sendet der Host den Spawn und der Beitrittsbildschirm öffnet die Welt.
+- Ein PC-Abschluss überträgt **34.392 Byte**: vollständiger `PokemonStorage` plus sechs vollständige Party-Pokémon. Die Gegenseite übernimmt den Speicher erst nach vollständigem Empfang und Prüfsumme, aktualisiert die Reihe des Absenders und bestätigt danach. Erst diese Bestätigung gibt die PC-Sperre frei.
+- Diese neuen Abläufe sind gebaut und hostseitig auf Protokollebene getestet. Die vollständige Emulatorabnahme mit Teamwahl, Rejoin, gesperrten Reihen und Abbrüchen steht noch aus.
 
 Nach den Karten-Ladeskripten wird die Gastfigur einmalig exakt auf den gespeicherten Spawn gesetzt. Erst danach endet `joinWarpPending` und die normale Bewegungssynchronisation beginnt. `ContinueJoinedGame()` ruft anschließend `InitMap()` auf, damit `LoadSavedMapView()` nicht den alten Host-Ausschnitt mit der neuen Gastposition kombiniert.
 
@@ -63,8 +73,8 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 
 - Der Host vergibt die Sperre nur an eine Rolle. Gastanfragen werden erst nach vollständiger Spielstandübernahme beantwortet.
 - `ShowPokemonStorageSystemPC()` fragt die Berechtigung an. Der Gast öffnet den PC erst nach positiver Antwort im regulären Welt-Frame.
-- `CB2_ExitPokeStorage()` gibt die Sperre frei. Stopp, F6, Softreset und `CtrCoop_PeerLeft()` setzen sie ebenfalls zurück.
-- Offlineverhalten und PC-Untermenüs bleiben unverändert. Der Laufzeittest der Vergabe steht noch aus.
+- `CB2_ExitPokeStorage()` startet die atomare Übernahme; die Bestätigung gibt die Sperre frei. Stopp, F6, Softreset und `CtrCoop_PeerLeft()` setzen sie ebenfalls zurück.
+- Offlineverhalten und PC-Untermenüs bleiben unverändert. Der Laufzeittest der Vergabe und Bestätigung steht noch aus.
 
 ## Szenario-Fortschritt
 
@@ -75,21 +85,23 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 
 ## Noch offen
 
-- Laufende Team-, PC-, Item-, Objekt- und sonstige Spielstandsänderungen synchronisieren; der vollständige Transfer gilt nur für den Initialzustand beim Beitritt.
-- Mehrspieler-Box und Startteam-Auswahl in Sprint 4 umsetzen.
+- Teamänderungen außerhalb des PCs, Items, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe und der Initialzustand werden bereits vollständig übertragen.
+- Beim Verbindungsende die aktuelle Gruppe einschließlich später Kampfänderungen in die Gast-Reihe zurücklegen; derzeit enthält sie den letzten bestätigten PC-Stand.
+- Den neuen Beitritt mit Startteam-Auswahl, Host-Bestätigung, Rejoin und Abbruch mit zwei Azahar-Instanzen abnehmen.
+- Die Sperren der Host- und Gast-Reihe sowie die Migration eines bereits gefüllten Box-14-Bestands im Emulator prüfen.
 - Unabhängige Einzelkämpfe und später gemeinsame Doppelkämpfe implementieren.
 - Dritte Konsole und bestehende Link-Theken erneut prüfen.
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
-- Den direkten Beitritt von BB ohne Spawn-Menü nachbestätigen.
+- Durchlässigkeit, unabhängige Menüs und Szenario-Synchronisation aus Sprint 3 ebenfalls abnehmen.
 
-Sprint 3 darf erst abgeschlossen werden, wenn alle seine Akzeptanzkriterien erfüllt sind.
+Sprint 3 und Sprint 4 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
 
 ## Nächste Arbeitsschritte
 
-1. Den bestätigten Basistest einschließlich Kartenwechsel nicht erneut als offenen Fehler behandeln.
-2. Durchlässigkeit, fehlende NPC-Dialoge und unabhängige Menüs im nächsten Laufzeittest bestätigen.
-3. Ein Szenario-Flag und eine Variable auf beiden Seiten prüfen: keine erneute Auslösung bei Host oder Gast.
-4. Danach mit Sprint 4 und der laufenden Spielstandssynchronisation fortfahren.
+1. Auf `main` Durchlässigkeit, fehlende NPC-Dialoge und unabhängige Menüs testen.
+2. Auf `sprint-4` einen neuen Gast beitreten lassen, ein Startteam wählen und erst nach der Host-Bestätigung die Welt betreten.
+3. Mit demselben Gastnamen erneut beitreten und das gespeicherte Team sowie den Spawn prüfen; die lokale Gast-SAV muss unverändert bleiben.
+4. PC-Sperre, atomare Übernahme und gesperrte Spieler-Reihen auf beiden Konsolen testen, anschließend Abbrüche während der Teamwahl und Übertragung prüfen.
 5. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
@@ -98,9 +110,9 @@ Sprint 3 darf erst abgeschlossen werden, wenn alle seine Akzeptanzkriterien erf�
 - Vor einem inkrementellen Build geänderte Portdateien auch nach `build/upstream/3ds_port/` kopieren.
 - `main_menu.c` wird im Buildbaum geändert und muss mit `patches/pokeemerald/0083-local-coop.patch` übereinstimmen.
 - Patchkontrolle: `git -C build/upstream apply --check --reverse ../../patches/pokeemerald/0083-local-coop.patch`.
-- Vor dem Abschluss: `make release pak`, `make -C 3ds_port verify-coop`, `git diff --check` und `python tools/release_audit.py --repo . --strict`.
+- Vor dem Abschluss: `make -C build/upstream/3ds_port release pak`, `make -C 3ds_port verify-coop`, `git diff --check` und `python tools/release_audit.py --repo . --strict`.
 - ROMs, Spielstände, PAKs, Build-Artefakte und Emulatorprofile niemals committen oder hochladen.
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Arbeite an Sprint 3 weiter. Host-Snapshot, gespeicherter Spawn, Rejoin, Kartenwechsel, Bewegung und Kartendarstellung sind bereits bestätigt. Neue Namen starten in Wurzelheim, alte Namen immer an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Keine ROMs, Saves oder Build-Artefakte committen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main` verwenden; die neue Koop-Box und Startteam-Auswahl liegen auf `sprint-4`. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Sprint-4-Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

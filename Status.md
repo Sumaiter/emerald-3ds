@@ -172,15 +172,15 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ### Aufgaben
 
-- [ ] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern.
-- [ ] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen.
-- [ ] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist.
+- [x] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern; die vorhandene Spawn-Tabelle und die Gast-Reihe werden verwendet.
+- [x] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen: Box 14 wird als KOOP-Box reserviert, Reihe 1 gehört dem Host und Reihe 2 dem Gast; vorhandene Pokémon werden vorher in normale Boxen verschoben.
+- [x] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist: Der Gast muss mindestens ein Pokémon wählen und die Welt öffnet erst nach Host-Bestätigung; Laufzeittest steht noch aus.
 - [x] Globale PC-Sperre für jeweils genau einen Spieler umsetzen: Host-Vergabe, verzögerte Gastöffnung und Freigabe bei Ausstieg, Stopp, F6 oder Disconnect; Laufzeittest steht noch aus.
-- [ ] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge ausführen.
-- [ ] Boxenreihen eingeloggter Spieler gegen Entnahme und Verschieben sperren.
-- [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren.
-- [ ] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln.
-- [ ] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren.
+- [x] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge ausführen: 34.392 Byte Speicher und Gruppe werden mit Prüfsumme übertragen und erst vollständig übernommen; Laufzeittest steht noch aus.
+- [x] Boxenreihen eingeloggter Spieler gegen Entnahme, Verschieben, Tausch, Freilassen und Mehrfachverschieben sperren; Laufzeittest steht noch aus.
+- [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren; die Reihe wird bei PC-Übernahmen aktualisiert, aber noch nicht bei jedem Verbindungsende mit aktuellen Kampfänderungen synchronisiert.
+- [x] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln: Die Übernahme erfolgt erst nach vollständigem Empfang und korrekter Prüfsumme; der Abbruchtest steht noch aus.
+- [x] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren: keine Größenänderung, KOOP-Initialisierung und Versionsmarker sind in `HANDOFF.md` beschrieben.
 
 ### Akzeptanzkriterien
 
@@ -282,8 +282,7 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 - Dürfen Gäste story-kritische Ereignisse auslösen oder nur normale Trainer und wilde Begegnungen?
 - Wie werden Flucht, Fangversuche und Kampfabbrüche in gemeinsamen Doppelkämpfen behandelt?
 - Soll bei einem Verbindungsabbruch im Doppelkampf eine KI übernehmen oder der Kampf sicher abgebrochen werden?
-- Soll ein wiederkehrender Gast jedes Mal ein Startteam wählen oder automatisch seine letzte Boxenreihe übernehmen?
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Der Gast übernimmt beim Beitritt den vollständigen benötigten Host-Spielstand mit Prüfsumme. Neue Namen starten in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Rejoin, Kartenwechsel, Bewegung und vollständige Kartendarstellung sind bestätigt; die lokale Gast-Speicherdatei bleibt unverändert. Kollisionen und Menütrennung sind implementiert. Story-Flags und Skriptvariablen werden laufend Host-autoritativ übernommen; Team-, Item-, Objekt- und weitere Spielstandssynchronisation stehen noch aus. Sprint 4 ist mit der globalen PC-Sperre begonnen. Alle neuen Regeln müssen noch im Laufzeittest bestätigt werden. `HANDOFF.md` enthält den aktuellen Stand, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Die neuen Sprint-4-Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; Emulator- und Hardwareabnahmen stehen noch aus. Teamänderungen außerhalb bestätigter PC-Vorgänge und das sichere Zurücklegen beim Verbindungsende sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

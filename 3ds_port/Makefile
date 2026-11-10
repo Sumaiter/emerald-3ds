@@ -420,9 +420,14 @@ build/video_decode_test.exe: tests/video_decode_test.c src/3ds_video_decode.c in
 
 verify: verify-coop
 .PHONY: verify-coop
-verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX)
+verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX) build/coop_storage_test$(EXESUFFIX)
 	./build/coop_protocol_test$(EXESUFFIX)
 	./build/coop_profile_test$(EXESUFFIX)
+	./build/coop_storage_test$(EXESUFFIX)
+
+build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_storage.c include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_storage_test.c src/3ds_coop_storage.c -o $@
 
 build/coop_protocol_test$(EXESUFFIX): tests/coop_protocol_test.c src/3ds_coop_protocol.c include/3ds_coop_protocol.h
 	@mkdir -p build

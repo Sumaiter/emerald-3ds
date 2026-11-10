@@ -205,6 +205,33 @@ static void TestSaveTransfer(void)
     CHECK(!CtrCoopProtocol_EncodeSaveChunk(0, payload, 0, chunk, sizeof(chunk)), "empty chunk rejected");
 }
 
+static void TestPcSyncTransfer(void)
+{
+    uint8_t payload[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t decoded[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
+    uint8_t chunk[CTR_COOP_SAVE_CHUNK_MAX];
+    uint32_t totalSize, checksum, offset;
+    uint16_t decodedSize;
+
+    for (uint16_t i = 0; i < sizeof(payload); i++)
+        payload[i] = i ^ 0x5A;
+    checksum = CtrCoopProtocol_Checksum(payload, sizeof(payload));
+    CHECK(CtrCoopProtocol_EncodePcSyncBegin(34392, checksum, begin, sizeof(begin)), "PC sync begin encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "PC sync begin decodes");
+    CHECK(totalSize == 34392, "PC sync size roundtrip");
+    begin[0] = CTR_COOP_SAVE_BEGIN_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "save begin is not PC sync");
+    CHECK(CtrCoopProtocol_EncodePcSyncRequest(128, request, sizeof(request)), "PC sync request encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncRequest(request, sizeof(request), &offset) && offset == 128, "PC sync request roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeSaveRequest(request, sizeof(request), &offset), "PC sync request is not save request");
+    CHECK(CtrCoopProtocol_EncodePcSyncChunk(128, payload, sizeof(payload), chunk, sizeof(chunk)), "PC sync chunk encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncChunk(chunk, sizeof(chunk), 128, decoded, sizeof(decoded), &decodedSize), "PC sync chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decoded, sizeof(payload)) == 0, "PC sync payload roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeSaveChunk(chunk, sizeof(chunk), 128, decoded, sizeof(decoded), &decodedSize), "PC sync chunk is not save chunk");
+}
+
 static void TestPCControl(void)
 {
     uint8_t packet[CTR_COOP_PC_RESULT_SIZE];
@@ -255,6 +282,7 @@ int main(void)
     TestAuthentication();
     TestSpawnIdentity();
     TestSaveTransfer();
+    TestPcSyncTransfer();
     TestPCControl();
     TestStoryUpdates();
     if (sFailures != 0)

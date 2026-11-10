@@ -1634,4 +1634,224 @@ diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
      gFieldCallback = FieldTask_ReturnToPcMenu;
      SetMainCallback2(CB2_ReturnToField);
  }
+diff --git a/include/main_menu.h b/include/main_menu.h
+--- a/include/main_menu.h
++++ b/include/main_menu.h
+@@ -2,6 +2,7 @@
+ #define GUARD_MAIN_MENU_H
+ 
+ void CB2_InitMainMenu(void);
++void CB2_InitJoinGameMenu(void);
+ void CreateYesNoMenuParameterized(u8 x, u8 y, u16 baseTileNum, u16 baseBlock, u8 yesNoPalNum, u8 winPalNum);
+ 
+ #endif // GUARD_MAIN_MENU_H
+diff --git a/src/main_menu.c b/src/main_menu.c
+index ca40323..0000000 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -1514,6 +1514,11 @@ static void InitJoinGameMenu(void)
+     CreateTask(Task_JoinGameSearch, 0);
+ }
+ 
++void CB2_InitJoinGameMenu(void)
++{
++    InitJoinGameMenu();
++}
++
+ static void JoinGameHighlight(u8 selected)
+ {
+     switch (selected)
+@@ -1555,6 +1560,7 @@ static void ContinueJoinedGame(void)
+     CtrCoop_EnterHostWorld();
+     CB2_ContinueSavedGame();
+     InitMap();
++    CtrCoop_FinishJoin();
+ }
+ 
+ static void Task_JoinGameSearch(u8 taskId)
+@@ -1583,7 +1589,7 @@ static void Task_JoinGameSearch(u8 taskId)
+         OpenJoinPassword(taskId);
+         return;
+     }
+-    if (state == LOCAL_SESSION_IN && gSaveFileStatus != SAVE_STATUS_EMPTY && gSaveFileStatus != SAVE_STATUS_NO_FLASH)
++    if (state == LOCAL_SESSION_IN)
+     {
+         gPlttBufferUnfaded[0] = RGB_BLACK;
+         gPlttBufferFaded[0] = RGB_BLACK;
+diff --git a/src/load_save.c b/src/load_save.c
+--- a/src/load_save.c
++++ b/src/load_save.c
+@@ -9,5 +9,6 @@
+ #include "random.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop.h"
+ #include "follower_mon.h"
+ #endif
+ #include "save_location.h"
+@@ -187,6 +188,10 @@ void SavePlayerParty(void)
+ {
+     int i;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_GuestSaveBlocked())
++        return;
++#endif
+     gSaveBlock1Ptr->playerPartyCount = gPlayerPartyCount;
+ 
+     for (i = 0; i < PARTY_SIZE; i++)
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -17,5 +17,6 @@
+ #include "mail.h"
+ #include "main.h"
++#include "main_menu.h"
+ #include "menu.h"
+ #include "mon_markings.h"
+ #include "naming_screen.h"
+@@ -1439,6 +1440,10 @@ s16 GetFirstFreeBoxSpot(u8 boxId)
+ 
+     for (i = 0; i < IN_BOX_COUNT; i++)
+     {
++#ifdef PLATFORM_3DS
++        if (CtrCoop_StorageSlotLocked(boxId, i))
++            continue;
++#endif
+         if (GetBoxMonDataAt(boxId, i, MON_DATA_SPECIES) == SPECIES_NONE)
+             return i;
+     }
+@@ -1571,6 +1576,10 @@ static void Task_PCMainMenu(u8 taskId)
+ #define tNextOption     data[3]
+ #define tWindowId       data[15]
+ 
++#ifdef PLATFORM_3DS
++static const u8 sText_ChooseInitialTeam[] = _("WÄHLE MIND. 1 POKéMON!");
++#endif
++
+ static void Task_PCMainMenu(u8 taskId)
+ {
+     struct Task *task = &gTasks[taskId];
+@@ -1612,5 +1621,15 @@ static void Task_PCMainMenu(u8 taskId)
+         case MENU_B_PRESSED:
+         case OPTION_EXIT:
++#ifdef PLATFORM_3DS
++            if (CtrCoop_InitialTeamSelection() && CountPartyMons() == 0)
++            {
++                PlaySE(SE_FAILURE);
++                FillWindowPixelBuffer(0, PIXEL_FILL(1));
++                AddTextPrinterParameterized2(0, FONT_NORMAL, sText_ChooseInitialTeam, 0, NULL, TEXT_COLOR_DARK_GRAY, TEXT_COLOR_WHITE, TEXT_COLOR_LIGHT_GRAY);
++                task->tState = STATE_ERROR_MSG;
++                break;
++            }
++#endif
+             ClearStdWindowAndFrame(task->tWindowId, TRUE);
+             UnlockPlayerFieldControls();
+             ScriptContext_Enable();
+@@ -1748,6 +1767,12 @@ static void CB2_ExitPokeStorage(void)
+ {
+ #ifdef PLATFORM_3DS
+-    CtrCoop_ReleasePC();
++    if (CtrCoop_InitialTeamSelection())
++    {
++        CtrCoop_CommitPC();
++        SetMainCallback2(CB2_InitJoinGameMenu);
++        return;
++    }
++    CtrCoop_CommitPC();
+ #endif
+     sPreviousBoxOption = GetCurrentBoxOption();
+     gFieldCallback = FieldTask_ReturnToPcMenu;
+@@ -2477,5 +2503,12 @@ static void Task_PokeStorageMain(u8 taskId)
+             break;
+         case INPUT_MULTIMOVE_START:
++#ifdef PLATFORM_3DS
++            if (CtrCoop_StorageBoxRestricted(StorageGetCurrentBox()))
++            {
++                PlaySE(SE_FAILURE);
++                break;
++            }
++#endif
+             PlaySE(SE_SELECT);
+             MultiMove_SetFunction(MULTIMOVE_START);
+             sStorage->state = MSTATE_MULTIMOVE_RUN;
+@@ -2495,5 +2528,12 @@ static void Task_PokeStorageMain(u8 taskId)
+             break;
+         case INPUT_MULTIMOVE_MOVE_MONS:
++#ifdef PLATFORM_3DS
++            if (CtrCoop_StorageBoxRestricted(StorageGetCurrentBox()))
++            {
++                PlaySE(SE_FAILURE);
++                break;
++            }
++#endif
+             PlaySE(SE_SELECT);
+             MultiMove_SetFunction(MULTIMOVE_MOVE_MONS);
+             sStorage->state = MSTATE_MULTIMOVE_RUN_MOVED;
+@@ -2502,5 +2542,12 @@ static void Task_PokeStorageMain(u8 taskId)
+             break;
+         case INPUT_MULTIMOVE_PLACE_MONS:
++#ifdef PLATFORM_3DS
++            if (CtrCoop_StorageBoxRestricted(StorageGetCurrentBox()))
++            {
++                PlaySE(SE_FAILURE);
++                break;
++            }
++#endif
+             PlaySE(SE_SELECT);
+             MultiMove_SetFunction(MULTIMOVE_PLACE_MONS);
+             sStorage->state = MSTATE_MULTIMOVE_RUN;
+@@ -6405,6 +6452,13 @@ static void SetUpScrollToBox(u8 boxId)
+ 
+ static void MoveMon(void)
+ {
++#ifdef PLATFORM_3DS
++    if (sCursorArea == CURSOR_AREA_IN_BOX && CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition))
++    {
++        PlaySE(SE_FAILURE);
++        return;
++    }
++#endif
+     switch (sCursorArea)
+     {
+     case CURSOR_AREA_IN_PARTY:
+@@ -6426,6 +6480,13 @@ static void PlaceMon(void)
+ {
+     u8 boxId;
+ 
++#ifdef PLATFORM_3DS
++    if (sCursorArea == CURSOR_AREA_IN_BOX && CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition))
++    {
++        PlaySE(SE_FAILURE);
++        return;
++    }
++#endif
+     switch (sCursorArea)
+     {
+     case CURSOR_AREA_IN_PARTY:
+@@ -6622,6 +6683,14 @@ static void GetRestrictedReleaseMoves(u16 *moves)
+ 
+ static void InitCanReleaseMonVars(void)
+ {
++#ifdef PLATFORM_3DS
++    if (sCursorArea == CURSOR_AREA_IN_BOX && CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition))
++    {
++        sStorage->releaseStatusResolved = TRUE;
++        sStorage->canReleaseMon = FALSE;
++        return;
++    }
++#endif
+     if (!AtLeastThreeUsableMons())
+     {
+         // The player only has 1 or 2 usable
+@@ -6883,6 +6952,10 @@ static bool8 CanShiftMon(void)
+ {
+     if (sIsMonBeingMoved)
+     {
++#ifdef PLATFORM_3DS
++        if (sCursorArea == CURSOR_AREA_IN_BOX && CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition))
++            return FALSE;
++#endif
+         if (sCursorArea == CURSOR_AREA_IN_PARTY && CountPartyAliveNonEggMonsExcept(sCursorPosition) == 0)
+         {
+             if (sStorage->displayMonIsEgg || GetMonData(&sStorage->movingMon, MON_DATA_HP) == 0)
 

@@ -6,17 +6,24 @@
 #include "3ds_local.h"
 #include "3ds_log.h"
 #include "characters.h"
+#include "battle.h"
+#include "battle_setup.h"
+#include "constants/battle.h"
+#include "constants/coins.h"
 #include "constants/event_objects.h"
 #include "constants/event_object_movement.h"
+#include "constants/flags.h"
 #include "constants/local_link.h"
 #include "constants/layouts.h"
 #include "constants/map_groups.h"
 #include "decoration_inventory.h"
+#include "event_data.h"
 #include "event_object_movement.h"
 #include "field_player_avatar.h"
 #include "fieldmap.h"
 #include "item.h"
 #include "load_save.h"
+#include "money.h"
 #include "overworld.h"
 #include "pokemon_storage_system.h"
 #include "sound.h"
@@ -47,6 +54,21 @@ static struct
     uint8_t syncState;
     uint32_t syncOffset;
     uint32_t syncChecksum;
+    bool battleActive;
+    bool battleReservePending;
+    bool battleReserved;
+    bool battleReleasePending;
+    uint16_t battleTrainerId;
+    uint16_t peerTrainerId;
+    uint16_t battleRetry;
+    uint8_t battleSendState;
+    uint32_t battleSendSize;
+    uint32_t battleSendOffset;
+    uint32_t battleSendChecksum;
+    uint8_t battleReceiveState;
+    uint32_t battleReceiveSize;
+    uint32_t battleReceiveOffset;
+    uint32_t battleReceiveChecksum;
     uint32_t saveOffset;
     uint32_t saveChecksum;
     bool spawnValid;
@@ -73,8 +95,20 @@ static struct
 #define PC_SYNC_IDLE 0
 #define PC_SYNC_SENDING 1
 #define PC_SYNC_RECEIVING 2
+#define BATTLE_SYNC_IDLE 0
+#define BATTLE_SYNC_SENDING 1
+#define BATTLE_SYNC_RECEIVING 2
+#define BATTLE_HEADER_SIZE 16
+#define BATTLE_STORAGE_RECORD_SIZE 82
+#define BATTLE_ITEM_RECORD_SIZE 4
+#define BATTLE_ITEM_SLOTS (PC_ITEMS_COUNT + BAG_ITEMS_COUNT + BAG_KEYITEMS_COUNT + BAG_POKEBALLS_COUNT + BAG_TMHM_COUNT + BAG_BERRIES_COUNT)
+#define CTR_COOP_BATTLE_DATA_MAX (BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE + TOTAL_BOXES_COUNT * IN_BOX_COUNT * BATTLE_STORAGE_RECORD_SIZE + 4096)
 
 static uint8_t sSaveData[CTR_COOP_SAVE_SIZE] ALIGNED(4);
+static uint8_t sBattleSendData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
+static uint8_t sBattleReceiveData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
+static struct SaveBlock1 sBattleSaveBaseline;
+static struct PokemonStorage sBattleStorageBaseline;
 
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
@@ -102,6 +136,14 @@ static void ClearRemote(void)
     sCoop.syncState = 0;
     sCoop.syncOffset = 0;
     sCoop.syncChecksum = 0;
+    sCoop.battleReservePending = false;
+    sCoop.battleReserved = false;
+    sCoop.battleReleasePending = false;
+    sCoop.battleTrainerId = 0;
+    sCoop.peerTrainerId = 0;
+    sCoop.battleRetry = 0;
+    sCoop.battleSendState = BATTLE_SYNC_IDLE;
+    sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
     sCoop.saveOffset = 0;
     sCoop.saveChecksum = 0;
     sCoop.spawnValid = false;
@@ -705,6 +747,448 @@ bool CtrCoop_StorageBoxRestricted(uint8_t boxId)
     return CtrCoopStorage_BoxRestricted(hostActive, guestActive, boxId);
 }
 
+static void SendBattleResult(void);
+static void SendBattleBegin(void);
+static void SendFlagUpdate(uint16_t to, uint16_t id, bool value);
+
+static bool BeginLocalBattle(void)
+{
+    if (gSaveBlock1Ptr == NULL || gPokemonStoragePtr == NULL)
+        return false;
+    memcpy(&sBattleSaveBaseline, gSaveBlock1Ptr, sizeof(sBattleSaveBaseline));
+    memcpy(&sBattleStorageBaseline, gPokemonStoragePtr, sizeof(sBattleStorageBaseline));
+    sCoop.battleActive = true;
+    sCoop.battleRetry = 0;
+    CtrLog_Write(CTR_LOG_GAME, "coop: battle start for %s, trainer %u", sCoop.guest ? "guest" : "host", sCoop.battleTrainerId);
+    return true;
+}
+
+bool CtrCoop_BattleStart(void)
+{
+    uint8_t packet[CTR_COOP_BATTLE_RESERVE_SIZE];
+    struct LocalPeer peers[1];
+    uint16_t trainerId;
+
+    if (sCoop.battleActive || !sCoop.wanted || (gBattleTypeFlags & BATTLE_TYPE_LINK))
+        return true;
+    if (sCoop.battleSendState != BATTLE_SYNC_IDLE || sCoop.battleReleasePending)
+        return false;
+    sCoop.battleTrainerId = 0;
+    if (!(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
+        return BeginLocalBattle();
+    trainerId = gTrainerBattleOpponent_A;
+    if (trainerId == 0)
+        return BeginLocalBattle();
+    sCoop.battleTrainerId = trainerId;
+    if (!sCoop.guest)
+    {
+        if (sCoop.peerTrainerId == trainerId)
+            return false;
+        sCoop.battleReserved = true;
+        return BeginLocalBattle();
+    }
+    if (sCoop.battleReserved)
+        return BeginLocalBattle();
+    if (sCoop.battleReservePending || !sCoop.authenticated || !sCoop.saveReady)
+        return false;
+    if (sCoop.battleRetry != 0)
+    {
+        sCoop.battleRetry--;
+        return false;
+    }
+    if (LocalLink_GetPeers(peers, 1) == 0)
+        return false;
+    if (CtrCoopProtocol_EncodeBattleReserve(trainerId, packet, sizeof(packet)))
+    {
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+        sCoop.battleReservePending = true;
+        sCoop.battleRetry = 60;
+    }
+    return false;
+}
+
+void CtrCoop_BattleEnd(void)
+{
+    if (!sCoop.battleActive)
+        return;
+    SendBattleResult();
+    sCoop.battleActive = false;
+    sCoop.battleReservePending = false;
+    sCoop.battleReserved = false;
+    sCoop.battleReleasePending = sCoop.wanted && sCoop.battleTrainerId != 0;
+    if (!sCoop.battleReleasePending)
+        sCoop.battleTrainerId = 0;
+    sCoop.battleRetry = 0;
+}
+
+static void ReleaseTrainerReservation(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_BATTLE_RESERVE_SIZE];
+    uint16_t trainerFlag;
+    uint8_t mask;
+
+    if (!sCoop.battleReleasePending)
+        return;
+    if (gBattleOutcome == B_OUTCOME_WON)
+    {
+        trainerFlag = TRAINER_FLAGS_START + sCoop.battleTrainerId;
+        if (!FlagGet(trainerFlag))
+            return;
+        if (sCoop.guest)
+        {
+            mask = 1 << (trainerFlag & 7);
+            if ((sCoop.storyFlagsBaseline[trainerFlag / 8] & mask) == 0)
+            {
+                if (LocalLink_GetPeers(peers, 1) == 0)
+                    return;
+                sCoop.storyFlagsBaseline[trainerFlag / 8] |= mask;
+                SendFlagUpdate(peers[0].id, trainerFlag, true);
+            }
+        }
+    }
+    if (sCoop.guest)
+    {
+        if (LocalLink_GetPeers(peers, 1) == 0)
+            return;
+        packet[0] = CTR_COOP_BATTLE_RELEASE_PACKET;
+        packet[1] = CTR_COOP_PROTOCOL_VERSION;
+        packet[2] = sCoop.battleTrainerId & 0xFF;
+        packet[3] = sCoop.battleTrainerId >> 8;
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+    }
+    sCoop.battleReleasePending = false;
+    sCoop.battleTrainerId = 0;
+}
+
+void CtrCoop_BattleTick(void)
+{
+    if (sCoop.battleSendState == BATTLE_SYNC_SENDING && ++sCoop.battleRetry >= 120)
+    {
+        sCoop.battleRetry = 0;
+        SendBattleBegin();
+    }
+}
+
+static void WriteBattle16(uint32_t offset, uint16_t value)
+{
+    sBattleSendData[offset] = value & 0xFF;
+    sBattleSendData[offset + 1] = value >> 8;
+}
+
+static void WriteBattle32(uint32_t offset, uint32_t value)
+{
+    sBattleSendData[offset] = value & 0xFF;
+    sBattleSendData[offset + 1] = (value >> 8) & 0xFF;
+    sBattleSendData[offset + 2] = (value >> 16) & 0xFF;
+    sBattleSendData[offset + 3] = value >> 24;
+}
+
+static uint16_t ReadBattle16(const uint8_t *data, uint32_t offset)
+{
+    return data[offset] | ((uint16_t)data[offset + 1] << 8);
+}
+
+static uint32_t ReadBattle32(const uint8_t *data, uint32_t offset)
+{
+    return data[offset] | ((uint32_t)data[offset + 1] << 8)
+        | ((uint32_t)data[offset + 2] << 16) | ((uint32_t)data[offset + 3] << 24);
+}
+
+static void AddBattleItemDelta(uint32_t *offset, uint16_t *count, uint16_t itemId, int32_t delta)
+{
+    if (itemId == ITEM_NONE || delta == 0)
+        return;
+    WriteBattle16(*offset, itemId);
+    WriteBattle16(*offset + 2, (uint16_t)(int16_t)delta);
+    *offset += BATTLE_ITEM_RECORD_SIZE;
+    (*count)++;
+}
+
+static void AddBattleItemArrayDeltas(const struct ItemSlot *before, const struct ItemSlot *after,
+    uint16_t slots, uint32_t *offset, uint16_t *count)
+{
+    for (uint16_t i = 0; i < slots; i++)
+    {
+        int32_t delta = (int32_t)after[i].quantity - before[i].quantity;
+
+        if (before[i].itemId == after[i].itemId)
+        {
+            AddBattleItemDelta(offset, count, after[i].itemId, delta);
+        }
+        else
+        {
+            AddBattleItemDelta(offset, count, before[i].itemId, -(int32_t)before[i].quantity);
+            AddBattleItemDelta(offset, count, after[i].itemId, after[i].quantity);
+        }
+    }
+}
+
+static void SendBattleBegin(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+
+    if (sCoop.battleSendState != BATTLE_SYNC_SENDING || LocalLink_GetPeers(peers, 1) == 0)
+        return;
+    if (CtrCoopProtocol_EncodeBattleBegin(sCoop.battleSendSize, sCoop.battleSendChecksum, packet, sizeof(packet)))
+        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+}
+
+static void SendBattleResult(void)
+{
+    uint32_t offset = BATTLE_HEADER_SIZE;
+    uint16_t storageCount = 0;
+    uint16_t itemCount = 0;
+    int32_t moneyDelta;
+    int16_t coinsDelta;
+    uint8_t row = sCoop.guest ? CTR_COOP_STORAGE_GUEST_ROW : CTR_COOP_STORAGE_HOST_ROW;
+    struct LocalPeer peers[1];
+
+    StorePartyRow(row, gPlayerParty);
+    if (!sCoop.guest)
+    {
+        gSaveBlock1Ptr->playerPartyCount = gPlayerPartyCount;
+        memcpy(gSaveBlock1Ptr->playerParty, gPlayerParty, sizeof(gPlayerParty));
+    }
+    if (!sCoop.wanted || sCoop.battleSendState != BATTLE_SYNC_IDLE
+     || (sCoop.guest && !sCoop.authenticated) || (!sCoop.guest && !sCoop.peerSaveReady)
+     || LocalLink_GetPeers(peers, 1) == 0)
+        return;
+    memcpy(sBattleSendData + offset, gPlayerParty, sizeof(gPlayerParty));
+    offset += sizeof(gPlayerParty);
+    for (uint8_t box = 0; box < TOTAL_BOXES_COUNT; box++)
+    {
+        for (uint8_t position = 0; position < IN_BOX_COUNT; position++)
+        {
+            const struct BoxPokemon *before = &sBattleStorageBaseline.boxes[box][position];
+            const struct BoxPokemon *after = &gPokemonStoragePtr->boxes[box][position];
+
+            if (box == CTR_COOP_STORAGE_BOX_ID && position < CTR_COOP_STORAGE_ROW_SIZE * 2)
+                continue;
+            if (memcmp(before, after, sizeof(*before)) == 0)
+                continue;
+            sBattleSendData[offset++] = box;
+            sBattleSendData[offset++] = position;
+            memcpy(sBattleSendData + offset, after, sizeof(*after));
+            offset += sizeof(*after);
+            storageCount++;
+        }
+    }
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.pcItems, gSaveBlock1Ptr->pcItems, PC_ITEMS_COUNT, &offset, &itemCount);
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_Items, gSaveBlock1Ptr->bagPocket_Items, BAG_ITEMS_COUNT, &offset, &itemCount);
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_KeyItems, gSaveBlock1Ptr->bagPocket_KeyItems, BAG_KEYITEMS_COUNT, &offset, &itemCount);
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_PokeBalls, gSaveBlock1Ptr->bagPocket_PokeBalls, BAG_POKEBALLS_COUNT, &offset, &itemCount);
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_TMHM, gSaveBlock1Ptr->bagPocket_TMHM, BAG_TMHM_COUNT, &offset, &itemCount);
+    AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_Berries, gSaveBlock1Ptr->bagPocket_Berries, BAG_BERRIES_COUNT, &offset, &itemCount);
+    moneyDelta = (int32_t)GetMoney(&gSaveBlock1Ptr->money) - (int32_t)GetMoney(&sBattleSaveBaseline.money);
+    coinsDelta = (int16_t)((int32_t)gSaveBlock1Ptr->coins - sBattleSaveBaseline.coins);
+    WriteBattle32(0, 0x31425443);
+    WriteBattle32(4, (uint32_t)moneyDelta);
+    WriteBattle16(8, (uint16_t)coinsDelta);
+    WriteBattle16(10, storageCount);
+    WriteBattle16(12, itemCount);
+    WriteBattle16(14, 0);
+    sCoop.battleSendSize = offset;
+    sCoop.battleSendOffset = 0;
+    sCoop.battleSendChecksum = CtrCoopProtocol_Checksum(sBattleSendData, offset);
+    sCoop.battleSendState = BATTLE_SYNC_SENDING;
+    sCoop.battleRetry = 0;
+    CtrLog_Write(CTR_LOG_GAME, "coop: battle result %lu bytes, %u storage and %u item changes",
+        (unsigned long)offset, storageCount, itemCount);
+    SendBattleBegin();
+}
+
+static void SendBattleRequest(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_REQUEST_SIZE];
+
+    if (CtrCoopProtocol_EncodeBattleRequest(offset, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void SendBattleChunk(uint16_t to, uint32_t offset)
+{
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint16_t size;
+
+    if (sCoop.battleSendState != BATTLE_SYNC_SENDING || offset >= sCoop.battleSendSize)
+        return;
+    size = sCoop.battleSendSize - offset;
+    if (size > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        size = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (CtrCoopProtocol_EncodeBattleChunk(offset, sBattleSendData + offset, size, packet, CTR_COOP_SAVE_CHUNK_HEADER + size))
+        LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+}
+
+static void HandleBattleBegin(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint32_t totalSize, checksum;
+
+    if (sCoop.battleReceiveState != BATTLE_SYNC_IDLE
+     || !CtrCoopProtocol_DecodeBattleBegin(data, len, &totalSize, &checksum)
+     || totalSize < BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE
+     || totalSize > CTR_COOP_BATTLE_DATA_MAX)
+        return;
+    sCoop.battleReceiveSize = totalSize;
+    sCoop.battleReceiveChecksum = checksum;
+    sCoop.battleReceiveOffset = 0;
+    sCoop.battleReceiveState = BATTLE_SYNC_RECEIVING;
+    SendBattleRequest(from, 0);
+}
+
+static uint16_t FindFreeBattleStorageSlot(void)
+{
+    for (uint8_t box = 0; box < TOTAL_BOXES_COUNT; box++)
+    {
+        uint8_t start = box == CTR_COOP_STORAGE_BOX_ID ? CTR_COOP_STORAGE_ROW_SIZE * 2 : 0;
+
+        for (uint8_t position = start; position < IN_BOX_COUNT; position++)
+        {
+            if (!CtrCoop_StorageSlotLocked(box, position)
+             && GetBoxMonDataAt(box, position, MON_DATA_SANITY_HAS_SPECIES) == 0)
+                return (uint16_t)box * IN_BOX_COUNT + position;
+        }
+    }
+    return UINT16_MAX;
+}
+
+static bool ApplyBattleResult(void)
+{
+    uint16_t storageCount, itemCount;
+    uint32_t offset = BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE;
+    uint32_t expectedSize;
+    uint16_t relocations = 0;
+    uint16_t freeSlots = 0;
+    uint8_t remoteRow = sCoop.guest ? CTR_COOP_STORAGE_HOST_ROW : CTR_COOP_STORAGE_GUEST_ROW;
+    const struct Pokemon *remoteParty = (const struct Pokemon *)(sBattleReceiveData + BATTLE_HEADER_SIZE);
+
+    if (ReadBattle32(sBattleReceiveData, 0) != 0x31425443)
+        return false;
+    storageCount = ReadBattle16(sBattleReceiveData, 10);
+    itemCount = ReadBattle16(sBattleReceiveData, 12);
+    if (storageCount > TOTAL_BOXES_COUNT * IN_BOX_COUNT || itemCount > BATTLE_ITEM_SLOTS * 2)
+        return false;
+    expectedSize = offset + storageCount * BATTLE_STORAGE_RECORD_SIZE + itemCount * BATTLE_ITEM_RECORD_SIZE;
+    if (expectedSize != sCoop.battleReceiveSize)
+        return false;
+    for (uint16_t i = 0; i < storageCount; i++)
+    {
+        uint32_t record = offset + i * BATTLE_STORAGE_RECORD_SIZE;
+        uint8_t box = sBattleReceiveData[record];
+        uint8_t position = sBattleReceiveData[record + 1];
+        struct BoxPokemon *incoming = (struct BoxPokemon *)(sBattleReceiveData + record + 2);
+
+        if (box >= TOTAL_BOXES_COUNT || position >= IN_BOX_COUNT)
+            return false;
+        if (!GetBoxMonData(incoming, MON_DATA_SANITY_HAS_SPECIES))
+            continue;
+        if (GetBoxMonDataAt(box, position, MON_DATA_SANITY_HAS_SPECIES)
+         && memcmp(incoming, &gPokemonStoragePtr->boxes[box][position], sizeof(*incoming)) != 0)
+            relocations++;
+    }
+    for (uint8_t box = 0; box < TOTAL_BOXES_COUNT; box++)
+    {
+        uint8_t start = box == CTR_COOP_STORAGE_BOX_ID ? CTR_COOP_STORAGE_ROW_SIZE * 2 : 0;
+
+        for (uint8_t position = start; position < IN_BOX_COUNT; position++)
+        {
+            if (!CtrCoop_StorageSlotLocked(box, position)
+             && GetBoxMonDataAt(box, position, MON_DATA_SANITY_HAS_SPECIES) == 0)
+                freeSlots++;
+        }
+    }
+    if (relocations > freeSlots)
+    {
+        CtrLog_Write(CTR_LOG_ERROR, "coop: battle result needs %u free storage slots", relocations);
+        return false;
+    }
+    for (uint16_t i = 0; i < storageCount; i++)
+    {
+        uint32_t record = offset + i * BATTLE_STORAGE_RECORD_SIZE;
+        uint8_t box = sBattleReceiveData[record];
+        uint8_t position = sBattleReceiveData[record + 1];
+        struct BoxPokemon *incoming = (struct BoxPokemon *)(sBattleReceiveData + record + 2);
+
+        if (!GetBoxMonData(incoming, MON_DATA_SANITY_HAS_SPECIES))
+            continue;
+        if (GetBoxMonDataAt(box, position, MON_DATA_SANITY_HAS_SPECIES)
+         && memcmp(incoming, &gPokemonStoragePtr->boxes[box][position], sizeof(*incoming)) != 0)
+        {
+            uint16_t freeSlot = FindFreeBattleStorageSlot();
+
+            box = freeSlot / IN_BOX_COUNT;
+            position = freeSlot % IN_BOX_COUNT;
+        }
+        SetBoxMonAt(box, position, incoming);
+    }
+    offset += storageCount * BATTLE_STORAGE_RECORD_SIZE;
+    for (uint16_t i = 0; i < itemCount; i++)
+    {
+        uint16_t itemId = ReadBattle16(sBattleReceiveData, offset);
+        int16_t delta = (int16_t)ReadBattle16(sBattleReceiveData, offset + 2);
+
+        if (delta > 0)
+            AddBagItem(itemId, delta);
+        else if (delta < 0)
+            RemoveBagItem(itemId, -(int32_t)delta);
+        offset += BATTLE_ITEM_RECORD_SIZE;
+    }
+    if ((int32_t)ReadBattle32(sBattleReceiveData, 4) >= 0)
+        AddMoney(&gSaveBlock1Ptr->money, ReadBattle32(sBattleReceiveData, 4));
+    else
+        RemoveMoney(&gSaveBlock1Ptr->money, -(int32_t)ReadBattle32(sBattleReceiveData, 4));
+    {
+        int32_t coins = (int32_t)gSaveBlock1Ptr->coins + (int16_t)ReadBattle16(sBattleReceiveData, 8);
+
+        if (coins < 0)
+            coins = 0;
+        else if (coins > MAX_COINS)
+            coins = MAX_COINS;
+        gSaveBlock1Ptr->coins = coins;
+    }
+    StorePartyRow(remoteRow, remoteParty);
+    return true;
+}
+
+static void HandleBattleChunk(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint16_t got, expected;
+
+    if (sCoop.battleReceiveState != BATTLE_SYNC_RECEIVING || sCoop.battleReceiveOffset >= sCoop.battleReceiveSize)
+        return;
+    if (!CtrCoopProtocol_DecodeBattleChunk(data, len, sCoop.battleReceiveOffset,
+            sBattleReceiveData + sCoop.battleReceiveOffset,
+            sCoop.battleReceiveSize - sCoop.battleReceiveOffset, &got))
+        return;
+    expected = sCoop.battleReceiveSize - sCoop.battleReceiveOffset;
+    if (expected > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        expected = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (got != expected)
+        return;
+    sCoop.battleReceiveOffset += got;
+    if (sCoop.battleReceiveOffset < sCoop.battleReceiveSize)
+    {
+        SendBattleRequest(from, sCoop.battleReceiveOffset);
+        return;
+    }
+    if (CtrCoopProtocol_Checksum(sBattleReceiveData, sCoop.battleReceiveSize) != sCoop.battleReceiveChecksum)
+    {
+        CtrLog_Write(CTR_LOG_ERROR, "coop: battle result checksum mismatch, retrying");
+        sCoop.battleReceiveOffset = 0;
+        SendBattleRequest(from, 0);
+        return;
+    }
+    sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
+    if (ApplyBattleResult())
+    {
+        uint8_t ready[CTR_COOP_SAVE_READY_SIZE] = {CTR_COOP_BATTLE_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
+
+        LocalLink_Send(from, ready, sizeof(ready));
+        CtrLog_Write(CTR_LOG_GAME, "coop: battle result applied");
+    }
+}
+
 static void SendPcSyncRequest(uint16_t to, uint32_t offset)
 {
     uint8_t packet[CTR_COOP_SAVE_REQUEST_SIZE];
@@ -1132,6 +1616,7 @@ void CtrCoop_OverworldFrame(void)
 
     if (!sCoop.wanted && !sCoop.remoteValid && sCoop.objectEventId == OBJECT_EVENTS_COUNT)
         return;
+    CtrCoop_BattleTick();
     state = LocalLink_GetSession();
     if (sCoop.wanted && ((state != LOCAL_SESSION_SEARCHING && state != LOCAL_SESSION_IN)
      || (state == LOCAL_SESSION_IN && LocalLink_GetSessionKind() != LOCAL_KIND_COOP)))
@@ -1153,6 +1638,7 @@ void CtrCoop_OverworldFrame(void)
         return;
     OpenPCWhenReady();
     SyncStoryState();
+    ReleaseTrainerReservation();
     if (!LocalSnapshot(&local))
     {
         RemoveRemoteObject();
@@ -1374,6 +1860,79 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             sCoop.syncOffset = 0;
             CtrCoop_ReleasePC();
             CtrLog_Write(CTR_LOG_GAME, "coop: PC commit confirmed");
+        }
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_RESERVE_PACKET)
+    {
+        uint16_t trainerId;
+        uint8_t reserveResult[CTR_COOP_BATTLE_RESERVE_RESULT_SIZE];
+
+        if (sCoop.guest || !sCoop.peerSaveReady || !CtrCoopProtocol_DecodeBattleReserve(data, len, &trainerId))
+            return true;
+        accepted = sCoop.peerTrainerId == 0 && (!sCoop.battleActive || sCoop.battleTrainerId != trainerId)
+                && (!sCoop.battleReleasePending || sCoop.battleTrainerId != trainerId);
+        if (accepted)
+            sCoop.peerTrainerId = trainerId;
+        if (CtrCoopProtocol_EncodeBattleReserveResult(trainerId, accepted, reserveResult, sizeof(reserveResult)))
+            LocalLink_Send(from, reserveResult, sizeof(reserveResult));
+        CtrLog_Write(CTR_LOG_GAME, "coop: trainer %u reservation %s", trainerId, accepted ? "granted" : "rejected");
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_RESERVE_RESULT_PACKET)
+    {
+        uint16_t trainerId;
+
+        if (!sCoop.guest || !sCoop.battleReservePending
+         || !CtrCoopProtocol_DecodeBattleReserveResult(data, len, &trainerId, &accepted)
+         || trainerId != sCoop.battleTrainerId)
+            return true;
+        sCoop.battleReservePending = false;
+        sCoop.battleReserved = accepted;
+        sCoop.battleRetry = accepted ? 0 : 60;
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_RELEASE_PACKET)
+    {
+        uint16_t trainerId;
+
+        if (!sCoop.guest && len == CTR_COOP_BATTLE_RESERVE_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        {
+            trainerId = data[2] | ((uint16_t)data[3] << 8);
+            if (sCoop.peerTrainerId == trainerId)
+                sCoop.peerTrainerId = 0;
+        }
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_BEGIN_PACKET)
+    {
+        if ((sCoop.guest && sCoop.saveReady) || (!sCoop.guest && sCoop.peerSaveReady))
+            HandleBattleBegin(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_REQUEST_PACKET)
+    {
+        uint32_t offset;
+
+        if (sCoop.battleSendState == BATTLE_SYNC_SENDING
+         && CtrCoopProtocol_DecodeBattleRequest(data, len, &offset))
+            SendBattleChunk(from, offset);
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_CHUNK_PACKET)
+    {
+        HandleBattleChunk(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_BATTLE_READY_PACKET)
+    {
+        if (sCoop.battleSendState == BATTLE_SYNC_SENDING && len == CTR_COOP_SAVE_READY_SIZE
+         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        {
+            sCoop.battleSendState = BATTLE_SYNC_IDLE;
+            sCoop.battleSendOffset = 0;
+            sCoop.battleRetry = 0;
+            CtrLog_Write(CTR_LOG_GAME, "coop: battle result confirmed");
         }
         return true;
     }

@@ -347,6 +347,80 @@ bool CtrCoopProtocol_DecodePcSyncChunk(const uint8_t *data, uint16_t size, uint3
     return DecodeTransferChunk(CTR_COOP_PC_SYNC_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
 }
 
+bool CtrCoopProtocol_EncodeBattleReserve(uint16_t trainerId, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || trainerId == 0 || outSize != CTR_COOP_BATTLE_RESERVE_SIZE)
+        return false;
+    out[0] = CTR_COOP_BATTLE_RESERVE_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = trainerId & 0xFF;
+    out[3] = trainerId >> 8;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeBattleReserve(const uint8_t *data, uint16_t size, uint16_t *trainerId)
+{
+    if (data == NULL || trainerId == NULL || size != CTR_COOP_BATTLE_RESERVE_SIZE
+     || data[0] != CTR_COOP_BATTLE_RESERVE_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || (data[2] | ((uint16_t)data[3] << 8)) == 0)
+        return false;
+    *trainerId = data[2] | ((uint16_t)data[3] << 8);
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeBattleReserveResult(uint16_t trainerId, bool accepted, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || trainerId == 0 || outSize != CTR_COOP_BATTLE_RESERVE_RESULT_SIZE)
+        return false;
+    out[0] = CTR_COOP_BATTLE_RESERVE_RESULT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = trainerId & 0xFF;
+    out[3] = (trainerId >> 8) | (accepted ? 0x80 : 0);
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeBattleReserveResult(const uint8_t *data, uint16_t size, uint16_t *trainerId, bool *accepted)
+{
+    if (data == NULL || trainerId == NULL || accepted == NULL || size != CTR_COOP_BATTLE_RESERVE_RESULT_SIZE
+     || data[0] != CTR_COOP_BATTLE_RESERVE_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || (data[2] | ((uint16_t)(data[3] & 0x7F) << 8)) == 0)
+        return false;
+    *trainerId = data[2] | ((uint16_t)(data[3] & 0x7F) << 8);
+    *accepted = (data[3] & 0x80) != 0;
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_BATTLE_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_BATTLE_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodeBattleRequest(uint32_t offset, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferRequest(CTR_COOP_BATTLE_REQUEST_PACKET, offset, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeBattleRequest(const uint8_t *data, uint16_t size, uint32_t *offset)
+{
+    return DecodeTransferRequest(CTR_COOP_BATTLE_REQUEST_PACKET, data, size, offset);
+}
+
+bool CtrCoopProtocol_EncodeBattleChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_BATTLE_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodeBattleChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_BATTLE_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size)
 {
     uint32_t hash = 2166136261u;

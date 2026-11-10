@@ -192,18 +192,20 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Sprint 5: Unabhängige Einzelkämpfe und gemeinsame Trainerwelt
 
-**Status: Offen**
+**Status: In Arbeit**
 
 ### Aufgaben
 
-- [ ] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen.
-- [ ] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen.
-- [ ] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben.
-- [ ] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren.
-- [ ] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen.
-- [ ] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen.
-- [ ] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln.
-- [ ] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners verhindern.
+- [x] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen; wilde Kämpfe starten lokal, Trainerkämpfe nach Host-Freigabe.
+- [x] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen; Host- und Gast-Gruppe bleiben getrennt.
+- [x] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben; Kampf- und Welt-Callbacks bleiben getrennt.
+- [x] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren; die Freigabe erfolgt erst nach Story-Synchronisation und gesetztem Trainer-Flag.
+- [x] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen; Flags und Variablen verwenden die bestehende Story-Synchronisation.
+- [x] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen; Fang-, Item- und Geldänderungen werden als Deltas übertragen und Boxkollisionen auf freie Plätze umgeleitet.
+- [x] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln; Niederlagen werden erst nach Whiteout einschließlich Heilung und Geldabzug übernommen.
+- [x] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners durch Reservierung und verzögerte Freigabe verhindern.
+
+Alle Sprint-5-Implementierungen sind kompiliert und auf Protokollebene getestet; die vollständige Abnahme mit zwei unabhängigen Kämpfen, Fang, Niederlage und Trainerreservierung in Azahar steht noch aus.
 
 ### Akzeptanzkriterien
 
@@ -285,4 +287,4 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Die neuen Sprint-4-Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; Emulator- und Hardwareabnahmen stehen noch aus. Teamänderungen außerhalb bestätigter PC-Vorgänge und das sichere Zurücklegen beim Verbindungsende sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

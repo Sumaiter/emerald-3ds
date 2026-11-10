@@ -251,6 +251,36 @@ static void TestPCControl(void)
     CHECK(!CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet) - 1), "short PC output rejected");
 }
 
+static void TestBattleProtocol(void)
+{
+    uint8_t reserve[CTR_COOP_BATTLE_RESERVE_SIZE];
+    uint8_t result[CTR_COOP_BATTLE_RESERVE_RESULT_SIZE];
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
+    uint8_t chunk[CTR_COOP_SAVE_CHUNK_HEADER + 3];
+    uint8_t payload[] = {1, 2, 3};
+    uint8_t decodedPayload[3];
+    uint16_t trainerId, decodedSize;
+    uint32_t totalSize, checksum, offset;
+    bool accepted;
+
+    CHECK(CtrCoopProtocol_EncodeBattleReserve(321, reserve, sizeof(reserve)), "battle reservation encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleReserve(reserve, sizeof(reserve), &trainerId) && trainerId == 321, "battle reservation roundtrip");
+    CHECK(!CtrCoopProtocol_EncodeBattleReserve(0, reserve, sizeof(reserve)), "zero trainer rejected");
+    CHECK(CtrCoopProtocol_EncodeBattleReserveResult(321, true, result, sizeof(result)), "battle grant encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && trainerId == 321 && accepted, "battle grant roundtrip");
+    result[3] &= 0x7F;
+    CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && !accepted, "battle rejection decodes");
+    CHECK(CtrCoopProtocol_EncodeBattleBegin(616, 0x12345678, begin, sizeof(begin)), "battle begin encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleBegin(begin, sizeof(begin), &totalSize, &checksum) && totalSize == 616 && checksum == 0x12345678, "battle begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "battle begin is not PC sync");
+    CHECK(CtrCoopProtocol_EncodeBattleRequest(128, request, sizeof(request)), "battle request encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleRequest(request, sizeof(request), &offset) && offset == 128, "battle request roundtrip");
+    CHECK(CtrCoopProtocol_EncodeBattleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "battle chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "battle chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "battle payload roundtrip");
+}
+
 static void TestStoryUpdates(void)
 {
     uint8_t flag[CTR_COOP_FLAG_SIZE];
@@ -284,6 +314,7 @@ int main(void)
     TestSaveTransfer();
     TestPcSyncTransfer();
     TestPCControl();
+    TestBattleProtocol();
     TestStoryUpdates();
     if (sFailures != 0)
     {

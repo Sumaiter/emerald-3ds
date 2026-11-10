@@ -10,7 +10,8 @@ Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha*
 - Original: `https://github.com/ZallaxDev/emerald-3ds`
 - Veröffentlichung und Ersteinrichtung für den Sprint-3-Test erfolgen über `main` (`6fbae82 Make co-op avatar non-blocking`).
 - Sprint 4 wird getrennt auf `sprint-4` entwickelt. Die Koop-Box, Startteam-Auswahl, atomare PC-Übertragung und Reihensperren sind implementiert, aber noch nicht im Emulator abgenommen.
-- Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von beiden Branches gemeinsam verwendet.
+- Sprint 5 baut auf diesem Stand auf und wird auf `sprint-5` entwickelt: unabhängige Kämpfe, Trainerreservierung und Battle-Ergebnissynchronisation.
+- Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren; dieser Arbeitsbaum wird von allen Branches gemeinsam verwendet.
 
 ## Mit zwei Azahar-Instanzen bestätigt
 
@@ -44,7 +45,7 @@ Geänderte Dateien:
 - `3ds_port/tests/coop_protocol_test.c`
 - `patches/pokeemerald/0083-local-coop.patch`
 
-Das Protokoll hat Version 6. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen sowie Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
+Das Protokoll hat Version 7. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe, atomare PC-Übertragungen, Trainerreservierungen und Battle-Ergebnisse sowie Änderungen von Story-Flags und Skriptvariablen. Chunks werden nur auf Anforderung gesendet; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
 Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
 
@@ -83,18 +84,29 @@ Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** k
 - Empfangene Werte aktualisieren Spielstand und Baseline zugleich, sodass keine Paketschleife entsteht. Höchstens acht Änderungen pro Intervall begrenzen die Netzwerk-Warteschlange.
 - Temporäre Spezialflags und Spezialvariablen werden nicht übertragen. Der Laufzeittest mit einem konkreten Szenario steht noch aus.
 
+## Sprint 5: Unabhängige Kämpfe
+
+- Wilde Kämpfe starten auf beiden Konsolen lokal und unabhängig mit der jeweiligen Gruppe. Die andere Konsole bleibt gleichzeitig in der Oberwelt oder kann selbst kämpfen.
+- `CB2_InitBattle` fragt bei Gast-Trainerkämpfen zuerst die Trainer-ID beim Host an. Der Host vergibt jede ID nur einmal; auch seine eigene ID bleibt nach dem Kampf bis zur Story-Synchronisation reserviert.
+- Vor der Freigabe muss bei einem Sieg `TRAINER_FLAGS_START + trainerId` gesetzt sein. Der Gast sendet dieses Flag vor der Freigabe, damit keine zweite Herausforderung oder doppelte Belohnung zwischen Kampfende und Story-Synchronisation entsteht.
+- Beim Kampfbeginn werden `SaveBlock1` und `PokemonStorage` als Baseline gespeichert. Nach dem Kampf enthält die Transaktion die vollständige Gruppe des Auslösers, geänderte Boxplätze sowie Geld-, Münz- und Item-Deltas.
+- Fangdaten werden nur hinzugefügt, nicht gelöscht. Ist ein Zielplatz inzwischen belegt, sucht die Übernahme vor dem Schreiben einen anderen freien Platz. Reicht der Platz nicht, wird nichts übernommen und die Übertragung später erneut versucht.
+- Item- und Geld-Deltas werden auf den aktuellen Empfängerzustand angewendet. Dadurch überschreibt ein später Kampfabschluss keine zeitgleichen Änderungen des anderen Spielers.
+- `ReturnFromBattleToOverworld` startet die Übernahme nach Levelaufstiegen und Evolutionen. Bei Niederlage oder Unentschieden wartet sie bis nach `DoWhiteOut()`, damit Heilung, Geldabzug und Rückkehr enthalten sind.
+- Battle- und PC-Übertragungen besitzen getrennte Puffer und Bestätigungen. Die vollständige Azahar-Abnahme mit gleichzeitigen Kämpfen, Fängen, Whiteout und derselben Trainer-ID steht noch aus.
+
 ## Noch offen
 
-- Teamänderungen außerhalb des PCs, Items, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe und der Initialzustand werden bereits vollständig übertragen.
-- Beim Verbindungsende die aktuelle Gruppe einschließlich später Kampfänderungen in die Gast-Reihe zurücklegen; derzeit enthält sie den letzten bestätigten PC-Stand.
+- Nicht kampfbedingte Teamänderungen außerhalb des PCs, Objekte und sonstige laufende Spielstandsänderungen synchronisieren; PC-Zugriffe, Kampfergebnisse und der Initialzustand werden bereits übertragen.
+- Beim Verbindungsende während einer unbestätigten Übertragung die endgültige Gruppe zuverlässig zurücklegen; die Reihe enthält den letzten bestätigten PC- oder Kampfstand.
 - Den neuen Beitritt mit Startteam-Auswahl, Host-Bestätigung, Rejoin und Abbruch mit zwei Azahar-Instanzen abnehmen.
 - Die Sperren der Host- und Gast-Reihe sowie die Migration eines bereits gefüllten Box-14-Bestands im Emulator prüfen.
-- Unabhängige Einzelkämpfe und später gemeinsame Doppelkämpfe implementieren.
+- Unabhängige Einzelkämpfe mit Fang, Niederlage und Trainerreservierung sowie später gemeinsame Doppelkämpfe abnehmen beziehungsweise implementieren.
 - Dritte Konsole und bestehende Link-Theken erneut prüfen.
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
 - Durchlässigkeit, unabhängige Menüs und Szenario-Synchronisation aus Sprint 3 ebenfalls abnehmen.
 
-Sprint 3 und Sprint 4 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
+Sprint 3, Sprint 4 und Sprint 5 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptanzkriterien erfüllt sind.
 
 ## Nächste Arbeitsschritte
 
@@ -102,7 +114,9 @@ Sprint 3 und Sprint 4 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptan
 2. Auf `sprint-4` einen neuen Gast beitreten lassen, ein Startteam wählen und erst nach der Host-Bestätigung die Welt betreten.
 3. Mit demselben Gastnamen erneut beitreten und das gespeicherte Team sowie den Spawn prüfen; die lokale Gast-SAV muss unverändert bleiben.
 4. PC-Sperre, atomare Übernahme und gesperrte Spieler-Reihen auf beiden Konsolen testen, anschließend Abbrüche während der Teamwahl und Übertragung prüfen.
-5. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+5. Auf `sprint-5` gleichzeitig verschiedene wilde Kämpfe durchführen, einen Fang auf einem vollen Zielplatz prüfen und EP, Items und Geld auf beiden Seiten vergleichen.
+6. Dieselbe Trainer-ID zeitgleich anfordern, danach Sieg, Niederlage mit Whiteout und erneute Herausforderung erst nach Flag-Übernahme prüfen.
+7. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 
@@ -115,4 +129,4 @@ Sprint 3 und Sprint 4 dürfen erst abgeschlossen werden, wenn alle ihre Akzeptan
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main` verwenden; die neue Koop-Box und Startteam-Auswahl liegen auf `sprint-4`. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Sprint-4-Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Für den Sprint-3-Test `main`, für Team und PC `sprint-4` und für unabhängige Kämpfe `sprint-5` verwenden. Vor einem Build die Portdateien des gewählten Branches nach `build/upstream/3ds_port/` kopieren. Keine ROMs, Saves oder Build-Artefakte committen. Die neuen Abläufe sind gebaut, aber noch nicht mit zwei Azahar-Instanzen abgenommen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

@@ -44,7 +44,7 @@ Geänderte Dateien:
 - `3ds_port/tests/coop_protocol_test.c`
 - `patches/pokeemerald/0083-local-coop.patch`
 
-Das Protokoll hat Version 3. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk und Übernahmebestätigung. Der Host sendet einen Chunk erst nach Anforderung durch den Gast; dadurch läuft die Netzwerk-Warteschlange nicht voll.
+Das Protokoll hat Version 5. Es enthält Authentifizierung, Identität, Spawn, Snapshot-Beginn, Chunk-Anforderung, Chunk, Übernahmebestätigung, PC-Anfrage, Vergabe und Freigabe sowie Änderungen von Story-Flags und Skriptvariablen. Der Host sendet einen Chunk erst nach Anforderung durch den Gast; dadurch läuft die Netzwerk-Warteschlange nicht voll.
 
 Die namensbasierte Spawntabelle liegt in `gSaveBlock1Ptr->unused_3598`, mit Magic `0x5350`, Version `1` und vier Einträgen. Positionspakete verwenden ObjectEvent-Koordinaten einschließlich `MAP_OFFSET`; `SetWarpDestination()` erhält die Koordinaten ohne diesen Rand.
 
@@ -52,11 +52,31 @@ Nach den Karten-Ladeskripten wird die Gastfigur einmalig exakt auf den gespeiche
 
 Nach **A** ist die Auswahl im Suchmenü während des Beitritts gesperrt. **B** kann weiterhin abbrechen.
 
+## Kollisionen und Menüs
+
+- `LOCALID_COOP_PLAYER` ist im zentralen Kollisionscheck ausgenommen: Die Verbindungsfigur blockiert keine Bewegung. Terrain, NPCs und normale Kollisionen bleiben unverändert.
+- Die Figur besitzt kein NPC-Script; ein Dialog wird nicht ausgelöst.
+- Menüs, Beutel, PC und Kämpfe verwenden getrennte Engine-Callbacks und keine gemeinsamen Menüzustände im Koop-Modul.
+- Diese neuen Regeln sind gebaut, aber noch nicht vom Nutzer im Laufzeittest bestätigt.
+
+## Sprint 4: PC-Sperre
+
+- Der Host vergibt die Sperre nur an eine Rolle. Gastanfragen werden erst nach vollständiger Spielstandübernahme beantwortet.
+- `ShowPokemonStorageSystemPC()` fragt die Berechtigung an. Der Gast öffnet den PC erst nach positiver Antwort im regulären Welt-Frame.
+- `CB2_ExitPokeStorage()` gibt die Sperre frei. Stopp, F6, Softreset und `CtrCoop_PeerLeft()` setzen sie ebenfalls zurück.
+- Offlineverhalten und PC-Untermenüs bleiben unverändert. Der Laufzeittest der Vergabe steht noch aus.
+
+## Szenario-Fortschritt
+
+- Persistente Story-Flags und Skriptvariablen werden alle 15 Frames mit einer kleinen Baseline verglichen. Auch direkte Schreibzugriffe über `GetVarPointer()` werden dadurch erfasst.
+- Änderungen gehen an die Gegenseite. Der Host übernimmt Gaständerungen und spiegelt sie anschließend als Hostzustand zurück.
+- Empfangene Werte aktualisieren Spielstand und Baseline zugleich, sodass keine Paketschleife entsteht. Höchstens acht Änderungen pro Intervall begrenzen die Netzwerk-Warteschlange.
+- Temporäre Spezialflags und Spezialvariablen werden nicht übertragen. Der Laufzeittest mit einem konkreten Szenario steht noch aus.
+
 ## Noch offen
 
-- Kollisionen und Interaktionen mit der zweiten Figur festlegen.
-- Laufende Team-, PC-, Item- und Storyänderungen synchronisieren; der vollständige Transfer gilt nur für den Initialzustand beim Beitritt.
-- PC-Sperre, Mehrspieler-Box und Startteam-Auswahl in Sprint 4 umsetzen.
+- Laufende Team-, PC-, Item-, Objekt- und sonstige Spielstandsänderungen synchronisieren; der vollständige Transfer gilt nur für den Initialzustand beim Beitritt.
+- Mehrspieler-Box und Startteam-Auswahl in Sprint 4 umsetzen.
 - Unabhängige Einzelkämpfe und später gemeinsame Doppelkämpfe implementieren.
 - Dritte Konsole und bestehende Link-Theken erneut prüfen.
 - Tests auf zwei realen 3DS-/2DS-Konsolen durchführen.
@@ -67,9 +87,10 @@ Sprint 3 darf erst abgeschlossen werden, wenn alle seine Akzeptanzkriterien erf�
 ## Nächste Arbeitsschritte
 
 1. Den bestätigten Basistest einschließlich Kartenwechsel nicht erneut als offenen Fehler behandeln.
-2. Kollisionen und Interaktionen mit der zweiten Figur festlegen.
-3. Danach mit Sprint 4 und der laufenden Spielstandssynchronisation fortfahren.
-4. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
+2. Durchlässigkeit, fehlende NPC-Dialoge und unabhängige Menüs im nächsten Laufzeittest bestätigen.
+3. Ein Szenario-Flag und eine Variable auf beiden Seiten prüfen: keine erneute Auslösung bei Host oder Gast.
+4. Danach mit Sprint 4 und der laufenden Spielstandssynchronisation fortfahren.
+5. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
 ## Build- und Testregeln
 

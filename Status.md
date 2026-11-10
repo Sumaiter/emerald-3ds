@@ -145,7 +145,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 **Status: In Arbeit**
 
-Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Kollisionen, laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
+Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Die Koop-Figur blockiert weder Bewegung noch NPC-Dialoge. Menüs und Kämpfe verwenden weiterhin getrennte Engine-Zustände pro Konsole. Persistente Story-Flags und Skriptvariablen werden nun laufend Host-autoritativ zwischen beiden Konsolen übernommen, auch bei direkten Schreibzugriffen. Team-, Item-, Objekt- und weitere Spielstandssynchronisation stehen noch aus; die neuen Regeln müssen noch im Laufzeittest bestätigt werden.
 
 ### Aufgaben
 
@@ -154,9 +154,10 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 - [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot, Rejoin und vollständigem Kartenaufbau bestätigt.
 - [x] Kartenwechsel durch Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren; einschließlich Rejoin bestätigt.
 - [x] Neue Gastnamen an einem freien, festen Punkt in Wurzelheim spawnen und für alte Namen immer deren gespeicherte Position ohne Spawn-Auswahl verwenden.
-- [ ] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen.
-- [ ] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast bereitstellen.
-- [ ] Menüs und Kampf-/Oberweltzustände pro Spieler getrennt halten.
+- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: keine Blockade und kein NPC-Script; Laufzeittest steht noch aus.
+- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als vollständigen Initial-Snapshot bereitstellen.
+- [x] Persistente Story-Flags und Skriptvariablen laufend Host-autoritativ übernehmen; direkte Schreibzugriffe werden mit einer Baseline und höchstens acht Änderungen pro Intervall erfasst.
+- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks trennen; Laufzeittest steht noch aus.
 
 ### Akzeptanzkriterien
 
@@ -167,14 +168,14 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Sprint 4: Spielerprofil, Mehrspieler-Box und PC-Sperre
 
-**Status: Offen**
+**Status: In Arbeit**
 
 ### Aufgaben
 
 - [ ] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern.
 - [ ] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen.
 - [ ] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist.
-- [ ] Globale PC-Sperre für jeweils genau einen Spieler umsetzen.
+- [x] Globale PC-Sperre für jeweils genau einen Spieler umsetzen: Host-Vergabe, verzögerte Gastöffnung und Freigabe bei Ausstieg, Stopp, F6 oder Disconnect; Laufzeittest steht noch aus.
 - [ ] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge ausführen.
 - [ ] Boxenreihen eingeloggter Spieler gegen Entnahme und Verschieben sperren.
 - [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren.
@@ -282,8 +283,7 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 - Wie werden Flucht, Fangversuche und Kampfabbrüche in gemeinsamen Doppelkämpfen behandelt?
 - Soll bei einem Verbindungsabbruch im Doppelkampf eine KI übernehmen oder der Kampf sicher abgebrochen werden?
 - Soll ein wiederkehrender Gast jedes Mal ein Startteam wählen oder automatisch seine letzte Boxenreihe übernehmen?
-- Welche Interaktionen zwischen den beiden Spielfiguren sind möglich, beispielsweise Ansprechen, Blockieren oder direkter Tausch?
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Der Gast übernimmt beim Beitritt den vollständigen benötigten Host-Spielstand mit Prüfsumme. Neue Namen starten in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Rejoin, Kartenwechsel, Bewegung und vollständige Kartendarstellung sind bestätigt; die lokale Gast-Speicherdatei bleibt unverändert. Kollisionen, laufende Spielstandssynchronisation und die übrigen Sprints stehen noch aus. `HANDOFF.md` enthält den aktuellen Stand, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist in Arbeit: Der Gast übernimmt beim Beitritt den vollständigen benötigten Host-Spielstand mit Prüfsumme. Neue Namen starten in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; es gibt keine Spawn-Auswahl. Rejoin, Kartenwechsel, Bewegung und vollständige Kartendarstellung sind bestätigt; die lokale Gast-Speicherdatei bleibt unverändert. Kollisionen und Menütrennung sind implementiert. Story-Flags und Skriptvariablen werden laufend Host-autoritativ übernommen; Team-, Item-, Objekt- und weitere Spielstandssynchronisation stehen noch aus. Sprint 4 ist mit der globalen PC-Sperre begonnen. Alle neuen Regeln müssen noch im Laufzeittest bestätigt werden. `HANDOFF.md` enthält den aktuellen Stand, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

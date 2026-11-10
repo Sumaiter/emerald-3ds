@@ -24,6 +24,8 @@ void CtrCoop_Stop(void);
 bool CtrCoop_GuestSaveBlocked(void);
 uint8_t CtrCoop_GetSessionState(void);
 int CtrCoop_GetFoundGames(struct CtrCoopFoundGame *games, int max);
+bool CtrCoop_RequestPC(void);
+void CtrCoop_ReleasePC(void);
 void CtrCoop_MenuFrame(void);
 void CtrCoop_OverworldFrame(void);
 bool CtrCoop_EnterHostWorld(void);

@@ -1581,3 +1581,57 @@ index f75e629..fd10099 100644
      if (sector != SECTOR_ID_TRAINER_HILL && sector != SECTOR_ID_RECORDED_BATTLE)
          return SAVE_STATUS_ERROR;
  
+diff --git a/src/event_object_movement.c b/src/event_object_movement.c
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -33,6 +33,7 @@
+ #include "constants/event_objects.h"
+ #include "constants/field_effects.h"
+ #include "constants/items.h"
++#include "constants/local_link.h"
+ #include "constants/mauville_old_man.h"
+ #include "constants/trainer_types.h"
+ #include "constants/union_room.h"
+@@ -5013,6 +5014,8 @@ static bool8 DoesObjectCollideWithObjectAt(struct ObjectEvent *objectEvent, s16
+         if (FollowerMon_IsFollower(curObject)
+          && (objectEvent->isPlayer || objectEvent->trainerType != TRAINER_TYPE_NONE))
+             continue;
++        if (curObject->localId == LOCALID_COOP_PLAYER)
++            continue;
+ #endif
+         if (curObject->active && curObject != objectEvent)
+         {
+ 
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -43,6 +43,7 @@
+ #endif
+ #ifdef PLATFORM_3DS
+ #include "3ds_assets.h"
++#include "3ds_coop.h"
+ #endif
+ #include "constants/rgb.h"
+ #include "constants/songs.h"
+@@ -1700,6 +1701,10 @@ static void Task_PCMainMenu(u8 taskId)
+ 
+ void ShowPokemonStorageSystemPC(void)
+ {
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_RequestPC())
++        return;
++#endif
+     u8 taskId = CreateTask(Task_PCMainMenu, 80);
+     gTasks[taskId].tState = 0;
+     gTasks[taskId].tSelectedOption = 0;
+@@ -1741,6 +1746,9 @@ static void CreateMainMenu(u8 whichMenu, s16 *windowIdPtr)
+ static void CB2_ExitPokeStorage(void)
+ {
++#ifdef PLATFORM_3DS
++    CtrCoop_ReleasePC();
++#endif
+     sPreviousBoxOption = GetCurrentBoxOption();
+     gFieldCallback = FieldTask_ReturnToPcMenu;
+     SetMainCallback2(CB2_ReturnToField);
+ }
+

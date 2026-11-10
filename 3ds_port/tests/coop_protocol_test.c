@@ -205,6 +205,46 @@ static void TestSaveTransfer(void)
     CHECK(!CtrCoopProtocol_EncodeSaveChunk(0, payload, 0, chunk, sizeof(chunk)), "empty chunk rejected");
 }
 
+static void TestPCControl(void)
+{
+    uint8_t packet[CTR_COOP_PC_RESULT_SIZE];
+    bool accepted;
+
+    CHECK(CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet)), "PC grant encodes");
+    CHECK(CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted) && accepted, "PC grant decodes");
+    CHECK(CtrCoopProtocol_EncodePcResult(false, packet, sizeof(packet)), "PC rejection encodes");
+    CHECK(CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted) && !accepted, "PC rejection decodes");
+    packet[2] = 2;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted), "invalid PC result rejected");
+    packet[2] = 1;
+    packet[0] = CTR_COOP_PC_REQUEST_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted), "PC request is not a result");
+    packet[0] = CTR_COOP_PC_RESULT_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet) - 1, &accepted), "short PC result rejected");
+    CHECK(!CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet) - 1), "short PC output rejected");
+}
+
+static void TestStoryUpdates(void)
+{
+    uint8_t flag[CTR_COOP_FLAG_SIZE];
+    uint8_t var[CTR_COOP_VAR_SIZE];
+    uint16_t id, value;
+    bool enabled;
+
+    CHECK(CtrCoopProtocol_EncodeFlag(0x1234, true, flag, sizeof(flag)), "flag encodes");
+    CHECK(CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled) && id == 0x1234 && enabled, "flag roundtrip");
+    flag[4] = 0;
+    CHECK(CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled) && !enabled, "flag clear decodes");
+    flag[4] = 2;
+    CHECK(!CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled), "invalid flag value rejected");
+    flag[4] = 1;
+    CHECK(!CtrCoopProtocol_DecodeFlag(flag, sizeof(flag) - 1, &id, &enabled), "short flag rejected");
+    CHECK(CtrCoopProtocol_EncodeVar(0x4567, 0xAB89, var, sizeof(var)), "var encodes");
+    CHECK(CtrCoopProtocol_DecodeVar(var, sizeof(var), &id, &value) && id == 0x4567 && value == 0xAB89, "var roundtrip");
+    var[1]++;
+    CHECK(!CtrCoopProtocol_DecodeVar(var, sizeof(var), &id, &value), "var version rejected");
+}
+
 int main(void)
 {
     TestRoundtrip();
@@ -215,6 +255,8 @@ int main(void)
     TestAuthentication();
     TestSpawnIdentity();
     TestSaveTransfer();
+    TestPCControl();
+    TestStoryUpdates();
     if (sFailures != 0)
     {
         printf("%d co-op protocol tests failed\n", sFailures);

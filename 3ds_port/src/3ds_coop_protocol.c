@@ -137,6 +137,70 @@ bool CtrCoopProtocol_DecodeAuthResult(const uint8_t *data, uint16_t size, bool *
     return true;
 }
 
+bool CtrCoopProtocol_EncodePcResult(bool accepted, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_PC_RESULT_SIZE)
+        return false;
+    out[0] = CTR_COOP_PC_RESULT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = accepted ? 1 : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodePcResult(const uint8_t *data, uint16_t size, bool *accepted)
+{
+    if (data == NULL || accepted == NULL || size != CTR_COOP_PC_RESULT_SIZE
+     || data[0] != CTR_COOP_PC_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION || data[2] > 1)
+        return false;
+    *accepted = data[2] != 0;
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeFlag(uint16_t id, bool value, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_FLAG_SIZE)
+        return false;
+    out[0] = CTR_COOP_FLAG_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = id & 0xFF;
+    out[3] = id >> 8;
+    out[4] = value ? 1 : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeFlag(const uint8_t *data, uint16_t size, uint16_t *id, bool *value)
+{
+    if (data == NULL || id == NULL || value == NULL || size != CTR_COOP_FLAG_SIZE
+     || data[0] != CTR_COOP_FLAG_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION || data[4] > 1)
+        return false;
+    *id = data[2] | ((uint16_t)data[3] << 8);
+    *value = data[4] != 0;
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeVar(uint16_t id, uint16_t value, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_VAR_SIZE)
+        return false;
+    out[0] = CTR_COOP_VAR_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = id & 0xFF;
+    out[3] = id >> 8;
+    out[4] = value & 0xFF;
+    out[5] = value >> 8;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeVar(const uint8_t *data, uint16_t size, uint16_t *id, uint16_t *value)
+{
+    if (data == NULL || id == NULL || value == NULL || size != CTR_COOP_VAR_SIZE
+     || data[0] != CTR_COOP_VAR_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION)
+        return false;
+    *id = data[2] | ((uint16_t)data[3] << 8);
+    *value = data[4] | ((uint16_t)data[5] << 8);
+    return true;
+}
+
 static void Put32(uint8_t *out, uint32_t value)
 {
     out[0] = value & 0xFF;

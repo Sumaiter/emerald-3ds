@@ -420,9 +420,23 @@ build/video_decode_test.exe: tests/video_decode_test.c src/3ds_video_decode.c in
 
 verify: verify-coop
 .PHONY: verify-coop
-verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX)
+verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX) build/coop_storage_test$(EXESUFFIX) build/starter_menu_test$(EXESUFFIX) build/local_session_test$(EXESUFFIX) build/local_build_test$(EXESUFFIX)
 	./build/coop_protocol_test$(EXESUFFIX)
 	./build/coop_profile_test$(EXESUFFIX)
+	./build/coop_storage_test$(EXESUFFIX)
+	./build/starter_menu_test$(EXESUFFIX)
+	./build/local_session_test$(EXESUFFIX)
+	./build/local_build_test$(EXESUFFIX)
+	"$(PYTHON)" tests/coop_join_flow_test.py
+
+build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_storage.c include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_storage_test.c src/3ds_coop_storage.c -o $@
+
+STARTER_MENU_ROOT := $(if $(wildcard $(ROOT)/src/main_menu.c),$(ROOT),$(ROOT)/build/upstream)
+build/starter_menu_test$(EXESUFFIX): tests/starter_menu_test.c $(STARTER_MENU_ROOT)/src/main_menu.c $(STARTER_MENU_ROOT)/src/task.c
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=pointer-to-int-cast -Wno-error=format -Wno-error=ignored-qualifiers -Wno-unused-parameter -Wno-unused-function -Wno-int-conversion -Wno-int-to-pointer-cast -ffunction-sections -fdata-sections -DSTARTER_MENU_TEST -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/starter_menu_test.c -Wl,--gc-sections -o $@
 
 build/coop_protocol_test$(EXESUFFIX): tests/coop_protocol_test.c src/3ds_coop_protocol.c include/3ds_coop_protocol.h
 	@mkdir -p build
@@ -431,6 +445,16 @@ build/coop_protocol_test$(EXESUFFIX): tests/coop_protocol_test.c src/3ds_coop_pr
 build/coop_profile_test$(EXESUFFIX): tests/coop_profile_test.c src/3ds_coop_profile.c include/3ds_coop_profile.h
 	@mkdir -p build
 	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_profile_test.c src/3ds_coop_profile.c -Wl,--wrap=remove -Wl,--wrap=rename -o $@
+
+build/local_build_test$(EXESUFFIX): tests/local_build_test.c src/3ds_local.c
+	@mkdir -p build
+	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Wno-error=pointer-to-int-cast -Wno-error=format -ffunction-sections -fdata-sections -DLOCAL_BUILD_TEST -DLOCAL_BUILD_SOURCE=\"$(abspath $(LOCAL_SESSION_ROOT))/3ds_port/src/3ds_local.c\" -Iinclude -Itests/host_include -I$(CTRULIB)/include tests/local_build_test.c -Wl,--gc-sections -o $@
+
+LOCAL_SESSION_ROOT := $(if $(wildcard $(ROOT)/src/local_session.c),$(ROOT),$(ROOT)/build/upstream)
+LOCAL_SESSION_SRC := $(LOCAL_SESSION_ROOT)/src/local_session.c
+build/local_session_test$(EXESUFFIX): tests/local_session_test.c $(LOCAL_SESSION_SRC)
+	@mkdir -p build
+	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Wno-error=ignored-qualifiers -DPLATFORM_3DS -Iinclude -I$(LOCAL_SESSION_ROOT)/include tests/local_session_test.c $(LOCAL_SESSION_SRC) -o $@
 
 verify: verify-randomizer
 .PHONY: verify-randomizer

@@ -1,6 +1,6 @@
 # Status: Emerald 3DS Koop-Mod
 
-Stand: 2026-11-09
+Stand: 2026-11-11
 
 ## Ziel
 
@@ -22,7 +22,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 | 1 | Technischen Koop-Prototyp nachweisen | Fertig |
 | 2 | Local-Wireless-Lobby und Passwort-Beitritt | Fertig |
 | 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | In Arbeit |
-| 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Offen |
+| 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | In Arbeit |
 | 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | Offen |
 | 6 | Gemeinsame Doppelkämpfe | Offen |
 | 7 | Abmeldung, Verbindungsabbrüche und sicheres Speichern | Offen |
@@ -145,18 +145,18 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 **Status: In Arbeit**
 
-Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Die Koop-Figur blockiert weder Bewegung noch NPC-Dialoge. Menüs und Kämpfe verwenden weiterhin getrennte Engine-Zustände pro Konsole; deren Laufzeittest steht noch aus. Laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
+Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Beim Beitritt werden alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die Kartendarstellung nach Gebietswechseln wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt bytegenau unverändert. Kollisionen, NPC-Interaktionen und unabhängige Menüs wurden vom Nutzer im Laufzeittest bestätigt. Beim initialen Join traten gelegentlich noch Fragmente aus dem alten gespeicherten Kartenausschnitt und NPC-Objekte der vorherigen Karte auf. Der Join verwirft nun den alten Kartenausschnitt und ersetzt bei einem Kartenwechsel auch die fremden NPC-Objekte und Objektvorlagen. Der wiederholte Join-Laufzeittest dieser Fixes steht noch aus. Während des Beitritts bleibt die ausgewählte Welt mit `VERBINDEN …` sichtbar, statt kurzzeitig als nicht gefunden zu verschwinden. Laufende Spielstandssynchronisation und die übrigen Oberweltfunktionen stehen noch aus.
 
 ### Aufgaben
 
 - [x] Zweite Spielfigur mit eigenem Charakter und Namen sowie Basis-Bewegungsdaten integrieren.
 - [x] Bewegungsdaten mit Heartbeat, Validierung und Verlustbehandlung übertragen; dies wurde in Sprint 1 bestätigt.
-- [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot, Rejoin und vollständigem Kartenaufbau bestätigt.
+- [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot und Rejoin bestätigt.
 - [x] Kartenwechsel durch Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren; einschließlich Rejoin bestätigt.
 - [x] Neue Gastnamen an einem freien, festen Punkt in Wurzelheim spawnen und für alte Namen immer deren gespeicherte Position ohne Spawn-Auswahl verwenden.
-- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: `LOCALID_COOP_PLAYER` blockiert keine Bewegung und besitzt kein NPC-Script; der Laufzeittest steht noch aus.
-- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als initialen Snapshot bereitstellen; laufende Änderungen gehören zu Sprint 4.
-- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks getrennt halten; der Laufzeittest steht noch aus.
+- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: `LOCALID_COOP_PLAYER` blockiert keine Bewegung und besitzt kein NPC-Script; vom Nutzer laufzeitgeprüft.
+- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als initialen Snapshot bereitstellen; der Snapshot enthält nun aktive ObjectEvents und NPC-Positionen werden auch danach Host-autoritativ aktualisiert. Der Laufzeitvergleich steht noch aus. Team-, Item- und Storyänderungen nach dem Beitritt gehören zu Sprint 4.
+- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks getrennt halten; unabhängige Menüs wurden vom Nutzer laufzeitgeprüft.
 
 ### Akzeptanzkriterien
 
@@ -167,19 +167,20 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Sprint 4: Spielerprofil, Mehrspieler-Box und PC-Sperre
 
-**Status: Offen**
+**Status: In Arbeit**
 
 ### Aufgaben
 
-- [ ] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern.
-- [ ] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen.
-- [ ] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist.
-- [ ] Globale PC-Sperre für jeweils genau einen Spieler umsetzen.
-- [ ] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge ausführen.
-- [ ] Boxenreihen eingeloggter Spieler gegen Entnahme und Verschieben sperren.
-- [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren.
-- [ ] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln.
-- [ ] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren.
+- [x] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern; Spawn-Tabelle und Gast-Reihe werden verwendet.
+- [x] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen: Box 14 als KOOP-Box, Reihe 1 für den Host und Reihe 2 für den Gast; Bestand wird vorher migriert.
+- [x] Neue Gäste zwischen Geckarbor, Flemmli und Hydropi wählen lassen und den Starter direkt in die Gast-Reihe legen; die Auswahl ist vor dem Startteam-PC verbindlich und darf nicht dupliziert werden. Hoch/Runter und die Bestätigung von Flemmli wurden im Emulator abgenommen; anschließend öffnete der Startteam-PC.
+- [x] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist; mindestens ein Pokémon und vollständige Host-Bestätigung vor dem Spawn; Laufzeittest steht noch aus.
+- [x] Globale PC-Sperre für jeweils genau einen Spieler umsetzen, einschließlich verzögerter Gastöffnung und Freigabe bei Ausstieg und Disconnect; Laufzeittest steht noch aus.
+- [x] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge mit Prüfsumme ausführen; Laufzeittest steht noch aus.
+- [x] Boxenreihen eingeloggter Spieler gegen Entnahme, Verschieben, Tausch, Freilassen und Mehrfachverschieben sperren; Laufzeittest steht noch aus.
+- [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren; die Reihe wird bei PC-Übernahmen aktualisiert, aber noch nicht bei jedem Verbindungsende mit aktuellen Kampfänderungen synchronisiert.
+- [x] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln; Übernahme erst nach vollständigem Empfang und korrekter Prüfsumme.
+- [x] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren.
 
 ### Akzeptanzkriterien
 

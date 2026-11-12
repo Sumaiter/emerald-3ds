@@ -1241,6 +1241,7 @@ void PortRfu_Frame(void)
     if (!LocalLink_Enabled())
         return;
     LocalSession_Update();
+    CtrCoop_OverworldFrame();
     if (st == NULL)
         return;
     sA.frame++;

@@ -127,7 +127,9 @@ static void TestAuthentication(void)
     uint8_t decoded[4];
     uint8_t packet[CTR_COOP_AUTH_PACKET_SIZE];
     uint8_t result[CTR_COOP_AUTH_RESULT_SIZE];
+    uint8_t joinInfo[CTR_COOP_JOIN_INFO_SIZE];
     bool accepted;
+    bool starterRequired;
 
     CHECK(CtrCoopProtocol_EncodeAuth(password, packet, sizeof(packet)), "auth packet encodes");
     CHECK(CtrCoopProtocol_DecodeAuth(packet, sizeof(packet), decoded), "auth packet decodes");
@@ -141,6 +143,15 @@ static void TestAuthentication(void)
     CHECK(CtrCoopProtocol_DecodeAuthResult(result, sizeof(result), &accepted) && !accepted, "rejected result decodes");
     result[2] = 2;
     CHECK(!CtrCoopProtocol_DecodeAuthResult(result, sizeof(result), &accepted), "invalid auth result rejected");
+    CHECK(CtrCoopProtocol_EncodeJoinInfo(true, joinInfo, sizeof(joinInfo)), "starter requirement encodes");
+    CHECK(CtrCoopProtocol_DecodeJoinInfo(joinInfo, sizeof(joinInfo), &starterRequired) && starterRequired,
+        "new guest starter requirement decodes");
+    CHECK(CtrCoopProtocol_EncodeJoinInfo(false, joinInfo, sizeof(joinInfo)), "returning guest info encodes");
+    CHECK(CtrCoopProtocol_DecodeJoinInfo(joinInfo, sizeof(joinInfo), &starterRequired) && !starterRequired,
+        "returning guest skips starter selection");
+    joinInfo[2] = CTR_COOP_JOIN_STARTER | 2;
+    CHECK(!CtrCoopProtocol_DecodeJoinInfo(joinInfo, sizeof(joinInfo), &starterRequired), "unknown join flags rejected");
+    CHECK(!CtrCoopProtocol_DecodeJoinInfo(joinInfo, sizeof(joinInfo) - 1, &starterRequired), "short join info rejected");
 }
 
 static void TestSpawnIdentity(void)
@@ -205,6 +216,110 @@ static void TestSaveTransfer(void)
     CHECK(!CtrCoopProtocol_EncodeSaveChunk(0, payload, 0, chunk, sizeof(chunk)), "empty chunk rejected");
 }
 
+static void TestNpcSync(void)
+{
+    CtrCoopNpcSnapshot original = {7, 2, 7, -7, 9, 1, 100}, decoded;
+    CtrCoopSnapshot playerDecoded;
+    uint8_t packet[CTR_COOP_NPC_PACKET_SIZE];
+
+    CHECK(CtrCoopProtocol_EncodeNpc(&original, packet, sizeof(packet)), "NPC packet encodes");
+    CHECK(CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC packet decodes");
+    CHECK(decoded.localId == original.localId && decoded.mapGroup == original.mapGroup
+        && decoded.mapNum == original.mapNum && decoded.x == original.x && decoded.y == original.y
+        && decoded.facing == original.facing && decoded.graphicsId == original.graphicsId,
+        "NPC roundtrip preserves every field");
+    CHECK(packet[0] == CTR_COOP_NPC_PACKET && packet[1] == CTR_COOP_PROTOCOL_VERSION,
+        "NPC type and version on wire");
+    CHECK(packet[5] == 0xF9 && packet[6] == 0xFF, "NPC negative x is little endian");
+    CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), &playerDecoded), "NPC packet is not a player packet");
+    CHECK(!CtrCoopProtocol_EncodeNpc(NULL, packet, sizeof(packet)), "null NPC encode rejected");
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), NULL), "null NPC decode rejected");
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet) - 1, &decoded), "short NPC packet rejected");
+    packet[1]++;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC version rejected");
+    packet[1]--;
+    packet[2] = 0;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC local id rejected");
+    packet[2] = original.localId;
+    packet[9] = 0;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC facing zero rejected");
+    packet[9] = 5;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC facing range rejected");
+    packet[9] = original.facing;
+    packet[10] = CTR_COOP_GRAPHICS_ID_MAX + 1;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC graphics rejected");
+    packet[10] = original.graphicsId;
+    packet[11] = 1;
+    CHECK(!CtrCoopProtocol_DecodeNpc(packet, sizeof(packet), &decoded), "NPC reserved byte rejected");
+}
+
+static void TestPcSyncTransfer(void)
+{
+    uint8_t payload[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t decoded[CTR_COOP_SAVE_CHUNK_DATA_MAX];
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
+    uint8_t chunk[CTR_COOP_SAVE_CHUNK_MAX];
+    uint32_t totalSize, checksum, offset;
+    uint16_t decodedSize;
+
+    for (uint16_t i = 0; i < sizeof(payload); i++)
+        payload[i] = i ^ 0x5A;
+    checksum = CtrCoopProtocol_Checksum(payload, sizeof(payload));
+    CHECK(CtrCoopProtocol_EncodePcSyncBegin(34392, checksum, begin, sizeof(begin)), "PC sync begin encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "PC sync begin decodes");
+    CHECK(totalSize == 34392, "PC sync size roundtrip");
+    begin[0] = CTR_COOP_SAVE_BEGIN_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "save begin is not PC sync");
+    CHECK(CtrCoopProtocol_EncodePcSyncRequest(128, request, sizeof(request)), "PC sync request encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncRequest(request, sizeof(request), &offset) && offset == 128, "PC sync request roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeSaveRequest(request, sizeof(request), &offset), "PC sync request is not save request");
+    CHECK(CtrCoopProtocol_EncodePcSyncChunk(128, payload, sizeof(payload), chunk, sizeof(chunk)), "PC sync chunk encodes");
+    CHECK(CtrCoopProtocol_DecodePcSyncChunk(chunk, sizeof(chunk), 128, decoded, sizeof(decoded), &decodedSize), "PC sync chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decoded, sizeof(payload)) == 0, "PC sync payload roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeSaveChunk(chunk, sizeof(chunk), 128, decoded, sizeof(decoded), &decodedSize), "PC sync chunk is not save chunk");
+}
+
+static void TestPCControl(void)
+{
+    uint8_t packet[CTR_COOP_PC_RESULT_SIZE];
+    bool accepted;
+
+    CHECK(CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet)), "PC grant encodes");
+    CHECK(CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted) && accepted, "PC grant decodes");
+    CHECK(CtrCoopProtocol_EncodePcResult(false, packet, sizeof(packet)), "PC rejection encodes");
+    CHECK(CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted) && !accepted, "PC rejection decodes");
+    packet[2] = 2;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted), "invalid PC result rejected");
+    packet[2] = 1;
+    packet[0] = CTR_COOP_PC_REQUEST_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet), &accepted), "PC request is not a result");
+    packet[0] = CTR_COOP_PC_RESULT_PACKET;
+    CHECK(!CtrCoopProtocol_DecodePcResult(packet, sizeof(packet) - 1, &accepted), "short PC result rejected");
+    CHECK(!CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet) - 1), "short PC output rejected");
+}
+
+static void TestStoryUpdates(void)
+{
+    uint8_t flag[CTR_COOP_FLAG_SIZE];
+    uint8_t var[CTR_COOP_VAR_SIZE];
+    uint16_t id, value;
+    bool enabled;
+
+    CHECK(CtrCoopProtocol_EncodeFlag(0x1234, true, flag, sizeof(flag)), "flag encodes");
+    CHECK(CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled) && id == 0x1234 && enabled, "flag roundtrip");
+    flag[4] = 0;
+    CHECK(CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled) && !enabled, "flag clear decodes");
+    flag[4] = 2;
+    CHECK(!CtrCoopProtocol_DecodeFlag(flag, sizeof(flag), &id, &enabled), "invalid flag value rejected");
+    flag[4] = 1;
+    CHECK(!CtrCoopProtocol_DecodeFlag(flag, sizeof(flag) - 1, &id, &enabled), "short flag rejected");
+    CHECK(CtrCoopProtocol_EncodeVar(0x4567, 0xAB89, var, sizeof(var)), "var encodes");
+    CHECK(CtrCoopProtocol_DecodeVar(var, sizeof(var), &id, &value) && id == 0x4567 && value == 0xAB89, "var roundtrip");
+    var[1]++;
+    CHECK(!CtrCoopProtocol_DecodeVar(var, sizeof(var), &id, &value), "var version rejected");
+}
+
 int main(void)
 {
     TestRoundtrip();
@@ -215,6 +330,10 @@ int main(void)
     TestAuthentication();
     TestSpawnIdentity();
     TestSaveTransfer();
+    TestNpcSync();
+    TestPcSyncTransfer();
+    TestPCControl();
+    TestStoryUpdates();
     if (sFailures != 0)
     {
         printf("%d co-op protocol tests failed\n", sFailures);

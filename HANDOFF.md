@@ -2,7 +2,16 @@
 
 Stand: 2026-11-12
 
-Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha**. Sprint 1 bis Sprint 4 sind geprüft. Die unten dokumentierten Join-, NPC-, Starter-, PC-/Box-, Menü-, Gruppen-, Abbruch- und Wiederbeitrittstests wurden mit zwei isolierten Azahar-Instanzen ausgeführt. Hardwaretests bleiben offen. Sprint 5 wurde noch nicht begonnen. Die aktuelle Arbeit liegt auf dem vorhandenen Branch `sprint-4`; neuere Multiplayer-Korrekturen aus dem bisherigen Arbeitsstand wurden erhalten.
+Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha**. Sprint 1 bis Sprint 4 sind geprüft und auf `main` zusammengeführt. Die unten dokumentierten Join-, NPC-, Starter-, PC-/Box-, Menü-, Gruppen-, Abbruch- und Wiederbeitrittstests wurden mit zwei isolierten Azahar-Instanzen ausgeführt. Hardwaretests bleiben offen. Sprint 5 wurde noch nicht begonnen. Der Branch `sprint-4` enthält weiterhin den abgenommenen Quellstand; neuere Multiplayer-Korrekturen aus dem bisherigen Arbeitsstand wurden erhalten.
+
+## Übergabe auf main vom 2026-11-12
+
+- Geprüfter Sprint-4-Commit: [`a976ce4`](https://github.com/Sumaiter/emerald-3ds/commit/a976ce4a54a6b0f4b166ad4aa0ff29256ed0eb65).
+- Merge nach `main`: `777e778` (`Merge sprint-4: complete co-op storage, PC locking and regression tests`). Der Merge-Inhalt entspricht vollständig dem geprüften Sprint-4-Commit; die bisherigen Änderungen von `main` bleiben enthalten.
+- GitHub-Ziele dieser Übergabe: `main` mit dem zusammengeführten Stand bis einschließlich Sprint 4 und `sprint-4` mit dem abgenommenen Quellstand. Implementierungen aus den Branches `sprint-5` bis `sprint-8` werden nicht übernommen.
+- Erneute Prüfung des zusammengeführten Stands: alle neun `verify-coop`-Testsuiten, Reverse-Patchkontrolle, Vorwärts-/Rückwärtsprüfung des Integrationspatches, strikter Release-Audit und `git diff --check`. Der bereits vollständig gebaute und im Emulator geprüfte Quellstand bleibt erhalten (Build `e6f233d528c8db82`, PAK-ABI `3a8d61b5`).
+- Übertragen werden ausschließlich Quellcode, Tests, Integrationspatches und Dokumentation. ROMs, SAV-Dateien, Emulatorprofile, PAKs und Build-Artefakte bleiben lokal und ignoriert.
+- Als Nächstes ist Sprint 5 vorgesehen. Vor dem Weiterarbeiten den vorhandenen Branch `origin/sprint-5` prüfen und den geprüften Stand aus `main` erhalten. Die Grenze bleibt vorerst Host plus ein Gast; Host plus drei Gäste gehört zum späteren Ausbau.
 
 ## Multiplayer-Review vom 2026-11-12
 
@@ -94,8 +103,7 @@ Alle neun Testsuiten aus `verify-coop` bestehen, darunter die zusätzlichen Regr
 - Fork: `https://github.com/Sumaiter/emerald-3ds`
 - Original: `https://github.com/ZallaxDev/emerald-3ds`
 - Veröffentlichung und Ersteinrichtung erfolgen über `main`.
-- Letzter Übergabe-Commit: `0cdbc1c Document sprint 3 handoff and PC setup`.
-- Die neueren Snapshot- und Spawn-Änderungen werden mit dieser Übergabe veröffentlicht.
+- Übergabestand bis Sprint 4: Merge `777e778`, geprüfter Quellstand `a976ce4`; Details stehen im Abschnitt „Übergabe auf main“.
 
 ## Mit zwei Azahar-Instanzen bestätigt
 
@@ -166,7 +174,7 @@ Sprint 3 und Sprint 4 sind nach den dokumentierten Emulator- und nativen Tests a
 ## Nächste Arbeitsschritte
 
 1. Den bestätigten Basistest einschließlich Kartenwechsel, Kollisionen und Menüs nicht erneut als offenen Fehler behandeln.
-2. Den abgenommenen Stand auf `sprint-4` erhalten; vorhandene spätere Sprint-Branches vor der nächsten Implementierung prüfen.
+2. Den abgenommenen Stand auf `main` und `sprint-4` erhalten; vorhandene spätere Sprint-Branches vor der nächsten Implementierung prüfen.
 3. Als Nächstes Sprint 5 mit unabhängigen Einzelkämpfen und Trainerreservierungen beginnen.
 4. `Status.md` und diese Datei nach bestätigten Tests aktualisieren.
 
@@ -181,4 +189,4 @@ Sprint 3 und Sprint 4 sind nach den dokumentierten Emulator- und nativen Tests a
 
 ## Fortsetzung in einer neuen Paseo-Sitzung
 
-> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Sprint 3 und Sprint 4 sind abgeschlossen; die Änderungen liegen auf `sprint-4`. Prüfe vor Sprint 5 den vorhandenen Branch `origin/sprint-5` und erhalte die abgenommenen Korrekturen. Zehn Gastnamen werden gespeichert; aktuell bleibt es bei Host plus einem Gast. Neue Namen starten in Wurzelheim, bekannte Namen an ihrem gespeicherten Spawn. Die aktuelle Gruppe wird laufend in die Koop-Box gespiegelt; der Gast beendet die Sitzung durch Ausschalten. Keine ROMs, Saves oder Build-Artefakte committen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.
+> Lies zuerst `AGENTS.md`, `HANDOFF.md`, `SETUP.md` und `Status.md`. Sprint 3 und Sprint 4 sind abgeschlossen und auf `main` zusammengeführt; `sprint-4` enthält den abgenommenen Quellstand. Prüfe vor Sprint 5 den vorhandenen Branch `origin/sprint-5` und erhalte die abgenommenen Korrekturen aus `main`. Zehn Gastnamen werden gespeichert; aktuell bleibt es bei Host plus einem Gast. Neue Namen starten in Wurzelheim, bekannte Namen an ihrem gespeicherten Spawn. Die aktuelle Gruppe wird laufend in die Koop-Box gespiegelt; der Gast beendet die Sitzung durch Ausschalten. Keine ROMs, Saves oder Build-Artefakte committen. Halte die Dokumentation aktuell und teste jede Änderung im Emulator.

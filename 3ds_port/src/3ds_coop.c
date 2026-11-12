@@ -13,6 +13,7 @@
 #include "constants/map_groups.h"
 #include "constants/species.h"
 #include "decoration_inventory.h"
+#include "event_data.h"
 #include "event_object_movement.h"
 #include "field_player_avatar.h"
 #include "fieldmap.h"
@@ -22,6 +23,7 @@
 #include "overworld.h"
 #include "pokemon.h"
 #include "pokemon_storage_system.h"
+#include "script.h"
 #include "sound.h"
 #include "constants/songs.h"
 
@@ -29,6 +31,9 @@ static struct
 {
     bool wanted;
     bool guest;
+    /* The host snapshot stays in RAM after leaving; protect the local SAV
+     * until a reset restores the local game state. */
+    bool guestWorldLoaded;
     bool authenticated;
     bool authSent;
     bool authRejected;
@@ -72,10 +77,23 @@ static struct
     uint8_t npcIndex;
     bool npcCacheValid[OBJECT_EVENTS_COUNT];
     CtrCoopNpcSnapshot npcCache[OBJECT_EVENTS_COUNT];
+    bool nameLimitRejected;
+    bool partySending;
+    bool partyReceiving;
+    bool havePartyAck;
+    uint8_t partyRetry;
+    uint16_t partyOffset;
+    uint32_t partySendChecksum;
+    uint32_t partyReceiveChecksum;
+    uint32_t partyAckChecksum;
+    bool pcScriptWaiting;
+    bool pcResumeScript;
+    bool peerIdentified;
 } sCoop = {.objectEventId = OBJECT_EVENTS_COUNT};
 
 #define CTR_COOP_SAVE_SIZE (sizeof(struct SaveBlock2) + sizeof(struct SaveBlock1) + sizeof(struct PokemonStorage))
 #define CTR_COOP_PC_SYNC_SIZE (sizeof(struct PokemonStorage) + sizeof(struct Pokemon) * PARTY_SIZE)
+#define CTR_COOP_PARTY_SIZE (sizeof(struct Pokemon) * PARTY_SIZE)
 #define PC_OWNER_NONE 0
 #define PC_OWNER_HOST 1
 #define PC_OWNER_GUEST 2
@@ -84,6 +102,9 @@ static struct
 #define PC_SYNC_RECEIVING 2
 
 static uint8_t sSaveData[CTR_COOP_SAVE_SIZE] ALIGNED(4);
+/* Independent buffers: party changes never overwrite an in-flight PC/save. */
+static uint8_t sPartySend[CTR_COOP_PARTY_SIZE] ALIGNED(4);
+static uint8_t sPartyReceive[CTR_COOP_PARTY_SIZE] ALIGNED(4);
 
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
@@ -92,9 +113,17 @@ static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 
 static void ClearRemote(void)
 {
+    /* A departing guest must not end the host's local PC operation while
+     * a Pokemon may still be held by the cursor. */
+    bool hostPcOpen = !sCoop.guest && sCoop.pcOpen && sCoop.pcOwner == PC_OWNER_HOST;
+    if (sCoop.pcScriptWaiting)
+        sCoop.pcResumeScript = true;
+    sCoop.pcScriptWaiting = false;
     if (sCoop.joinWarpPending)
         CtrLog_Write(CTR_LOG_GAME, "coop: join warp interrupted");
     sCoop.peerId = 0;
+    sCoop.peerAuthenticated = false;
+    sCoop.peerIdentified = false;
     sCoop.remoteValid = false;
     sCoop.haveApplied = false;
     sCoop.savePrepared = false;
@@ -108,9 +137,14 @@ static void ClearRemote(void)
     sCoop.joinInfoReceived = false;
     sCoop.storyInitialized = false;
     sCoop.storyFrame = 0;
-    sCoop.pcOwner = PC_OWNER_NONE;
+    sCoop.partySending = false;
+    sCoop.partyReceiving = false;
+    sCoop.havePartyAck = false;
+    sCoop.partyRetry = 0;
+    sCoop.partyOffset = 0;
+    sCoop.pcOwner = hostPcOpen ? PC_OWNER_HOST : PC_OWNER_NONE;
     sCoop.pcPending = false;
-    sCoop.pcOpen = false;
+    sCoop.pcOpen = hostPcOpen;
     sCoop.syncState = 0;
     sCoop.syncOffset = 0;
     sCoop.syncChecksum = 0;
@@ -134,8 +168,9 @@ static void ResetStoryBaseline(void)
 }
 
 #define SPAWN_TABLE_MAGIC 0x5350
-#define SPAWN_TABLE_VERSION 1
-#define SPAWN_RECORD_COUNT 4
+#define SPAWN_TABLE_VERSION 2
+#define SPAWN_RECORD_COUNT CTR_COOP_MAX_GUEST_NAMES
+#define SPAWN_LEGACY_RECORD_COUNT 4
 
 struct SpawnRecord
 {
@@ -168,13 +203,66 @@ struct CoopSaveExtension
     uint16_t storageVersion;
 };
 
+struct LegacyCoopSaveExtension
+{
+    uint16_t magic;
+    uint16_t version;
+    struct SpawnRecord records[SPAWN_LEGACY_RECORD_COUNT];
+    uint16_t storageMagic;
+    uint16_t storageVersion;
+};
+
+_Static_assert(sizeof(struct CoopSaveExtension) <= sizeof(((struct SaveBlock1 *)0)->unused_3598),
+    "Co-op save extension must fit in the reserved save area");
+
 static const uint8_t sDefaultGuestName[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
 
 static struct CoopSaveExtension *SaveExtension(void)
 {
+    struct CoopSaveExtension *extension;
+
     if (gSaveBlock1Ptr == NULL)
         return NULL;
-    return (struct CoopSaveExtension *)gSaveBlock1Ptr->unused_3598;
+    extension = (struct CoopSaveExtension *)gSaveBlock1Ptr->unused_3598;
+    if (extension->spawn.magic == SPAWN_TABLE_MAGIC && extension->spawn.version == 1)
+    {
+        const struct LegacyCoopSaveExtension *legacy = (const void *)extension;
+        uint16_t storageMagic = legacy->storageMagic;
+        uint16_t storageVersion = legacy->storageVersion;
+
+        /* The first four records keep their offsets. Save the old box marker
+         * before clearing the six new records that occupy its old location. */
+        memset(&extension->spawn.records[SPAWN_LEGACY_RECORD_COUNT], 0,
+            sizeof(extension->spawn.records) - SPAWN_LEGACY_RECORD_COUNT * sizeof(struct SpawnRecord));
+        extension->storageMagic = storageMagic;
+        extension->storageVersion = storageVersion;
+        extension->spawn.version = SPAWN_TABLE_VERSION;
+    }
+    if (extension->spawn.magic != SPAWN_TABLE_MAGIC || extension->spawn.version != SPAWN_TABLE_VERSION)
+    {
+        memset(&extension->spawn, 0, sizeof(extension->spawn));
+        extension->spawn.magic = SPAWN_TABLE_MAGIC;
+        extension->spawn.version = SPAWN_TABLE_VERSION;
+    }
+    return extension;
+}
+
+static bool CoopStorageReady(void)
+{
+    const struct CoopSaveExtension *extension;
+
+    if (gSaveBlock1Ptr == NULL || gPokemonStoragePtr == NULL)
+        return false;
+    extension = (const void *)gSaveBlock1Ptr->unused_3598;
+    if (extension->spawn.magic != SPAWN_TABLE_MAGIC)
+        return false;
+    if (extension->spawn.version == 1)
+    {
+        const struct LegacyCoopSaveExtension *legacy = (const void *)extension;
+        return legacy->storageMagic == COOP_STORAGE_MAGIC && legacy->storageVersion == COOP_STORAGE_VERSION;
+    }
+    return extension->spawn.version == SPAWN_TABLE_VERSION
+        && extension->storageMagic == COOP_STORAGE_MAGIC && extension->storageVersion == COOP_STORAGE_VERSION;
 }
 
 static void StorePartyRow(uint8_t row, const struct Pokemon *party)
@@ -190,12 +278,14 @@ static void StorePartyRow(uint8_t row, const struct Pokemon *party)
 static void LoadPartyRow(uint8_t row, struct Pokemon *party)
 {
     uint8_t start = row * CTR_COOP_STORAGE_ROW_SIZE;
+    uint8_t count = 0;
 
     for (uint8_t i = 0; i < PARTY_SIZE; i++)
-    {
         ZeroMonData(&party[i]);
+    for (uint8_t i = 0; i < PARTY_SIZE; i++)
+    {
         if (GetBoxMonData(&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i], MON_DATA_SANITY_HAS_SPECIES))
-            BoxMonToMon(&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i], &party[i]);
+            BoxMonToMon(&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i], &party[count++]);
     }
     gPlayerPartyCount = CalculatePlayerPartyCount();
 }
@@ -266,26 +356,11 @@ static void GuestName(uint8_t *out)
         memcpy(out, sDefaultGuestName, CTR_COOP_PLAYER_NAME_SIZE);
 }
 
-static struct SpawnTable *SpawnTable(void)
-{
-    if (gSaveBlock1Ptr == NULL)
-        return NULL;
-    return (struct SpawnTable *)gSaveBlock1Ptr->unused_3598;
-}
-
 static struct SpawnTable *ValidSpawnTable(void)
 {
-    struct SpawnTable *table = SpawnTable();
+    struct CoopSaveExtension *extension = SaveExtension();
 
-    if (table == NULL)
-        return NULL;
-    if (table->magic != SPAWN_TABLE_MAGIC || table->version != SPAWN_TABLE_VERSION)
-    {
-        memset(table, 0, sizeof(*table));
-        table->magic = SPAWN_TABLE_MAGIC;
-        table->version = SPAWN_TABLE_VERSION;
-    }
-    return table;
+    return extension == NULL ? NULL : &extension->spawn;
 }
 
 static struct SpawnRecord *FindSpawnRecord(const uint8_t *name, bool create)
@@ -320,6 +395,20 @@ static void SnapshotFromRecord(CtrCoopSnapshot *snapshot, const struct SpawnReco
     snapshot->facing = record->facing;
     snapshot->graphicsId = record->graphicsId;
     snapshot->movementActionId = GetFaceDirectionMovementAction(record->facing);
+}
+
+static bool HasRoomForGuestName(const uint8_t *name)
+{
+    struct SpawnTable *table = ValidSpawnTable();
+
+    if (table == NULL)
+        return false;
+    if (FindSpawnRecord(name, false) != NULL)
+        return true;
+    for (u8 i = 0; i < SPAWN_RECORD_COUNT; i++)
+        if (!table->records[i].used)
+            return true;
+    return false;
 }
 
 static void StoreSpawnRecord(const CtrCoopSnapshot *snapshot)
@@ -431,6 +520,7 @@ static void ApplyHostSave(void)
 {
     uint32_t offset = 0;
 
+    sCoop.guestWorldLoaded = true;
     memcpy(gSaveBlock2Ptr, sSaveData + offset, sizeof(*gSaveBlock2Ptr));
     offset += sizeof(*gSaveBlock2Ptr);
     memcpy(gSaveBlock1Ptr, sSaveData + offset, sizeof(*gSaveBlock1Ptr));
@@ -576,6 +666,11 @@ static bool RemoteObjectValid(void)
 
 static void RemoveRemoteObject(void)
 {
+    /* A host save can restore the special avatar before any session has
+     * assigned its runtime slot. Find that saved object as well. */
+    if (sCoop.objectEventId >= OBJECT_EVENTS_COUNT && gSaveBlock1Ptr != NULL)
+        TryGetObjectEventIdByLocalIdAndMap(LOCALID_COOP_PLAYER,
+            gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup, &sCoop.objectEventId);
     if (RemoteObjectValid())
         RemoveObjectEventByLocalIdAndMap(LOCALID_COOP_PLAYER, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup);
     sCoop.objectEventId = OBJECT_EVENTS_COUNT;
@@ -711,7 +806,9 @@ static void ApplyHostNpc(const CtrCoopNpcSnapshot *snapshot)
     uint8_t objectEventId;
     struct ObjectEvent *object;
 
-    if (snapshot->localId == LOCALID_COOP_PLAYER
+    /* Menus and battles reuse gSprites while field object IDs remain live.
+     * The host's round-robin snapshots refresh NPCs after the field returns. */
+    if (gMain.callback2 != CB2_Overworld || snapshot->localId == LOCALID_COOP_PLAYER
      || snapshot->mapGroup != gSaveBlock1Ptr->location.mapGroup
      || snapshot->mapNum != gSaveBlock1Ptr->location.mapNum)
         return;
@@ -828,6 +925,11 @@ void CtrCoop_ReleasePC(void)
     sCoop.pcOpen = false;
 }
 
+bool CtrCoop_PCOpen(void)
+{
+    return sCoop.pcOpen;
+}
+
 bool CtrCoop_InitialTeamSelection(void)
 {
     return sCoop.guest && sCoop.initialTeamSelection && !sCoop.initialTeamCommitted;
@@ -837,7 +939,8 @@ bool CtrCoop_ChooseStarter(uint16_t species)
 {
     uint8_t start = CTR_COOP_STORAGE_GUEST_ROW * CTR_COOP_STORAGE_ROW_SIZE;
 
-    if (!sCoop.guest || !sCoop.starterRequired || sCoop.starterChosen)
+    if (!sCoop.guest || !sCoop.authenticated || !sCoop.saveReady || !sCoop.joinInfoReceived
+     || !sCoop.starterRequired || sCoop.starterChosen)
         return false;
     if (species != SPECIES_TREECKO && species != SPECIES_TORCHIC && species != SPECIES_MUDKIP)
         return false;
@@ -864,18 +967,130 @@ void CtrCoop_FinishJoin(void)
 
 bool CtrCoop_StorageSlotLocked(uint8_t boxId, uint8_t position)
 {
-    bool hostActive = sCoop.wanted && (!sCoop.guest || sCoop.authenticated);
-    bool guestActive = sCoop.guest ? sCoop.authenticated : sCoop.peerTeamReady;
+    /* The host's mirrored party still exists when the radio is off. */
+    bool hostActive = sCoop.guest ? sCoop.wanted && sCoop.authenticated : CoopStorageReady();
+    bool guestActive = sCoop.guest ? sCoop.authenticated : sCoop.peerAuthenticated && sCoop.peerSaveReady;
 
     return CtrCoopStorage_SlotLocked(hostActive, guestActive, boxId, position);
 }
 
 bool CtrCoop_StorageBoxRestricted(uint8_t boxId)
 {
-    bool hostActive = sCoop.wanted && (!sCoop.guest || sCoop.authenticated);
-    bool guestActive = sCoop.guest ? sCoop.authenticated : sCoop.peerTeamReady;
+    bool hostActive = sCoop.guest ? sCoop.wanted && sCoop.authenticated : CoopStorageReady();
+    bool guestActive = sCoop.guest ? sCoop.authenticated : sCoop.peerAuthenticated && sCoop.peerSaveReady;
 
     return CtrCoopStorage_BoxRestricted(hostActive, guestActive, boxId);
+}
+
+static bool PartyPeerReady(void)
+{
+    return sCoop.wanted && (sCoop.guest
+        ? sCoop.authenticated && sCoop.saveReady && sCoop.initialTeamCommitted
+        : sCoop.peerAuthenticated && sCoop.peerTeamReady);
+}
+
+static void SyncParty(void)
+{
+    struct LocalPeer peers[1];
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint8_t own = sCoop.guest ? PC_OWNER_GUEST : PC_OWNER_HOST;
+    uint32_t checksum;
+
+    if (!CoopStorageReady() || (sCoop.guest && !PartyPeerReady()))
+        return;
+    SaveExtension();
+    /* A mon held by the PC cursor is an unfinished transaction. Keep its
+     * previous row until CommitPC captures the complete operation. */
+    if (sCoop.pcOwner != own || !sCoop.pcOpen)
+        StorePartyRow(sCoop.guest ? CTR_COOP_STORAGE_GUEST_ROW : CTR_COOP_STORAGE_HOST_ROW, gPlayerParty);
+    if (!PartyPeerReady() || LocalLink_GetSession() != LOCAL_SESSION_IN
+     || sCoop.pcOwner != PC_OWNER_NONE || sCoop.pcPending || sCoop.syncState != PC_SYNC_IDLE
+     || sCoop.partySending)
+        return;
+    if (sCoop.partyRetry != 0)
+    {
+        sCoop.partyRetry--;
+        return;
+    }
+    checksum = CtrCoopProtocol_Checksum((const uint8_t *)gPlayerParty, sizeof(gPlayerParty));
+    if (sCoop.havePartyAck && checksum == sCoop.partyAckChecksum)
+        return;
+    if (LocalLink_GetPeers(peers, 1) == 0)
+        return;
+    memcpy(sPartySend, gPlayerParty, sizeof(sPartySend));
+    sCoop.partySendChecksum = checksum;
+    sCoop.partySending = true;
+    CtrCoopProtocol_EncodePartyBegin(sizeof(sPartySend), checksum, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    LocalLink_Send(peers[0].id, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    /* Six reliable messages fit in one UDS frame. Push the frozen party in
+     * one batch instead of taking a request round trip for every chunk. */
+    for (uint32_t offset = 0; offset < sizeof(sPartySend); )
+    {
+        uint16_t size = sizeof(sPartySend) - offset;
+        if (size > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+            size = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+        CtrCoopProtocol_EncodePartyChunk(offset, sPartySend + offset, size, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+        LocalLink_Send(peers[0].id, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
+        offset += size;
+    }
+}
+
+static void SendPartyResult(uint16_t to, bool accepted)
+{
+    uint8_t packet[CTR_COOP_PARTY_RESULT_SIZE];
+
+    CtrCoopProtocol_EncodePartyResult(accepted, packet, sizeof(packet));
+    LocalLink_Send(to, packet, sizeof(packet));
+}
+
+static void HandlePartyBegin(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint32_t size, checksum;
+
+    if (!CtrCoopProtocol_DecodePartyBegin(data, len, &size, &checksum))
+        return;
+    if (size != sizeof(sPartyReceive) || !PartyPeerReady() || !CoopStorageReady() || sCoop.pcOwner != PC_OWNER_NONE
+     || sCoop.pcPending || sCoop.syncState != PC_SYNC_IDLE || sCoop.partyReceiving)
+    {
+        SendPartyResult(from, false);
+        return;
+    }
+    sCoop.partyOffset = 0;
+    sCoop.partyReceiveChecksum = checksum;
+    sCoop.partyReceiving = true;
+}
+
+static void HandlePartyChunk(uint16_t from, const uint8_t *data, uint16_t len)
+{
+    uint16_t got;
+    uint16_t expected;
+
+    if (!sCoop.partyReceiving)
+        return;
+    expected = sizeof(sPartyReceive) - sCoop.partyOffset;
+    if (expected > CTR_COOP_SAVE_CHUNK_DATA_MAX)
+        expected = CTR_COOP_SAVE_CHUNK_DATA_MAX;
+    if (!CtrCoopProtocol_DecodePartyChunk(data, len, sCoop.partyOffset,
+            sPartyReceive + sCoop.partyOffset, sizeof(sPartyReceive) - sCoop.partyOffset, &got)
+     || got != expected)
+    {
+        sCoop.partyReceiving = false;
+        SendPartyResult(from, false);
+        return;
+    }
+    sCoop.partyOffset += got;
+    if (sCoop.partyOffset != sizeof(sPartyReceive))
+        return;
+    sCoop.partyReceiving = false;
+    if (CtrCoopProtocol_Checksum(sPartyReceive, sizeof(sPartyReceive)) != sCoop.partyReceiveChecksum)
+    {
+        SendPartyResult(from, false);
+        return;
+    }
+    StorePartyRow(sCoop.guest ? CTR_COOP_STORAGE_HOST_ROW : CTR_COOP_STORAGE_GUEST_ROW,
+        (const struct Pokemon *)sPartyReceive);
+    SendPartyResult(from, true);
+    CtrLog_Write(CTR_LOG_GAME, "coop: party row updated (%s)", sCoop.guest ? "host" : "guest");
 }
 
 static void SendPcSyncRequest(uint16_t to, uint32_t offset)
@@ -893,14 +1108,20 @@ void CtrCoop_CommitPC(void)
     uint32_t offset = 0;
     uint8_t row = sCoop.guest ? CTR_COOP_STORAGE_GUEST_ROW : CTR_COOP_STORAGE_HOST_ROW;
 
-    if (!sCoop.wanted)
+    if (sCoop.syncState != PC_SYNC_IDLE)
+        return;
+    if (CoopStorageReady())
+        StorePartyRow(row, gPlayerParty);
+    /* Commit the local host operation even if its guest left the PC visit.
+     * The next join receives this complete state in its initial snapshot. */
+    if (!sCoop.wanted || LocalLink_GetPeers(peers, 1) == 0
+     || (!sCoop.guest && !sCoop.peerSaveReady))
     {
         CtrCoop_ReleasePC();
         return;
     }
-    if (sCoop.syncState != PC_SYNC_IDLE || LocalLink_GetPeers(peers, 1) == 0 || gPokemonStoragePtr == NULL)
+    if (gPokemonStoragePtr == NULL)
         return;
-    StorePartyRow(row, gPlayerParty);
     memcpy(sSaveData + offset, gPokemonStoragePtr, sizeof(*gPokemonStoragePtr));
     offset += sizeof(*gPokemonStoragePtr);
     memcpy(sSaveData + offset, gPlayerParty, sizeof(gPlayerParty));
@@ -949,6 +1170,9 @@ static void ApplyPcSync(uint16_t from)
 
     memcpy(gPokemonStoragePtr, sSaveData, sizeof(*gPokemonStoragePtr));
     StorePartyRow(remoteRow, remoteParty);
+    /* The other player's snapshot can predate changes to our live party. */
+    StorePartyRow(sCoop.guest ? CTR_COOP_STORAGE_GUEST_ROW : CTR_COOP_STORAGE_HOST_ROW, gPlayerParty);
+    sCoop.havePartyAck = false;
     sCoop.syncState = PC_SYNC_IDLE;
     sCoop.syncOffset = 0;
     LocalLink_Send(from, ready, sizeof(ready));
@@ -990,6 +1214,17 @@ static void HandlePcSyncChunk(uint16_t from, const uint8_t *data, uint16_t len)
     ApplyPcSync(from);
 }
 
+static bool DenyPC(void)
+{
+    /* The PC special is followed by waitstate. Resume on the next frame,
+     * after the script has actually reached that command. */
+    if (gMain.callback2 == CB2_Overworld || sCoop.pcScriptWaiting)
+        sCoop.pcResumeScript = true;
+    sCoop.pcScriptWaiting = false;
+    PlaySE(SE_FAILURE);
+    return false;
+}
+
 bool CtrCoop_RequestPC(void)
 {
     struct LocalPeer peers[1];
@@ -998,13 +1233,18 @@ bool CtrCoop_RequestPC(void)
 
     if (!sCoop.wanted)
     {
-        sCoop.pcOwner = PC_OWNER_NONE;
+        if (sCoop.guestWorldLoaded)
+            return DenyPC();
+        sCoop.pcOwner = own;
+        sCoop.pcOpen = true;
         return true;
     }
-    if (sCoop.syncState != PC_SYNC_IDLE)
-        return false;
+    if (sCoop.syncState != PC_SYNC_IDLE || sCoop.partySending || sCoop.partyReceiving)
+        return DenyPC();
     if (sCoop.pcOwner == own)
     {
+        sCoop.pcScriptWaiting = false;
+        sCoop.pcResumeScript = false;
         sCoop.pcOpen = true;
         return true;
     }
@@ -1015,19 +1255,23 @@ bool CtrCoop_RequestPC(void)
         if (sCoop.pcOwner == PC_OWNER_HOST || !sCoop.authenticated || !sCoop.saveReady
          || LocalLink_GetSession() != LOCAL_SESSION_IN || LocalLink_GetPeers(peers, 1) == 0)
         {
-            PlaySE(SE_FAILURE);
-            return false;
+            return DenyPC();
         }
         LocalLink_Send(peers[0].id, packet, sizeof(packet));
         sCoop.pcPending = true;
+        sCoop.pcScriptWaiting = gMain.callback2 == CB2_Overworld;
         return false;
     }
     if (sCoop.pcOwner == PC_OWNER_GUEST)
     {
-        PlaySE(SE_FAILURE);
-        return false;
+        return DenyPC();
+    }
+    if (sCoop.peerAuthenticated && sCoop.savePrepared && !sCoop.peerSaveReady)
+    {
+        return DenyPC();
     }
     sCoop.pcOwner = PC_OWNER_HOST;
+    sCoop.pcResumeScript = false;
     sCoop.pcOpen = true;
     packet[0] = CTR_COOP_PC_CLAIM_PACKET;
     if (LocalLink_GetPeers(peers, 1) != 0)
@@ -1063,6 +1307,7 @@ static void StartSession(bool searchOnly)
     sCoop.authenticated = !searchOnly;
     sCoop.authSent = false;
     sCoop.authRejected = false;
+    sCoop.nameLimitRejected = false;
     sCoop.peerAuthenticated = false;
     sCoop.generation = LocalLink_Generation();
     sCoop.haveLastSent = false;
@@ -1121,6 +1366,7 @@ void CtrCoop_JoinGame(uint32_t token, const uint8_t *password)
     sCoop.authenticated = false;
     sCoop.authSent = false;
     sCoop.authRejected = false;
+    sCoop.nameLimitRejected = false;
     sCoop.peerAuthenticated = false;
     sCoop.generation = LocalLink_Generation();
     sCoop.haveLastSent = false;
@@ -1137,6 +1383,7 @@ void CtrCoop_Stop(void)
     sCoop.authenticated = false;
     sCoop.authSent = false;
     sCoop.authRejected = false;
+    sCoop.nameLimitRejected = false;
     sCoop.peerAuthenticated = false;
     ClearRemote();
     LocalLink_LeaveSession();
@@ -1144,13 +1391,15 @@ void CtrCoop_Stop(void)
 
 bool CtrCoop_GuestSaveBlocked(void)
 {
-    return sCoop.wanted && sCoop.guest;
+    return sCoop.guestWorldLoaded || (sCoop.wanted && sCoop.guest);
 }
 
 uint8_t CtrCoop_GetSessionState(void)
 {
     uint8_t state;
 
+    if (sCoop.nameLimitRejected)
+        return CTR_COOP_SESSION_NAME_LIMIT;
     if (!sCoop.wanted)
         return LOCAL_SESSION_NONE;
     if (sCoop.authRejected)
@@ -1187,6 +1436,8 @@ void CtrCoop_MenuFrame(void)
         return;
     if (sCoop.authenticated)
     {
+        if (!sCoop.saveReady || !sCoop.joinInfoReceived)
+            return;
         if (sCoop.starterRequired && !sCoop.starterChosen)
         {
             if (!CB2_StarterSelectionActive())
@@ -1310,8 +1561,18 @@ void CtrCoop_OverworldFrame(void)
     uint8_t state;
     int peerCount;
 
+    if (sCoop.pcResumeScript && gMain.callback2 == CB2_Overworld)
+    {
+        sCoop.pcResumeScript = false;
+        ScriptContext_Enable();
+    }
     if (!sCoop.wanted && !sCoop.remoteValid && sCoop.objectEventId == OBJECT_EVENTS_COUNT)
+    {
+        SyncParty();
+        if (gMain.callback2 == CB2_Overworld && gSaveBlock1Ptr != NULL)
+            RemoveRemoteObject();
         return;
+    }
     state = LocalLink_GetSession();
     if (sCoop.wanted && ((state != LOCAL_SESSION_SEARCHING && state != LOCAL_SESSION_IN)
      || (state == LOCAL_SESSION_IN && LocalLink_GetSessionKind() != LOCAL_KIND_COOP)))
@@ -1326,7 +1587,11 @@ void CtrCoop_OverworldFrame(void)
         sCoop.haveLastSent = false;
         ClearRemote();
     }
-    if (!sCoop.remoteValid)
+    SyncParty();
+    if (!sCoop.guest && sCoop.wanted && sCoop.peerAuthenticated && sCoop.peerIdentified
+     && !sCoop.savePrepared && sCoop.pcOwner == PC_OWNER_NONE && sCoop.syncState == PC_SYNC_IDLE)
+        PrepareHostSave(sCoop.peerId);
+    if (!sCoop.remoteValid && gMain.callback2 == CB2_Overworld)
         RemoveRemoteObject();
     if ((sCoop.guest && (!sCoop.authenticated || !sCoop.saveReady || !sCoop.joinInfoReceived
       || (sCoop.starterRequired && !sCoop.starterChosen)))
@@ -1334,6 +1599,10 @@ void CtrCoop_OverworldFrame(void)
         return;
     OpenPCWhenReady();
     SyncStoryState();
+    /* Keep transport and story state running, but only mutate field sprites
+     * after the engine has rebuilt them on returning from a menu or battle. */
+    if (gMain.callback2 != CB2_Overworld)
+        return;
     if (!LocalSnapshot(&local))
     {
         RemoveRemoteObject();
@@ -1380,15 +1649,20 @@ void CtrCoop_OverworldFrame(void)
 
 bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
 {
+    struct LocalPeer peers[1];
     CtrCoopSnapshot remote;
     uint8_t password[4];
     uint8_t result[CTR_COOP_AUTH_RESULT_SIZE];
     bool accepted;
 
-    if (len == 0)
+    if (data == NULL || len == 0)
         return false;
     if (!sCoop.wanted || LocalLink_GetSessionKind() != LOCAL_KIND_COOP)
         return false;
+    if (data[0] < CTR_COOP_PEER_PACKET || data[0] > CTR_COOP_PARTY_RESULT_PACKET)
+        return false;
+    if (LocalLink_GetSession() != LOCAL_SESSION_IN || LocalLink_GetPeers(peers, 1) == 0 || peers[0].id != from)
+        return true;
     if (data[0] == CTR_COOP_AUTH_PACKET)
     {
         if (sCoop.guest || !CtrCoopProtocol_DecodeAuth(data, len, password))
@@ -1405,10 +1679,12 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (data[0] == CTR_COOP_AUTH_RESULT_PACKET)
     {
-        if (!sCoop.guest || !CtrCoopProtocol_DecodeAuthResult(data, len, &accepted))
+        if (!sCoop.guest || !sCoop.authSent || sCoop.authenticated
+         || !CtrCoopProtocol_DecodeAuthResult(data, len, &accepted))
             return true;
         if (accepted)
         {
+            sCoop.peerId = from;
             sCoop.authenticated = true;
             sCoop.authRejected = false;
             SendGuestIdentity(from);
@@ -1422,12 +1698,64 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         }
         return true;
     }
+    if (from != sCoop.peerId || (sCoop.guest ? !sCoop.authenticated : !sCoop.peerAuthenticated))
+        return true;
+    if (data[0] == CTR_COOP_PARTY_BEGIN_PACKET)
+    {
+        HandlePartyBegin(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_PARTY_CHUNK_PACKET)
+    {
+        HandlePartyChunk(from, data, len);
+        return true;
+    }
+    if (data[0] == CTR_COOP_PARTY_RESULT_PACKET)
+    {
+        if (sCoop.partySending && CtrCoopProtocol_DecodePartyResult(data, len, &accepted))
+        {
+            sCoop.partySending = false;
+            if (accepted)
+            {
+                sCoop.havePartyAck = true;
+                sCoop.partyAckChecksum = sCoop.partySendChecksum;
+            }
+            else
+                sCoop.partyRetry = 15;
+        }
+        return true;
+    }
     if (data[0] == CTR_COOP_IDENTITY_PACKET)
     {
         if (sCoop.guest || !sCoop.peerAuthenticated)
             return true;
         if (CtrCoopProtocol_DecodeIdentity(data, len, sCoop.peerName))
-            PrepareHostSave(from);
+        {
+            if (!HasRoomForGuestName(sCoop.peerName))
+            {
+                uint8_t packet[CTR_COOP_NAME_LIMIT_SIZE];
+
+                if (CtrCoopProtocol_EncodeNameLimit(packet, sizeof(packet)))
+                    LocalLink_Send(from, packet, sizeof(packet));
+                CtrLog_Write(CTR_LOG_GAME, "coop: guest name limit reached (%u)", SPAWN_RECORD_COUNT);
+                ClearRemote();
+                return true;
+            }
+            sCoop.peerIdentified = true;
+            if (sCoop.pcOwner == PC_OWNER_NONE && sCoop.syncState == PC_SYNC_IDLE)
+                PrepareHostSave(from);
+        }
+        return true;
+    }
+    if (data[0] == CTR_COOP_NAME_LIMIT_PACKET)
+    {
+        if (sCoop.guest && CtrCoopProtocol_DecodeNameLimit(data, len))
+        {
+            sCoop.nameLimitRejected = true;
+            sCoop.authenticated = false;
+            ClearRemote();
+            LocalLink_LeaveSession();
+        }
         return true;
     }
     if (data[0] == CTR_COOP_JOIN_INFO_PACKET)
@@ -1498,7 +1826,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         if (sCoop.guest || len != CTR_COOP_PC_CONTROL_SIZE || data[1] != CTR_COOP_PROTOCOL_VERSION)
             return true;
         accepted = sCoop.peerAuthenticated && sCoop.peerSaveReady && sCoop.pcOwner != PC_OWNER_HOST
-                && sCoop.syncState == PC_SYNC_IDLE;
+                && sCoop.syncState == PC_SYNC_IDLE && !sCoop.partySending && !sCoop.partyReceiving;
         if (accepted)
             sCoop.pcOwner = PC_OWNER_GUEST;
         if (CtrCoopProtocol_EncodePcResult(accepted, result, sizeof(result)))
@@ -1522,7 +1850,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         else
         {
             sCoop.pcOwner = PC_OWNER_NONE;
-            PlaySE(SE_FAILURE);
+            DenyPC();
         }
         return true;
     }
@@ -1531,6 +1859,8 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         if (sCoop.guest && len == CTR_COOP_PC_CONTROL_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION
          && sCoop.pcOwner != PC_OWNER_GUEST && sCoop.syncState == PC_SYNC_IDLE)
         {
+            if (sCoop.pcPending)
+                DenyPC();
             sCoop.pcOwner = PC_OWNER_HOST;
             sCoop.pcPending = false;
             sCoop.pcOpen = false;
@@ -1539,7 +1869,10 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (data[0] == CTR_COOP_PC_RELEASE_PACKET)
     {
-        if (len == CTR_COOP_PC_CONTROL_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        uint8_t remoteOwner = sCoop.guest ? PC_OWNER_HOST : PC_OWNER_GUEST;
+
+        if (len == CTR_COOP_PC_CONTROL_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION
+         && sCoop.pcOwner == remoteOwner && sCoop.syncState == PC_SYNC_IDLE)
         {
             sCoop.pcOwner = PC_OWNER_NONE;
             sCoop.pcPending = false;
@@ -1576,6 +1909,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         {
             sCoop.syncState = PC_SYNC_IDLE;
             sCoop.syncOffset = 0;
+            sCoop.havePartyAck = false;
             CtrCoop_ReleasePC();
             CtrLog_Write(CTR_LOG_GAME, "coop: PC commit confirmed");
         }
@@ -1630,6 +1964,8 @@ void CtrCoop_PeerLeft(uint16_t id)
 
         ClearRemote();
         sCoop.peerAuthenticated = false;
+        if (sCoop.guest)
+            sCoop.authenticated = false;
         sCoop.authSent = false;
         if (restart)
             LocalLink_StartSession(LOCAL_KIND_COOP);
@@ -1638,14 +1974,19 @@ void CtrCoop_PeerLeft(uint16_t id)
 
 void CtrCoop_SoftReset(void)
 {
+    sCoop.pcOpen = false;
     sCoop.wanted = false;
+    sCoop.guest = false;
+    sCoop.guestWorldLoaded = false;
     sCoop.authenticated = false;
     sCoop.authSent = false;
     sCoop.authRejected = false;
+    sCoop.nameLimitRejected = false;
     sCoop.peerAuthenticated = false;
     sCoop.objectEventId = OBJECT_EVENTS_COUNT;
     sCoop.haveLastSent = false;
     ClearRemote();
+    sCoop.pcResumeScript = false;
     if (LocalLink_GetSessionKind() == LOCAL_KIND_COOP)
         LocalLink_LeaveSession();
 }

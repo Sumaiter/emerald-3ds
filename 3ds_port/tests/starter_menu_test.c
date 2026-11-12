@@ -20,6 +20,8 @@ static int sHighlightValue = -1;
 static int sChosenSpecies;
 static int sChooseCount;
 static MainCallback sCallback;
+static bool sPcOpen;
+static int sStopCount;
 
 #define CHECK(condition, message) do { if (!(condition)) { sFailures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, message); } } while (0)
 
@@ -47,7 +49,8 @@ void SetMainCallback2(MainCallback callback) { sCallback = callback; }
 void CB2_InitMultiplayerGuestPassword(void) {}
 void CB2_ContinueSavedGame(void) {}
 void CtrCoop_MenuFrame(void) {}
-void CtrCoop_Stop(void) {}
+void CtrCoop_Stop(void) { sStopCount++; }
+bool CtrCoop_PCOpen(void) { return sPcOpen; }
 void CtrCoop_Search(void) {}
 void CtrCoop_PrepareJoin(uint32_t token) { (void)token; }
 void CtrCoop_JoinGame(uint32_t token, const uint8_t *password) { (void)token; (void)password; }
@@ -88,6 +91,15 @@ static void ResetStarter(void)
 int main(void)
 {
     setbuf(stdout, NULL);
+    ResetTasks();
+    sPcOpen = true;
+    sJoining = TRUE;
+    u8 joinTask = CreateTask(Task_JoinGameSearch, 0);
+    gMain.newKeys = B_BUTTON;
+    Task_JoinGameSearch(joinTask);
+    gMain.newKeys = 0;
+    CHECK(sStopCount == 0 && sJoining, "B in the initial PC does not cancel the parent join task");
+    sPcOpen = false;
     ResetStarter();
     CHECK(FuncIsActiveTask(Task_StarterSelection), "starter task is created");
     CHECK(CB2_StarterSelectionActive(), "active starter task is detected");

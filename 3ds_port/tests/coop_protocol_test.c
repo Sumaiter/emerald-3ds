@@ -44,6 +44,12 @@ static void TestInvalidPackets(void)
     packet[10] = 1;
     packet[11] = 4;
     CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), &decoded), "unsupported action rejected");
+    packet[10] = 0;
+    CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), &decoded), "zero facing with unsupported action rejected");
+    original.facing = 0;
+    original.movementActionId = 4;
+    CHECK(!CtrCoopProtocol_Encode(&original, packet, sizeof(packet)), "zero facing cannot encode an unsupported action");
+    packet[10] = 1;
     packet[11] = CTR_COOP_ACTION_WALK_NORMAL_DOWN + 1;
     CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), &decoded), "action/facing mismatch rejected");
     packet[11] = CTR_COOP_ACTION_FACE_DOWN;
@@ -175,6 +181,23 @@ static void TestSpawnIdentity(void)
     CHECK(!CtrCoopProtocol_Decode(spawn, sizeof(spawn), &decoded), "spawn is not accepted as movement packet");
     spawn[12] = CTR_COOP_GRAPHICS_ID_MAX + 1;
     CHECK(!CtrCoopProtocol_DecodeSpawn(spawn, sizeof(spawn), &decoded), "invalid spawn graphics rejected");
+}
+
+static void TestNameLimitPacket(void)
+{
+    uint8_t packet[CTR_COOP_NAME_LIMIT_SIZE];
+
+    CHECK(CtrCoopProtocol_EncodeNameLimit(packet, sizeof(packet)), "name-limit result encodes");
+    CHECK(CtrCoopProtocol_DecodeNameLimit(packet, sizeof(packet)), "name-limit result decodes");
+    CHECK(!CtrCoopProtocol_DecodeNameLimit(packet, sizeof(packet) - 1), "short name-limit result rejected");
+    CHECK(!CtrCoopProtocol_DecodeNameLimit(NULL, sizeof(packet)), "null name-limit result rejected");
+    CHECK(!CtrCoopProtocol_EncodeNameLimit(NULL, sizeof(packet)), "null name-limit output rejected");
+    CHECK(!CtrCoopProtocol_EncodeNameLimit(packet, sizeof(packet) - 1), "short name-limit output rejected");
+    packet[0]--;
+    CHECK(!CtrCoopProtocol_DecodeNameLimit(packet, sizeof(packet)), "wrong name-limit packet type rejected");
+    packet[0]++;
+    packet[1]--;
+    CHECK(!CtrCoopProtocol_DecodeNameLimit(packet, sizeof(packet)), "old name-limit version rejected");
 }
 
 static void TestSaveTransfer(void)
@@ -320,6 +343,37 @@ static void TestStoryUpdates(void)
     CHECK(!CtrCoopProtocol_DecodeVar(var, sizeof(var), &id, &value), "var version rejected");
 }
 
+static void TestPartyPackets(void)
+{
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE], chunk[CTR_COOP_SAVE_CHUNK_MAX];
+    uint8_t result[CTR_COOP_PARTY_RESULT_SIZE];
+    uint8_t original[] = {1, 2, 3, 4, 5}, decoded[sizeof(original)];
+    uint32_t total, checksum;
+    uint16_t got;
+    bool accepted;
+
+    CHECK(CtrCoopProtocol_EncodePartyBegin(600, 0x12345678, begin, sizeof(begin)), "party begin encodes");
+    CHECK(CtrCoopProtocol_DecodePartyBegin(begin, sizeof(begin), &total, &checksum)
+        && total == 600 && checksum == 0x12345678, "party begin preserves size and checksum");
+    CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &total, &checksum),
+        "party begin cannot be mistaken for a complete storage commit");
+    CHECK(CtrCoopProtocol_EncodePartyChunk(128, original, sizeof(original), chunk,
+        CTR_COOP_SAVE_CHUNK_HEADER + sizeof(original)), "party chunk encodes");
+    CHECK(CtrCoopProtocol_DecodePartyChunk(chunk, CTR_COOP_SAVE_CHUNK_HEADER + sizeof(original), 128,
+        decoded, sizeof(decoded), &got) && got == sizeof(original) && memcmp(decoded, original, got) == 0,
+        "party chunk preserves its offset and payload");
+    CHECK(!CtrCoopProtocol_DecodePartyChunk(chunk, CTR_COOP_SAVE_CHUNK_HEADER + sizeof(original), 0,
+        decoded, sizeof(decoded), &got), "party chunks cannot be applied out of order");
+    CHECK(CtrCoopProtocol_EncodePartyResult(true, result, sizeof(result))
+        && CtrCoopProtocol_DecodePartyResult(result, sizeof(result), &accepted) && accepted,
+        "completed party has a typed confirmation");
+    result[2] = 2;
+    CHECK(!CtrCoopProtocol_DecodePartyResult(result, sizeof(result), &accepted), "invalid party confirmation rejected");
+    result[2] = 1;
+    result[1]--;
+    CHECK(!CtrCoopProtocol_DecodePartyResult(result, sizeof(result), &accepted), "old party protocol rejected");
+}
+
 int main(void)
 {
     TestRoundtrip();
@@ -329,11 +383,13 @@ int main(void)
     TestMovementPlan();
     TestAuthentication();
     TestSpawnIdentity();
+    TestNameLimitPacket();
     TestSaveTransfer();
     TestNpcSync();
     TestPcSyncTransfer();
     TestPCControl();
     TestStoryUpdates();
+    TestPartyPackets();
     if (sFailures != 0)
     {
         printf("%d co-op protocol tests failed\n", sFailures);

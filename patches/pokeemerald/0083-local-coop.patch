@@ -1940,3 +1940,116 @@ diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
          {
              if (sStorage->displayMonIsEgg || GetMonData(&sStorage->movingMon, MON_DATA_HP) == 0)
 
+
+diff --git a/src/main_menu.c b/src/main_menu.c
+index 4c1e0c27fd6eb41df90a77b2e2194e850cb48372..3bee9f6bc427dc78fd2a1693829ea7bd19faa482 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -615,6 +615,10 @@
+ static const u8 sJoinFailedDe[] = _("LOKALEN FUNK AKTIVIEREN");
+ static const u8 sJoinOtherBuildEn[] = _("DIFFERENT VERSION");
+ static const u8 sJoinOtherBuildDe[] = _("ANDERE VERSION");
++static const u8 sJoinNameLimitEn[] = _("10 GUEST NAMES STORED");
++static const u8 sJoinNameLimitDe[] = _("10 GASTNAMEN BELEGT");
++static const u8 sJoinNameLimitHintEn[] = _("USE AN EXISTING NAME");
++static const u8 sJoinNameLimitHintDe[] = _("BEKANNTEN NAMEN WAEHLEN");
+ static const u8 sJoinEmpty[] = _("");
+ static const u8 sJoinConnectedEn[] = _("CONNECTED!");
+ static const u8 sJoinConnectedDe[] = _("VERBUNDEN!");
+@@ -633,6 +637,8 @@
+ #define JOIN_BACK_TEXT CTR_TEXT(sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackDe, sJoinBackEn)
+ #define JOIN_FAILED_TEXT CTR_TEXT(sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedDe, sJoinFailedEn)
+ #define JOIN_OTHER_BUILD_TEXT CTR_TEXT(sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildDe, sJoinOtherBuildEn)
++#define JOIN_NAME_LIMIT_TEXT CTR_TEXT(sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitDe, sJoinNameLimitEn)
++#define JOIN_NAME_LIMIT_HINT CTR_TEXT(sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintDe, sJoinNameLimitHintEn)
+ #define JOIN_CONNECTED_TEXT CTR_TEXT(sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedDe, sJoinConnectedEn)
+ #define JOIN_SEARCH_DOTS CTR_TEXT(sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsDe, sJoinSearchDotsEn)
+ #define JOIN_CONNECTING_DOTS CTR_TEXT(sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsDe, sJoinConnectingDotsEn)
+@@ -1703,7 +1709,9 @@
+         return;
+     gTasks[taskId].data[2] = 0;
+     gTasks[taskId].data[3] = (gTasks[taskId].data[3] + 1) % 4;
+-    if (state == LOCAL_SESSION_IN)
++    if (state == CTR_COOP_SESSION_NAME_LIMIT)
++        JoinGamePrint(0, JOIN_NAME_LIMIT_TEXT);
++    else if (state == LOCAL_SESSION_IN)
+         JoinGamePrint(0, JOIN_CONNECTED_TEXT);
+     else if (state == LOCAL_SESSION_FAILED || state == LOCAL_SESSION_OFF)
+         JoinGamePrint(0, JOIN_FAILED_TEXT);
+@@ -1719,7 +1727,9 @@
+         gTasks[taskId].data[4] += 20;
+     for (u8 i = 0; i < ARRAY_COUNT(games); i++)
+     {
+-        if (i < found)
++        if (state == CTR_COOP_SESSION_NAME_LIMIT)
++            JoinGamePrint(i + 2, i == 0 ? JOIN_NAME_LIMIT_HINT : sJoinEmpty);
++        else if (i < found)
+         {
+             static const u8 version[] = _(" V" CTR_COOP_VERSION);
+             const u8 *name = games[i].hostName;
+
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+index 985946cc6c7b56d67d52559ba76f0ac98cf12361..7c861f9b2744f6f10049d89bc9a07b0294e1c896 100644
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -1632,6 +1632,21 @@
+             }
+ #endif
+             ClearStdWindowAndFrame(task->tWindowId, TRUE);
++#ifdef PLATFORM_3DS
++            // One PC visit owns the lock across the box and this menu.
++            // Commit only when the complete visit ends.
++            {
++                bool8 initialTeam = CtrCoop_InitialTeamSelection();
++                CtrCoop_CommitPC();
++                if (initialTeam)
++                {
++                    RemoveWindow(task->tWindowId);
++                    DestroyTask(taskId);
++                    SetMainCallback2(CB2_InitJoinGameMenu);
++                    return;
++                }
++            }
++#endif
+             UnlockPlayerFieldControls();
+             ScriptContext_Enable();
+             RemoveWindow(task->tWindowId);
+@@ -1772,7 +1787,6 @@
+         SetMainCallback2(CB2_InitJoinGameMenu);
+         return;
+     }
+-    CtrCoop_CommitPC();
+ #endif
+     sPreviousBoxOption = GetCurrentBoxOption();
+     gFieldCallback = FieldTask_ReturnToPcMenu;
+@@ -7614,6 +7628,16 @@
+             break;
+         }
+ 
++#ifdef PLATFORM_3DS
++        if (STORAGE_A_PRESSED()
++         && (CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition)
++          || (CtrCoop_StorageBoxRestricted(StorageGetCurrentBox()) && sAutoActionOn
++           && sStorage->boxOption == OPTION_MOVE_MONS && !sIsMonBeingMoved)))
++        {
++            PlaySE(SE_FAILURE);
++            return INPUT_NONE;
++        }
++#endif
+         if ((STORAGE_A_PRESSED()) && SetSelectionMenuTexts())
+         {
+             if (!sAutoActionOn)
+
+diff --git a/src/main_menu.c b/src/main_menu.c
+index 32806a2f42c9046c58f7f54b6c4a426084b8edad..58d92b60e30a79bcc5310d04650ad4a734011173 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -1664,7 +1664,7 @@
+ 
+     if (selected > found)
+         selected = found;
+-    if (JOY_NEW(B_BUTTON))
++    if (JOY_NEW(B_BUTTON) && !CtrCoop_PCOpen())
+     {
+         sJoining = FALSE;
+         CtrCoop_Stop();

@@ -49,6 +49,8 @@ check('(sCoop.starterRequired && !sCoop.starterChosen)' in coop,
       'World entry must wait until the starter has been chosen')
 check('!sCoop.joinInfoReceived' in coop,
       'World entry must wait until the starter requirement has been received')
+check('JOY_NEW(B_BUTTON) && !CtrCoop_PCOpen()' in menu,
+      'B in the initial PC must not also cancel the join task')
 overworld_frame = coop.index('void CtrCoop_OverworldFrame(void)')
 open_pc = coop.index('OpenPCWhenReady();', overworld_frame)
 check('!sCoop.joinInfoReceived' in coop[overworld_frame:open_pc]
@@ -112,6 +114,10 @@ check('else if (!found && !sJoining && gTasks[taskId].data[4] >= 600)' in menu[j
       'Joining must not display the no-open-world hints')
 check('if (state != LOCAL_SESSION_IN && !sJoining)' in menu[join_task:],
       'Joining must keep the menu selection locked')
+check('if (state == CTR_COOP_SESSION_NAME_LIMIT)' in menu[join_task:]
+      and 'JoinGamePrint(0, JOIN_NAME_LIMIT_TEXT);' in menu[join_task:]
+      and 'i == 0 ? JOIN_NAME_LIMIT_HINT : sJoinEmpty' in menu[join_task:],
+      'A full ten-name roster must show its own message and the existing-name hint')
 
 local_update = adapter.index('LocalSession_Update();')
 coop_frame = adapter.index('CtrCoop_OverworldFrame();', local_update)

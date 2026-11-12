@@ -420,10 +420,12 @@ build/video_decode_test.exe: tests/video_decode_test.c src/3ds_video_decode.c in
 
 verify: verify-coop
 .PHONY: verify-coop
-verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX) build/coop_storage_test$(EXESUFFIX) build/starter_menu_test$(EXESUFFIX) build/local_session_test$(EXESUFFIX) build/local_build_test$(EXESUFFIX)
+verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESUFFIX) build/coop_storage_test$(EXESUFFIX) build/coop_runtime_test$(EXESUFFIX) build/coop_session_test$(EXESUFFIX) build/starter_menu_test$(EXESUFFIX) build/local_session_test$(EXESUFFIX) build/local_build_test$(EXESUFFIX)
 	./build/coop_protocol_test$(EXESUFFIX)
 	./build/coop_profile_test$(EXESUFFIX)
 	./build/coop_storage_test$(EXESUFFIX)
+	./build/coop_runtime_test$(EXESUFFIX)
+	./build/coop_session_test$(EXESUFFIX)
 	./build/starter_menu_test$(EXESUFFIX)
 	./build/local_session_test$(EXESUFFIX)
 	./build/local_build_test$(EXESUFFIX)
@@ -433,7 +435,15 @@ build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_stor
 	@mkdir -p build
 	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_storage_test.c src/3ds_coop_storage.c -o $@
 
+build/coop_session_test$(EXESUFFIX): tests/coop_session_test.c tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=4 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+
 STARTER_MENU_ROOT := $(if $(wildcard $(ROOT)/src/main_menu.c),$(ROOT),$(ROOT)/build/upstream)
+build/coop_runtime_test$(EXESUFFIX): tests/coop_runtime_test.c src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=ignored-qualifiers -ffunction-sections -fdata-sections -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/coop_runtime_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -Wl,--gc-sections -o $@
+
 build/starter_menu_test$(EXESUFFIX): tests/starter_menu_test.c $(STARTER_MENU_ROOT)/src/main_menu.c $(STARTER_MENU_ROOT)/src/task.c
 	@mkdir -p build
 	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=pointer-to-int-cast -Wno-error=format -Wno-error=ignored-qualifiers -Wno-unused-parameter -Wno-unused-function -Wno-int-conversion -Wno-int-to-pointer-cast -ffunction-sections -fdata-sections -DSTARTER_MENU_TEST -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/starter_menu_test.c -Wl,--gc-sections -o $@

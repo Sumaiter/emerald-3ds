@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include "3ds_coop_profile.h"
 
@@ -15,6 +16,7 @@ struct DiskProfile
 };
 
 static int sFailures;
+static bool sFailRename;
 #define CHECK(cond, ...) do { if (!(cond)) { sFailures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 int __real_remove(const char *path);
@@ -40,6 +42,11 @@ int __wrap_remove(const char *path)
 int __wrap_rename(const char *from, const char *to)
 {
     (void)to;
+    if (sFailRename)
+    {
+        errno = EIO;
+        return -1;
+    }
     return __real_rename(MapPath(from), MAIN_PATH);
 }
 
@@ -140,6 +147,45 @@ static void TestInvalidPassword(void)
     CHECK(CtrCoopProfile_Get()->guestGraphicsId == 105, "valid fields survive invalid password (got %u)", CtrCoopProfile_Get()->guestGraphicsId);
 }
 
+static void TestFailedRenameRecovery(void)
+{
+    static const uint8_t password[] = {1, 2, 3, 4};
+    FILE *file;
+
+    CtrCoopProfile_SetHostPassword(password);
+    sFailRename = true;
+    CHECK(!CtrCoopProfile_Save(), "rename failure is reported");
+    sFailRename = false;
+    CtrCoopProfile_Reload();
+    CHECK(memcmp(CtrCoopProfile_Get()->hostPassword, password, sizeof(password)) == 0,
+        "complete temporary profile survives a failed rename and reload");
+    file = fopen(MAIN_PATH, "wb");
+    CHECK(file != NULL, "incomplete destination can be simulated");
+    if (file != NULL) fclose(file);
+    CtrCoopProfile_Reload();
+    CHECK(memcmp(CtrCoopProfile_Get()->hostPassword, password, sizeof(password)) == 0,
+        "valid temporary profile also recovers an incomplete destination");
+    CHECK(CtrCoopProfile_Save(), "recovered profile can be saved again");
+}
+
+static void TestCorruptTerminator(void)
+{
+    static const uint8_t password[] = {4, 3, 2, 1};
+    struct DiskProfile disk = {0};
+    FILE *file;
+
+    CtrCoopProfile_SetHostPassword(password);
+    ReadDisk(&disk);
+    disk.profile.guestName[CTR_COOP_GUEST_NAME_LENGTH] = 0;
+    file = fopen(MAIN_PATH, "wb");
+    CHECK(file != NULL, "corrupt terminator can be written");
+    if (file == NULL) return;
+    fwrite(&disk, 1, sizeof(disk), file);
+    fclose(file);
+    CtrCoopProfile_Reload();
+    CHECK(!CtrCoopProfile_HasHostPassword(), "checksum is checked before normalizing the name terminator");
+}
+
 int main(void)
 {
     __real_remove(MAIN_PATH);
@@ -147,6 +193,8 @@ int main(void)
     TestRoundtrip();
     TestCorruption();
     TestInvalidPassword();
+    TestFailedRenameRecovery();
+    TestCorruptTerminator();
     __real_remove(MAIN_PATH);
     __real_remove(TEMP_PATH);
     if (sFailures)

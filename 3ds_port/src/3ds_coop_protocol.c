@@ -21,6 +21,7 @@ static bool IsMoving(uint8_t action)
 static bool EncodeSnapshot(uint8_t type, const CtrCoopSnapshot *snapshot, uint8_t *out, uint16_t outSize)
 {
     if (snapshot == NULL || out == NULL || outSize != CTR_COOP_PACKET_SIZE
+     || snapshot->facing < 1 || snapshot->facing > 4
      || ActionDirection(snapshot->movementActionId) != snapshot->facing || snapshot->graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
         return false;
     out[0] = type;
@@ -54,7 +55,8 @@ static bool DecodeSnapshot(uint8_t expectedType, const uint8_t *data, uint16_t s
     snapshot.facing = data[10];
     snapshot.movementActionId = data[11];
     snapshot.graphicsId = data[12];
-    if (ActionDirection(snapshot.movementActionId) != snapshot.facing || snapshot.graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
+    if (snapshot.facing < 1 || snapshot.facing > 4
+     || ActionDirection(snapshot.movementActionId) != snapshot.facing || snapshot.graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
         return false;
     *out = snapshot;
     return true;
@@ -78,6 +80,47 @@ bool CtrCoopProtocol_EncodeSpawn(const CtrCoopSnapshot *snapshot, uint8_t *out, 
 bool CtrCoopProtocol_DecodeSpawn(const uint8_t *data, uint16_t size, CtrCoopSnapshot *out)
 {
     return DecodeSnapshot(CTR_COOP_SPAWN_PACKET, data, size, out);
+}
+
+bool CtrCoopProtocol_EncodeNpc(const CtrCoopNpcSnapshot *snapshot, uint8_t *out, uint16_t outSize)
+{
+    if (snapshot == NULL || out == NULL || outSize != CTR_COOP_NPC_PACKET_SIZE
+     || snapshot->localId == 0 || snapshot->facing < 1 || snapshot->facing > 4
+     || snapshot->graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
+        return false;
+    out[0] = CTR_COOP_NPC_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = snapshot->localId;
+    out[3] = snapshot->mapGroup;
+    out[4] = snapshot->mapNum;
+    out[5] = (uint16_t)snapshot->x & 0xFF;
+    out[6] = (uint16_t)snapshot->x >> 8;
+    out[7] = (uint16_t)snapshot->y & 0xFF;
+    out[8] = (uint16_t)snapshot->y >> 8;
+    out[9] = snapshot->facing;
+    out[10] = snapshot->graphicsId;
+    out[11] = 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeNpc(const uint8_t *data, uint16_t size, CtrCoopNpcSnapshot *out)
+{
+    CtrCoopNpcSnapshot snapshot = {0};
+
+    if (data == NULL || out == NULL || size != CTR_COOP_NPC_PACKET_SIZE
+     || data[0] != CTR_COOP_NPC_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || data[2] == 0 || data[9] < 1 || data[9] > 4
+     || data[10] > CTR_COOP_GRAPHICS_ID_MAX || data[11] != 0)
+        return false;
+    snapshot.localId = data[2];
+    snapshot.mapGroup = data[3];
+    snapshot.mapNum = data[4];
+    snapshot.x = (int16_t)(data[5] | ((uint16_t)data[6] << 8));
+    snapshot.y = (int16_t)(data[7] | ((uint16_t)data[8] << 8));
+    snapshot.facing = data[9];
+    snapshot.graphicsId = data[10];
+    *out = snapshot;
+    return true;
 }
 
 bool CtrCoopProtocol_EncodeIdentity(const uint8_t *name, uint8_t *out, uint16_t outSize)
@@ -135,6 +178,41 @@ bool CtrCoopProtocol_DecodeAuthResult(const uint8_t *data, uint16_t size, bool *
         return false;
     *accepted = data[2] != 0;
     return true;
+}
+
+bool CtrCoopProtocol_EncodeJoinInfo(bool starterRequired, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_JOIN_INFO_SIZE)
+        return false;
+    out[0] = CTR_COOP_JOIN_INFO_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = starterRequired ? CTR_COOP_JOIN_STARTER : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeJoinInfo(const uint8_t *data, uint16_t size, bool *starterRequired)
+{
+    if (data == NULL || starterRequired == NULL || size != CTR_COOP_JOIN_INFO_SIZE
+     || data[0] != CTR_COOP_JOIN_INFO_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || (data[2] & ~CTR_COOP_JOIN_STARTER) != 0)
+        return false;
+    *starterRequired = (data[2] & CTR_COOP_JOIN_STARTER) != 0;
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeNameLimit(uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_NAME_LIMIT_SIZE)
+        return false;
+    out[0] = CTR_COOP_NAME_LIMIT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeNameLimit(const uint8_t *data, uint16_t size)
+{
+    return data != NULL && size == CTR_COOP_NAME_LIMIT_SIZE
+        && data[0] == CTR_COOP_NAME_LIMIT_PACKET && data[1] == CTR_COOP_PROTOCOL_VERSION;
 }
 
 bool CtrCoopProtocol_EncodePcResult(bool accepted, uint8_t *out, uint16_t outSize)
@@ -345,6 +423,46 @@ bool CtrCoopProtocol_DecodePcSyncChunk(const uint8_t *data, uint16_t size, uint3
     uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
 {
     return DecodeTransferChunk(CTR_COOP_PC_SYNC_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
+bool CtrCoopProtocol_EncodePartyBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_PARTY_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePartyBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_PARTY_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodePartyChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_PARTY_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePartyChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_PARTY_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
+bool CtrCoopProtocol_EncodePartyResult(bool accepted, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_PARTY_RESULT_SIZE)
+        return false;
+    out[0] = CTR_COOP_PARTY_RESULT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = accepted ? 1 : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodePartyResult(const uint8_t *data, uint16_t size, bool *accepted)
+{
+    if (data == NULL || accepted == NULL || size != CTR_COOP_PARTY_RESULT_SIZE
+     || data[0] != CTR_COOP_PARTY_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION || data[2] > 1)
+        return false;
+    *accepted = data[2] != 0;
+    return true;
 }
 
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size)

@@ -130,7 +130,16 @@ struct AppData
 
 /* Ours, and the passphrase made with it. */
 static uint8_t sBuildId[BUILD_ID_SIZE];
+#ifndef LOCAL_BUILD_TEST
 static char sPassphrase[sizeof(PASSPHRASE) + 2 * 16 + 8];
+#endif
+
+static const char *BuildHex(char *out, const uint8_t *id)
+{
+    for (int i = 0; i < BUILD_ID_SIZE; i++)
+        snprintf(out + 2 * i, 3, "%02x", id[i]);
+    return out;
+}
 
 enum
 {
@@ -139,6 +148,7 @@ enum
     SESSION_OTHER, /* this counter's, another build (or protocol) */
 };
 
+#ifndef LOCAL_BUILD_TEST
 struct OutMessage
 {
     uint16_t seq;
@@ -654,13 +664,6 @@ static bool EnsureIdle(void)
     return RestartUds();
 }
 
-static const char *BuildHex(char *out, const uint8_t *id)
-{
-    for (int i = 0; i < BUILD_ID_SIZE; i++)
-        snprintf(out + 2 * i, 3, "%02x", id[i]);
-    return out;
-}
-
 static void SetPassphrase(const uint8_t *password)
 {
     int n = snprintf(sPassphrase, sizeof(sPassphrase), "%s ", PASSPHRASE);
@@ -672,6 +675,8 @@ static void SetPassphrase(const uint8_t *password)
             sPassphrase[n++] = '0' + password[i];
     sPassphrase[n] = '\0';
 }
+
+#endif
 
 static int SessionCheck(const udsNetworkScanInfo *net, uint8_t kind, uint32_t *token, uint8_t *hostName)
 {
@@ -705,6 +710,7 @@ static int SessionCheck(const udsNetworkScanInfo *net, uint8_t kind, uint32_t *t
     return net->network.total_nodes < net->network.max_nodes ? SESSION_YES : SESSION_NO;
 }
 
+#ifndef LOCAL_BUILD_TEST
 static bool Connect(const udsNetworkScanInfo *net)
 {
     SetPassphrase(sL.askedKind == LOCAL_KIND_COOP ? sL.joinPassword : NULL);
@@ -1492,3 +1498,4 @@ uint8_t LocalLink_InSession(void)
 
     return state == LOCAL_SESSION_IN || state == LOCAL_SESSION_SEARCHING;
 }
+#endif

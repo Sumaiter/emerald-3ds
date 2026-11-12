@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 #define CTR_COOP_VERSION "0.1.0"
+#define CTR_COOP_MAX_GUEST_NAMES 10
+/* A co-op status, outside the transport's LOCAL_SESSION_* values. */
+#define CTR_COOP_SESSION_NAME_LIMIT 0x80
 
 void CtrCoop_Toggle(void);
 bool CtrCoop_IsEnabled(void);
@@ -25,9 +28,11 @@ bool CtrCoop_GuestSaveBlocked(void);
 uint8_t CtrCoop_GetSessionState(void);
 int CtrCoop_GetFoundGames(struct CtrCoopFoundGame *games, int max);
 bool CtrCoop_RequestPC(void);
+bool CtrCoop_PCOpen(void);
 void CtrCoop_ReleasePC(void);
 void CtrCoop_CommitPC(void);
 bool CtrCoop_InitialTeamSelection(void);
+bool CtrCoop_ChooseStarter(uint16_t species);
 bool CtrCoop_StorageSlotLocked(uint8_t boxId, uint8_t position);
 bool CtrCoop_StorageBoxRestricted(uint8_t boxId);
 void CtrCoop_FinishJoin(void);

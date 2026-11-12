@@ -277,10 +277,9 @@ static void TestHostJoinAndPcLock(void)
     CtrCoop_HandlePacket(PEER_ID, (const uint8_t[]){CTR_COOP_PC_RELEASE_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_PC_CONTROL_SIZE);
     CHECK(CtrCoop_RequestPC(), "host acquires PC after guest release");
     CtrCoop_PeerLeft(PEER_ID);
-    sCoop.peerAuthenticated = true;
-    sCoop.peerTeamReady = true;
-    sCoop.peerSaveReady = true;
     CtrCoop_ReleasePC();
+    AuthenticateHost();
+    sCoop.peerTeamReady = true;
     ClearPackets();
     CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_PC_CONTROL_SIZE);
     result = LastPacket(CTR_COOP_PC_RESULT_PACKET);
@@ -364,12 +363,15 @@ static void BuildHostSnapshot(uint8_t *payload, struct SaveBlock2 *save2, struct
 static void AcceptGuestSnapshot(void)
 {
     uint8_t result[CTR_COOP_AUTH_RESULT_SIZE];
+    uint8_t info[CTR_COOP_JOIN_INFO_SIZE];
 
     CtrCoop_MenuFrame();
     CHECK(LastPacket(CTR_COOP_AUTH_PACKET) != NULL, "guest sends authentication once in session");
     CtrCoopProtocol_EncodeAuthResult(true, result, sizeof(result));
     CtrCoop_HandlePacket(PEER_ID, result, sizeof(result));
     CHECK(LastPacket(CTR_COOP_IDENTITY_PACKET) != NULL, "accepted guest sends profile identity");
+    CtrCoopProtocol_EncodeJoinInfo(false, info, sizeof(info));
+    CtrCoop_HandlePacket(PEER_ID, info, sizeof(info));
 }
 
 static void TestGuestJoinFlow(void)
@@ -699,6 +701,20 @@ void ObjectEventSetHeldMovement(struct ObjectEvent *objectEvent, uint8_t movemen
 void MoveObjectEventToMapCoords(struct ObjectEvent *objectEvent, int16_t x, int16_t y) { objectEvent->currentCoords.x = x; objectEvent->currentCoords.y = y; }
 void ShowPokemonStorageSystemPC(void) { sPcOpenCount++; }
 void PlaySE(uint16_t song) { (void)song; }
+void CB2_Overworld(void) {}
+void CB2_InitStarterSelection(void) {}
+bool8 CB2_StarterSelectionActive(void) { return FALSE; }
+void SaveObjectEvents(void) {}
+void LoadObjEventTemplatesFromHeader(void) {}
+void RemoveObjectEventByLocalIdAndMap(u8 localId, u8 mapNum, u8 mapGroup) { (void)localId; (void)mapNum; (void)mapGroup; }
+void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphics) { object->graphicsId = graphics; }
+u8 TrySpawnObjectEvent(u8 localId, u8 mapNum, u8 mapGroup) { (void)localId; (void)mapNum; (void)mapGroup; return OBJECT_EVENTS_COUNT; }
+void ScriptContext_Enable(void) {}
+void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, bool8 hasFixedPersonality, u32 personality, u8 otIdType, u32 fixedOtId)
+{
+    (void)level; (void)fixedIV; (void)hasFixedPersonality; (void)personality; (void)otIdType; (void)fixedOtId;
+    SetMon(mon, species);
+}
 uint16_t Random(void) { return 0x1234; }
 void CB2_InitBattle(void) {}
 void CB2_InitEndLinkBattle(void) {}

@@ -58,6 +58,9 @@ ENGINE_PATTERNS = [
     "bottom/battle.bin",
     "bottom/menu.bin",
     "battle/hud.bin",
+    "coop/backpics.bin",  # newly generated art + numeric native picture IDs
+    "coop/bikes.bin",     # newly generated bicycle frames + native graphics IDs
+    "coop/walks.bin",     # newly generated player walking frames
 ]
 OPTIONAL_PATTERNS = [
     "followers/*",

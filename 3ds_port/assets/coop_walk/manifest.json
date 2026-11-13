@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "frame_width": 32,
+  "frame_height": 32,
+  "columns": 3,
+  "frame_names": [
+    "south_idle",
+    "north_idle",
+    "west_idle",
+    "south_step_a",
+    "south_step_b",
+    "north_step_a",
+    "north_step_b",
+    "west_step_a",
+    "west_step_b"
+  ],
+  "entries": [
+    {
+      "graphics_id": 27,
+      "symbol": "OBJ_EVENT_GFX_COOK",
+      "name": "COOK",
+      "source": "generated",
+      "image": "cook.png",
+      "identity_reference": "graphics/object_events/pics/people/cook.png",
+      "visual_review": "passed",
+      "sha256": "68f7f68b1db5491f431cf4cbf5e570a4e4d0c3be98e9af2beb43ebe5fdc01086"
+    },
+    {
+      "graphics_id": 29,
+      "symbol": "OBJ_EVENT_GFX_OLD_MAN",
+      "name": "OLD MAN",
+      "source": "generated",
+      "image": "old_man.png",
+      "identity_reference": "graphics/object_events/pics/people/old_man.png",
+      "visual_review": "passed",
+      "sha256": "309793c5b8f0e8beec48cef4ad9ba8edbfc703ffb05132226242e05cb5b89f3f"
+    },
+    {
+      "graphics_id": 121,
+      "symbol": "OBJ_EVENT_GFX_SIDNEY",
+      "name": "SIDNEY",
+      "source": "generated",
+      "image": "sidney.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/sidney.png",
+      "visual_review": "passed",
+      "sha256": "23bb0d2ec57d6a67a0365d677724f19af9c217a9143ec21bc4ae7e9238b5dfd9"
+    },
+    {
+      "graphics_id": 122,
+      "symbol": "OBJ_EVENT_GFX_PHOEBE",
+      "name": "PHOEBE",
+      "source": "generated",
+      "image": "phoebe.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/phoebe.png",
+      "visual_review": "passed",
+      "sha256": "a8b58c0853d911f21f0304670b92df9f0cd3c45e7d7844f7a02969571ed5fc7b"
+    },
+    {
+      "graphics_id": 123,
+      "symbol": "OBJ_EVENT_GFX_GLACIA",
+      "name": "GLACIA",
+      "source": "generated",
+      "image": "glacia.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/glacia.png",
+      "visual_review": "passed",
+      "sha256": "974930645f60aad533bc3d6d1db9712fcc6131cd9e285fdfeddf9370525219cf"
+    },
+    {
+      "graphics_id": 124,
+      "symbol": "OBJ_EVENT_GFX_DRAKE",
+      "name": "DRAKE",
+      "source": "generated",
+      "image": "drake.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/drake.png",
+      "visual_review": "passed",
+      "sha256": "04db997c9842e1a8cac5f248c50274767ddb250f29f161ed4c74e1aab1bd6b49"
+    },
+    {
+      "graphics_id": 125,
+      "symbol": "OBJ_EVENT_GFX_ROXANNE",
+      "name": "ROXANNE",
+      "source": "generated",
+      "image": "roxanne.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/roxanne.png",
+      "visual_review": "passed",
+      "sha256": "eaa564b6884fe63f68fb64fbf14d98bf7d8d4547828f152870b7d1acef203738"
+    },
+    {
+      "graphics_id": 126,
+      "symbol": "OBJ_EVENT_GFX_BRAWLY",
+      "name": "BRAWLY",
+      "source": "generated",
+      "image": "brawly.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/brawly.png",
+      "visual_review": "passed",
+      "sha256": "8c3f10a9ef3019ef96b2e9cf28aeeb23b9fc5cbc993d193c9f942268a6ed1f52"
+    },
+    {
+      "graphics_id": 127,
+      "symbol": "OBJ_EVENT_GFX_WATTSON",
+      "name": "WATTSON",
+      "source": "generated",
+      "image": "wattson.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/wattson.png",
+      "visual_review": "passed",
+      "sha256": "657188ad7795959a8aaa96d73e86c0576d79f3e58573e0ad3da158fc978f499a"
+    },
+    {
+      "graphics_id": 128,
+      "symbol": "OBJ_EVENT_GFX_FLANNERY",
+      "name": "FLANNERY",
+      "source": "generated",
+      "image": "flannery.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/flannery.png",
+      "visual_review": "passed",
+      "sha256": "b63fed260d23fbbdd60dd19bc8ecf4954cb843524ffc3cd0c492a1ffd51127bb"
+    },
+    {
+      "graphics_id": 130,
+      "symbol": "OBJ_EVENT_GFX_WINONA",
+      "name": "WINONA",
+      "source": "generated",
+      "image": "winona.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/winona.png",
+      "visual_review": "passed",
+      "sha256": "362d6053a5d60e8c3e782767f8254a930c252a72b775486abc883fe16a4bedc8"
+    },
+    {
+      "graphics_id": 131,
+      "symbol": "OBJ_EVENT_GFX_LIZA",
+      "name": "LIZA",
+      "source": "generated",
+      "image": "liza.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/liza.png",
+      "visual_review": "passed",
+      "sha256": "3b24d2eca8fc58903dadecd45e58f4c570f69d4817d8c43c579a16c9ad14d3da"
+    },
+    {
+      "graphics_id": 132,
+      "symbol": "OBJ_EVENT_GFX_TATE",
+      "name": "TATE",
+      "source": "generated",
+      "image": "tate.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/tate.png",
+      "visual_review": "passed",
+      "sha256": "fe9772dd193e788e41cea9857a61c0f8a55969a8265b9fa464cb5fa2d86b3128"
+    },
+    {
+      "graphics_id": 189,
+      "symbol": "OBJ_EVENT_GFX_GAMEBOY_KID",
+      "name": "GAMEBOY KID",
+      "source": "generated",
+      "image": "gameboy_kid.png",
+      "identity_reference": "graphics/object_events/pics/people/gameboy_kid.png",
+      "visual_review": "passed",
+      "sha256": "89fe456e280b1994a9ba1706e14902df072c17c4cbec19c825c98c86ddcb0e40"
+    },
+    {
+      "graphics_id": 223,
+      "symbol": "OBJ_EVENT_GFX_MYSTERY_GIFT_MAN",
+      "name": "MYSTERY GIFT MAN",
+      "source": "generated",
+      "image": "mystery_gift_man.png",
+      "identity_reference": "graphics/object_events/pics/people/mystery_event_deliveryman.png",
+      "visual_review": "passed",
+      "sha256": "263273083dd13fc2a9c038ee8b2b29e6bd941fdb7e8026f7c6e0ce4a9956a68b"
+    }
+  ],
+  "status": "complete"
+}

@@ -1113,15 +1113,20 @@ index 0000000..88cdabe
 +    return FALSE;
 +}
 +
-+// Once a frame (from the emulated adapter): a session is only for meeting
-+// people through the counter it was started at, so once the player is
-+// walking around outside the link rooms again (left the Union Room or Trade
-+// Center, or didn't go in after all), leave it.
++// Once a frame (from the emulated adapter): a counter session is only for
++// meeting people through the counter it was started at, so once the player is
++// walking around outside the link rooms again, leave it. Co-op sessions are
++// free-roaming and are left through their own lifecycle instead.
 +void LocalSession_Update(void)
 +{
 +    static u16 sFreeFrames;
 +
 +    if (LocalLink_GetSession() != LOCAL_SESSION_IN)
++    {
++        sFreeFrames = 0;
++        return;
++    }
++    if (LocalLink_GetSessionKind() == LOCAL_KIND_COOP)
 +    {
 +        sFreeFrames = 0;
 +        return;

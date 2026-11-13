@@ -69,7 +69,7 @@ diff --git a/src/main_menu.c b/src/main_menu.c
 index d3ca0df..ca40323 100644
 --- a/src/main_menu.c
 +++ b/src/main_menu.c
-@@ -41,6 +41,13 @@
+@@ -41,6 +41,14 @@
  #ifdef PORT_BRIDGE
  #include "port_platform.h"
  #endif
@@ -78,6 +78,7 @@ index d3ca0df..ca40323 100644
 +#include "3ds_coop_profile.h"
 +#include "3ds_locale.h"
 +#include "constants/local_link.h"
++#include "constants/species.h"
 +#include "multiplayer_menu.h"
 +#endif
  
@@ -152,7 +153,7 @@ index d3ca0df..ca40323 100644
  
  static const struct WindowTemplate sNewGameBirchSpeechTextWindows[] =
  {
-@@ -543,6 +580,52 @@ static const u16 sMainMenuTextPal[] = INCBIN_U16("graphics/interface/main_menu_t
+@@ -543,6 +580,63 @@ static const u16 sMainMenuTextPal[] = INCBIN_U16("graphics/interface/main_menu_t
  
  static const u8 sTextColor_Headers[] = {TEXT_DYNAMIC_COLOR_1, TEXT_DYNAMIC_COLOR_2, TEXT_DYNAMIC_COLOR_3};
  static const u8 sTextColor_MenuInfo[] = {TEXT_DYNAMIC_COLOR_1, TEXT_COLOR_WHITE, TEXT_DYNAMIC_COLOR_3};
@@ -178,6 +179,14 @@ index d3ca0df..ca40323 100644
 +static const u8 sJoinSearch1De[] = _("SUCHE .");
 +static const u8 sJoinSearch2De[] = _("SUCHE . .");
 +static const u8 sJoinSearch3De[] = _("SUCHE . . .");
++static const u8 sJoinConnecting0En[] = _("CONNECTING");
++static const u8 sJoinConnecting1En[] = _("CONNECTING .");
++static const u8 sJoinConnecting2En[] = _("CONNECTING . .");
++static const u8 sJoinConnecting3En[] = _("CONNECTING . . .");
++static const u8 sJoinConnecting0De[] = _("VERBINDEN");
++static const u8 sJoinConnecting1De[] = _("VERBINDEN .");
++static const u8 sJoinConnecting2De[] = _("VERBINDEN . .");
++static const u8 sJoinConnecting3De[] = _("VERBINDEN . . .");
 +static const u8 sJoinFailedEn[] = _("ENABLE LOCAL WIRELESS");
 +static const u8 sJoinFailedDe[] = _("LOKALEN FUNK AKTIVIEREN");
 +static const u8 sJoinOtherBuildEn[] = _("DIFFERENT VERSION");
@@ -193,6 +202,8 @@ index d3ca0df..ca40323 100644
 +static const u8 sJoinHint2De[] = _("AKTIVIEREN.");
 +static const u8 *const sJoinSearchDotsEn[] = {sJoinSearch0En, sJoinSearch1En, sJoinSearch2En, sJoinSearch3En};
 +static const u8 *const sJoinSearchDotsDe[] = {sJoinSearch0De, sJoinSearch1De, sJoinSearch2De, sJoinSearch3De};
++static const u8 *const sJoinConnectingDotsEn[] = {sJoinConnecting0En, sJoinConnecting1En, sJoinConnecting2En, sJoinConnecting3En};
++static const u8 *const sJoinConnectingDotsDe[] = {sJoinConnecting0De, sJoinConnecting1De, sJoinConnecting2De, sJoinConnecting3De};
 +static const u8 *const sJoinHintsEn[] = {sJoinHint0En, sJoinHint1En, sJoinHint2En};
 +static const u8 *const sJoinHintsDe[] = {sJoinHint0De, sJoinHint1De, sJoinHint2De};
 +#define JOIN_BACK_TEXT CTR_TEXT(sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackDe, sJoinBackEn)
@@ -200,6 +211,7 @@ index d3ca0df..ca40323 100644
 +#define JOIN_OTHER_BUILD_TEXT CTR_TEXT(sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildDe, sJoinOtherBuildEn)
 +#define JOIN_CONNECTED_TEXT CTR_TEXT(sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedDe, sJoinConnectedEn)
 +#define JOIN_SEARCH_DOTS CTR_TEXT(sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsDe, sJoinSearchDotsEn)
++#define JOIN_CONNECTING_DOTS CTR_TEXT(sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsDe, sJoinConnectingDotsEn)
 +#define JOIN_HINTS CTR_TEXT(sJoinHintsEn, sJoinHintsEn, sJoinHintsEn, sJoinHintsEn, sJoinHintsEn, sJoinHintsDe, sJoinHintsEn)
 +#endif
  
@@ -392,7 +404,7 @@ index d3ca0df..ca40323 100644
              case ACTION_MYSTERY_GIFT:
                  SetMainCallback2(CB2_InitMysteryGift);
                  DestroyTask(taskId);
-@@ -1284,18 +1427,236 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
+@@ -1284,18 +1427,259 @@ static void Task_HandleMainMenuAPressed(u8 taskId)
                  return;
          }
          FreeAllWindowBuffers();
@@ -409,14 +421,17 @@ index d3ca0df..ca40323 100644
 +#ifdef PLATFORM_3DS
 +static void JoinGamePrint(u8 windowId, const u8 *text)
 +{
++#ifndef STARTER_MENU_TEST
 +    FillWindowPixelBuffer(windowId, PIXEL_FILL(0xA));
 +    AddTextPrinterParameterized3(windowId, FONT_NORMAL, 0, 1, sTextColor_Headers, TEXT_SKIP_DRAW, text);
 +    PutWindowTilemap(windowId);
 +    CopyWindowToVram(windowId, COPYWIN_GFX);
++#endif
 +}
 +
 +static void InitJoinGameMenu(void)
 +{
++#ifndef STARTER_MENU_TEST
 +    u16 palette;
 +
 +    SetVBlankCallback(NULL);
@@ -484,6 +499,7 @@ index d3ca0df..ca40323 100644
 +    SetGpuReg(REG_OFFSET_WIN0H, MENU_WIN_HCOORDS);
 +    SetGpuReg(REG_OFFSET_WIN0V, MENU_WIN_VCOORDS(8));
 +    CreateTask(Task_JoinGameSearch, 0);
++#endif
 +}
 +
 +static void JoinGameHighlight(u8 selected)
@@ -512,12 +528,17 @@ index d3ca0df..ca40323 100644
 +    DestroyTask(taskId);
 +}
 +
-+static void JoinSelectedGame(u8 taskId, uint32_t token)
++static bool8 sJoining;
++static struct CtrCoopFoundGame sJoiningGame;
++
++static void JoinSelectedGame(u8 taskId, const struct CtrCoopFoundGame *game)
 +{
++    sJoining = TRUE;
++    sJoiningGame = *game;
 +    gTasks[taskId].data[6] = 1;
-+    CtrCoop_PrepareJoin(token);
++    CtrCoop_PrepareJoin(game->token);
 +    if (CtrCoopProfile_HasGuestPassword())
-+        CtrCoop_JoinGame(token, CtrCoopProfile_Get()->guestPassword);
++        CtrCoop_JoinGame(game->token, CtrCoopProfile_Get()->guestPassword);
 +    else
 +        OpenJoinPassword(taskId);
 +}
@@ -525,24 +546,36 @@ index d3ca0df..ca40323 100644
 +static void ContinueJoinedGame(void)
 +{
 +    CtrCoop_EnterHostWorld();
++    sJoining = FALSE;
 +    CB2_ContinueSavedGame();
-+    InitMap();
 +}
 +
 +static void Task_JoinGameSearch(u8 taskId)
 +{
 +    struct CtrCoopFoundGame games[3];
 +    u8 state;
++    u8 selected = gTasks[taskId].data[5];
++    int found;
 +
 +    CtrCoop_MenuFrame();
 +    state = CtrCoop_GetSessionState();
-+    u8 selected = gTasks[taskId].data[5];
-+    int found = CtrCoop_GetFoundGames(games, ARRAY_COUNT(games));
++    if (sJoining)
++    {
++        selected = 1;
++        games[0] = sJoiningGame;
++        found = 1;
++        gTasks[taskId].data[6] = 1;
++    }
++    else
++    {
++        found = CtrCoop_GetFoundGames(games, ARRAY_COUNT(games));
++    }
 +
 +    if (selected > found)
 +        selected = found;
 +    if (JOY_NEW(B_BUTTON))
 +    {
++        sJoining = FALSE;
 +        CtrCoop_Stop();
 +        InitMainMenu(FALSE);
 +        return;
@@ -560,7 +593,7 @@ index d3ca0df..ca40323 100644
 +        DestroyTask(taskId);
 +        return;
 +    }
-+    if (state != LOCAL_SESSION_IN && gTasks[taskId].data[6] == 0)
++    if (state != LOCAL_SESSION_IN && !sJoining)
 +    {
 +        if (JOY_NEW(DPAD_UP) && selected > 0)
 +            selected--;
@@ -574,12 +607,12 @@ index d3ca0df..ca40323 100644
 +                InitMainMenu(FALSE);
 +                return;
 +            }
-+            JoinSelectedGame(taskId, games[selected - 1].token);
++            JoinSelectedGame(taskId, &games[selected - 1]);
 +        }
 +    }
 +    gTasks[taskId].data[5] = selected;
 +    JoinGameHighlight(selected);
-+    if (state == LOCAL_SESSION_NONE)
++    if (state == LOCAL_SESSION_NONE && !sJoining)
 +        CtrCoop_Search();
 +    if (++gTasks[taskId].data[2] < 20)
 +        return;
@@ -591,6 +624,8 @@ index d3ca0df..ca40323 100644
 +        JoinGamePrint(0, JOIN_FAILED_TEXT);
 +    else if (state == LOCAL_SESSION_OTHER_BUILD)
 +        JoinGamePrint(0, JOIN_OTHER_BUILD_TEXT);
++    else if (sJoining)
++        JoinGamePrint(0, JOIN_CONNECTING_DOTS[gTasks[taskId].data[3]]);
 +    else
 +        JoinGamePrint(0, JOIN_SEARCH_DOTS[gTasks[taskId].data[3]]);
 +    if (found)
@@ -614,7 +649,7 @@ index d3ca0df..ca40323 100644
 +            *out = EOS;
 +            JoinGamePrint(i + 2, label);
 +        }
-+        else if (!found && gTasks[taskId].data[4] >= 600)
++        else if (!found && !sJoining && gTasks[taskId].data[4] >= 600)
 +            JoinGamePrint(i + 2, JOIN_HINTS[i]);
          else
 -            sCurrItemAndOptionMenuCheck |= OPTION_MENU_FLAG;  // entering the options menu
@@ -1601,7 +1636,6 @@ diff --git a/src/event_object_movement.c b/src/event_object_movement.c
  #endif
          if (curObject->active && curObject != objectEvent)
          {
- 
 diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
 --- a/src/pokemon_storage_system.c
 +++ b/src/pokemon_storage_system.c
@@ -1637,11 +1671,13 @@ diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
 diff --git a/include/main_menu.h b/include/main_menu.h
 --- a/include/main_menu.h
 +++ b/include/main_menu.h
-@@ -2,6 +2,7 @@
+@@ -2,6 +2,9 @@
  #define GUARD_MAIN_MENU_H
  
  void CB2_InitMainMenu(void);
 +void CB2_InitJoinGameMenu(void);
++void CB2_InitStarterSelection(void);
++bool8 CB2_StarterSelectionActive(void);
  void CreateYesNoMenuParameterized(u8 x, u8 y, u16 baseTileNum, u16 baseBlock, u8 yesNoPalNum, u8 winPalNum);
  
  #endif // GUARD_MAIN_MENU_H
@@ -1649,27 +1685,76 @@ diff --git a/src/main_menu.c b/src/main_menu.c
 index ca40323..0000000 100644
 --- a/src/main_menu.c
 +++ b/src/main_menu.c
-@@ -1514,6 +1514,11 @@ static void InitJoinGameMenu(void)
+@@ -1514,7 +1514,60 @@ static void InitJoinGameMenu(void)
      CreateTask(Task_JoinGameSearch, 0);
+ #endif
  }
  
 +void CB2_InitJoinGameMenu(void)
 +{
++#ifndef STARTER_MENU_TEST
 +    InitJoinGameMenu();
++#endif
++}
++
++static const u8 sStarterTitleEn[] = _("CHOOSE STARTER");
++static const u8 sStarterTitleDe[] = _("STARTER WÄHLEN");
++#define STARTER_TITLE CTR_TEXT(sStarterTitleEn, sStarterTitleEn, sStarterTitleEn, sStarterTitleEn, sStarterTitleEn, sStarterTitleDe, sStarterTitleEn)
++static const u16 sStarterSpecies[] = {SPECIES_TREECKO, SPECIES_TORCHIC, SPECIES_MUDKIP};
++
++static void JoinGameHighlight(u8 selected);
++
++static void Task_StarterSelection(u8 taskId)
++{
++    u8 selected = gTasks[taskId].data[0];
++
++    if (JOY_NEW(DPAD_UP))
++        selected = (selected + ARRAY_COUNT(sStarterSpecies) - 1) % ARRAY_COUNT(sStarterSpecies);
++    else if (JOY_NEW(DPAD_DOWN))
++        selected = (selected + 1) % ARRAY_COUNT(sStarterSpecies);
++    if (JOY_NEW(A_BUTTON) && CtrCoop_ChooseStarter(sStarterSpecies[selected]))
++    {
++        PlaySE(SE_SUCCESS);
++        SetMainCallback2(CB2_InitJoinGameMenu);
++        DestroyTask(taskId);
++        return;
++    }
++    gTasks[taskId].data[0] = selected;
++    JoinGameHighlight(selected);
++}
++
++bool8 CB2_StarterSelectionActive(void)
++{
++    return FuncIsActiveTask(Task_StarterSelection);
++}
++
++void CB2_InitStarterSelection(void)
++{
++    u8 taskId = FindTaskIdByFunc(Task_JoinGameSearch);
++
++    if (taskId != TASK_NONE)
++        DestroyTask(taskId);
++    JoinGamePrint(0, STARTER_TITLE);
++    JoinGamePrint(4, sJoinEmpty);
++    for (u8 i = 0; i < ARRAY_COUNT(sStarterSpecies); i++)
++        JoinGamePrint(i + 1, gSpeciesNames[sStarterSpecies[i]]);
++    CreateTask(Task_StarterSelection, 0);
++    JoinGameHighlight(0);
++    SetMainCallback2(CB2_MainMenu);
 +}
 +
  static void JoinGameHighlight(u8 selected)
  {
      switch (selected)
-@@ -1555,6 +1560,7 @@ static void ContinueJoinedGame(void)
+@@ -1555,6 +1562,7 @@ static void ContinueJoinedGame(void)
      CtrCoop_EnterHostWorld();
+     sJoining = FALSE;
      CB2_ContinueSavedGame();
-     InitMap();
 +    CtrCoop_FinishJoin();
  }
  
  static void Task_JoinGameSearch(u8 taskId)
-@@ -1583,7 +1589,7 @@ static void Task_JoinGameSearch(u8 taskId)
+@@ -1583,7 +1591,7 @@ static void Task_JoinGameSearch(u8 taskId)
          OpenJoinPassword(taskId);
          return;
      }
@@ -1905,3 +1990,116 @@ diff --git a/src/overworld.c b/src/overworld.c
          ScriptContext_Init();
          UnlockPlayerFieldControls();
 
+
+diff --git a/src/main_menu.c b/src/main_menu.c
+index 4c1e0c27fd6eb41df90a77b2e2194e850cb48372..3bee9f6bc427dc78fd2a1693829ea7bd19faa482 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -615,6 +615,10 @@
+ static const u8 sJoinFailedDe[] = _("LOKALEN FUNK AKTIVIEREN");
+ static const u8 sJoinOtherBuildEn[] = _("DIFFERENT VERSION");
+ static const u8 sJoinOtherBuildDe[] = _("ANDERE VERSION");
++static const u8 sJoinNameLimitEn[] = _("10 GUEST NAMES STORED");
++static const u8 sJoinNameLimitDe[] = _("10 GASTNAMEN BELEGT");
++static const u8 sJoinNameLimitHintEn[] = _("USE AN EXISTING NAME");
++static const u8 sJoinNameLimitHintDe[] = _("BEKANNTEN NAMEN WAEHLEN");
+ static const u8 sJoinEmpty[] = _("");
+ static const u8 sJoinConnectedEn[] = _("CONNECTED!");
+ static const u8 sJoinConnectedDe[] = _("VERBUNDEN!");
+@@ -633,6 +637,8 @@
+ #define JOIN_BACK_TEXT CTR_TEXT(sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackEn, sJoinBackDe, sJoinBackEn)
+ #define JOIN_FAILED_TEXT CTR_TEXT(sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedEn, sJoinFailedDe, sJoinFailedEn)
+ #define JOIN_OTHER_BUILD_TEXT CTR_TEXT(sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildEn, sJoinOtherBuildDe, sJoinOtherBuildEn)
++#define JOIN_NAME_LIMIT_TEXT CTR_TEXT(sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitEn, sJoinNameLimitDe, sJoinNameLimitEn)
++#define JOIN_NAME_LIMIT_HINT CTR_TEXT(sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintEn, sJoinNameLimitHintDe, sJoinNameLimitHintEn)
+ #define JOIN_CONNECTED_TEXT CTR_TEXT(sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedEn, sJoinConnectedDe, sJoinConnectedEn)
+ #define JOIN_SEARCH_DOTS CTR_TEXT(sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsEn, sJoinSearchDotsDe, sJoinSearchDotsEn)
+ #define JOIN_CONNECTING_DOTS CTR_TEXT(sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsEn, sJoinConnectingDotsDe, sJoinConnectingDotsEn)
+@@ -1703,7 +1709,9 @@
+         return;
+     gTasks[taskId].data[2] = 0;
+     gTasks[taskId].data[3] = (gTasks[taskId].data[3] + 1) % 4;
+-    if (state == LOCAL_SESSION_IN)
++    if (state == CTR_COOP_SESSION_NAME_LIMIT)
++        JoinGamePrint(0, JOIN_NAME_LIMIT_TEXT);
++    else if (state == LOCAL_SESSION_IN)
+         JoinGamePrint(0, JOIN_CONNECTED_TEXT);
+     else if (state == LOCAL_SESSION_FAILED || state == LOCAL_SESSION_OFF)
+         JoinGamePrint(0, JOIN_FAILED_TEXT);
+@@ -1719,7 +1727,9 @@
+         gTasks[taskId].data[4] += 20;
+     for (u8 i = 0; i < ARRAY_COUNT(games); i++)
+     {
+-        if (i < found)
++        if (state == CTR_COOP_SESSION_NAME_LIMIT)
++            JoinGamePrint(i + 2, i == 0 ? JOIN_NAME_LIMIT_HINT : sJoinEmpty);
++        else if (i < found)
+         {
+             static const u8 version[] = _(" V" CTR_COOP_VERSION);
+             const u8 *name = games[i].hostName;
+
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+index 985946cc6c7b56d67d52559ba76f0ac98cf12361..7c861f9b2744f6f10049d89bc9a07b0294e1c896 100644
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -1632,6 +1632,21 @@
+             }
+ #endif
+             ClearStdWindowAndFrame(task->tWindowId, TRUE);
++#ifdef PLATFORM_3DS
++            // One PC visit owns the lock across the box and this menu.
++            // Commit only when the complete visit ends.
++            {
++                bool8 initialTeam = CtrCoop_InitialTeamSelection();
++                CtrCoop_CommitPC();
++                if (initialTeam)
++                {
++                    RemoveWindow(task->tWindowId);
++                    DestroyTask(taskId);
++                    SetMainCallback2(CB2_InitJoinGameMenu);
++                    return;
++                }
++            }
++#endif
+             UnlockPlayerFieldControls();
+             ScriptContext_Enable();
+             RemoveWindow(task->tWindowId);
+@@ -1772,7 +1787,6 @@
+         SetMainCallback2(CB2_InitJoinGameMenu);
+         return;
+     }
+-    CtrCoop_CommitPC();
+ #endif
+     sPreviousBoxOption = GetCurrentBoxOption();
+     gFieldCallback = FieldTask_ReturnToPcMenu;
+@@ -7614,6 +7628,16 @@
+             break;
+         }
+ 
++#ifdef PLATFORM_3DS
++        if (STORAGE_A_PRESSED()
++         && (CtrCoop_StorageSlotLocked(StorageGetCurrentBox(), sCursorPosition)
++          || (CtrCoop_StorageBoxRestricted(StorageGetCurrentBox()) && sAutoActionOn
++           && sStorage->boxOption == OPTION_MOVE_MONS && !sIsMonBeingMoved)))
++        {
++            PlaySE(SE_FAILURE);
++            return INPUT_NONE;
++        }
++#endif
+         if ((STORAGE_A_PRESSED()) && SetSelectionMenuTexts())
+         {
+             if (!sAutoActionOn)
+
+diff --git a/src/main_menu.c b/src/main_menu.c
+index 32806a2f42c9046c58f7f54b6c4a426084b8edad..58d92b60e30a79bcc5310d04650ad4a734011173 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -1664,7 +1664,7 @@
+ 
+     if (selected > found)
+         selected = found;
+-    if (JOY_NEW(B_BUTTON))
++    if (JOY_NEW(B_BUTTON) && !CtrCoop_PCOpen())
+     {
+         sJoining = FALSE;
+         CtrCoop_Stop();

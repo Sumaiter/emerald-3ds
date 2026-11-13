@@ -83,6 +83,9 @@ BACKEND_SRCS += src/3ds_nuzlocke_game.c
 # talks to (its radio is src/3ds_local.c).
 BACKEND_SRCS += src/3ds_rfu_adapter.c
 BACKEND_SRCS += src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_profile.c src/3ds_coop_storage.c
+BACKEND_SRCS += src/3ds_coop_battle.c
+BACKEND_SRCS += src/3ds_coop_bike.c
+BACKEND_SRCS += src/3ds_coop_walk.c
 BACKEND_SRCS += src/3ds_encounter_tables.c
 # The seeded species randomizer, off by default (include/3ds_randomizer.h).
 BACKEND_SRCS += src/3ds_randomizer.c src/3ds_randomizer_core.c
@@ -144,6 +147,10 @@ ROMFS_SHADER_OUTS += romfs/bottom/battle.bin
 ROMFS_SHADER_OUTS += romfs/bottom/menu.bin
 # The battle's info boxes and text box: the port's own art (scripts/gen_battle_hud.py).
 ROMFS_SHADER_OUTS += romfs/battle/hud.bin
+# New co-op battle art; native avatars are numeric references only.
+ROMFS_SHADER_OUTS += romfs/coop/backpics.bin
+ROMFS_SHADER_OUTS += romfs/coop/bikes.bin
+ROMFS_SHADER_OUTS += romfs/coop/walks.bin
 
 FULL_OBJECTS := $(FULL_C_OBJS) $(FULL_DATA_OBJS) $(BACKEND_OBJS)
 # The keep table is only referenced from the payload, which is not linked,
@@ -553,6 +560,25 @@ romfs/bottom/menu.bin: scripts/gen_menu_art.py scripts/gen_battle_art.py
 romfs/battle/hud.bin: scripts/gen_battle_hud.py
 	@mkdir -p $(@D)
 	"$(PYTHON)" scripts/gen_battle_hud.py --output $@
+
+romfs/coop/backpics.bin: scripts/pack_coop_battle_back.py assets/coop_battle_back/manifest.json \
+		$(wildcard assets/coop_battle_back/*.png) $(ROOT)/src/multiplayer_menu.c \
+		$(ROOT)/include/constants/event_objects.h
+	@mkdir -p $(@D)
+	"$(PYTHON)" scripts/pack_coop_battle_back.py --upstream $(ROOT) --output $@
+
+romfs/coop/bikes.bin: scripts/pack_coop_bike.py assets/coop_bike/manifest.json \
+		$(wildcard assets/coop_bike/*.png) $(ROOT)/src/multiplayer_menu.c \
+		$(ROOT)/include/constants/event_objects.h
+	@mkdir -p $(@D)
+	"$(PYTHON)" scripts/pack_coop_bike.py --upstream $(ROOT) --output $@
+
+romfs/coop/walks.bin: scripts/pack_coop_walk.py scripts/prepare_coop_walk.py scripts/pack_coop_bike.py assets/coop_walk/manifest.json \
+		$(wildcard assets/coop_walk/*.png) $(ROOT)/src/multiplayer_menu.c \
+		$(ROOT)/include/constants/event_objects.h
+	@mkdir -p $(@D)
+	"$(PYTHON)" scripts/pack_coop_walk.py --upstream $(ROOT) --output $@
+
 romfs/stage/leaves.bin: scripts/gen_intro_margins.py $(ROOT)/graphics/intro/scene_1/bg.4bpp \
 		$(wildcard $(ROOT)/graphics/intro/scene_1/bg?_map.bin)
 	@mkdir -p $(@D)

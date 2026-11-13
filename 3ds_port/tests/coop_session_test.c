@@ -27,6 +27,7 @@ static int sSessionKind = LOCAL_KIND_COOP;
 static int sPeerCount = 1;
 static int sPcOpenCount;
 static int sWarpCount;
+static bool sFailBagChange;
 static int8_t sWarpX;
 static int8_t sWarpY;
 static MainCallback sMainCallback;
@@ -34,6 +35,12 @@ static struct CtrCoopProfile sProfile;
 static struct SaveBlock2 sSaveBlock2;
 static struct SaveBlock1 sSaveBlock1;
 static struct PokemonStorage sStorage;
+
+uint8_t CtrCoopBike_LocalMode(void) { return CTR_COOP_BIKE_NONE; }
+uint8_t CtrCoopBike_LocalMovementSequence(void) { return 0; }
+bool CtrCoopBike_SetRemote(uint8_t id, uint8_t mode) { (void)id; (void)mode; return false; }
+void CtrCoopBike_ClearRemote(void) {}
+void CtrCoopBike_Reset(void) {}
 
 struct SaveBlock2 *gSaveBlock2Ptr = &sSaveBlock2;
 struct SaveBlock1 *gSaveBlock1Ptr = &sSaveBlock1;
@@ -142,6 +149,7 @@ static void ResetFixture(void)
     sPeerCount = 1;
     sPcOpenCount = 0;
     sWarpCount = 0;
+    sFailBagChange = false;
     sWarpX = 0;
     sWarpY = 0;
     sMainCallback = NULL;
@@ -277,10 +285,9 @@ static void TestHostJoinAndPcLock(void)
     CtrCoop_HandlePacket(PEER_ID, (const uint8_t[]){CTR_COOP_PC_RELEASE_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_PC_CONTROL_SIZE);
     CHECK(CtrCoop_RequestPC(), "host acquires PC after guest release");
     CtrCoop_PeerLeft(PEER_ID);
-    sCoop.peerAuthenticated = true;
-    sCoop.peerTeamReady = true;
-    sCoop.peerSaveReady = true;
     CtrCoop_ReleasePC();
+    AuthenticateHost();
+    sCoop.peerTeamReady = true;
     ClearPackets();
     CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_PC_CONTROL_SIZE);
     result = LastPacket(CTR_COOP_PC_RESULT_PACKET);
@@ -361,15 +368,70 @@ static void BuildHostSnapshot(uint8_t *payload, struct SaveBlock2 *save2, struct
     memcpy(payload + offset, storage, sizeof(*storage));
 }
 
+static void TestGuestNameAfterHostSnapshot(void)
+{
+    static const uint8_t hostName[8] = {0xC2, 0xC9, 0xCD, 0xCE, EOS, EOS, EOS, EOS};
+    static const uint8_t guestName[7] = {0xC1, 0xBB, 0xCD, 0xCE, 0xD5, 0xD6, 0xD7};
+    static const uint8_t lengths[] = {0, 1, 4, 7, 8};
+    static const uint8_t defaultName[8] = {0xC1, 0xBB, 0xCD, 0xCE, EOS, EOS, EOS, EOS};
+    struct SaveBlock2 incoming2, expected2;
+    struct SaveBlock1 incoming1 = {0};
+    struct PokemonStorage incomingStorage = {0};
+    uint8_t expectedName[8];
+
+    for (unsigned i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
+    {
+        ResetFixture();
+        sCoop.guest = true;
+        memset(&incoming2, 0x35, sizeof(incoming2));
+        memcpy(incoming2.playerName, hostName, sizeof(hostName));
+        memset(sProfile.guestName, 0x99, sizeof(sProfile.guestName));
+        memcpy(sProfile.guestName, guestName, sizeof(guestName));
+        sProfile.guestNameLength = lengths[i];
+        memset(expectedName, EOS, sizeof(expectedName));
+        if (lengths[i] > 0 && lengths[i] <= CTR_COOP_GUEST_NAME_LENGTH)
+            memcpy(expectedName, guestName, lengths[i]);
+        else
+            memcpy(expectedName, defaultName, sizeof(expectedName));
+        BuildHostSnapshot(sSaveData, &incoming2, &incoming1, &incomingStorage);
+        uint32_t checksum = CtrCoopProtocol_Checksum(sSaveData, sizeof(sSaveData));
+        ApplyHostSave();
+        CHECK(memcmp(sCoop.hostName, hostName, sizeof(hostName)) == 0,
+            "PC notice retains the real host name before applying guest identity");
+        CHECK(memcmp(gSaveBlock2Ptr->playerName, expectedName, sizeof(expectedName)) == 0,
+            "scenario player name is the guest profile name, with a proper game-text terminator");
+        expected2 = incoming2;
+        memcpy(expected2.playerName, expectedName, sizeof(expectedName));
+        CHECK(memcmp(gSaveBlock2Ptr, &expected2, sizeof(expected2)) == 0,
+            "guest name substitution preserves all other host SaveBlock2 fields");
+        CHECK(CtrCoopProtocol_Checksum(sSaveData, sizeof(sSaveData)) == checksum
+           && memcmp(incoming2.playerName, hostName, sizeof(hostName)) == 0,
+            "guest dialog name never changes the host snapshot or its checksum");
+        ApplyHostSave();
+        CHECK(memcmp(gSaveBlock2Ptr->playerName, expectedName, sizeof(expectedName)) == 0,
+            "reapplying the host snapshot on rejoin keeps the guest's own name");
+        CtrCoop_Stop();
+        CHECK(CtrCoop_GuestSaveBlocked(), "guest identity substitution cannot permit writing the local SAV");
+    }
+    ResetFixture();
+    memcpy(gSaveBlock2Ptr->playerName, hostName, sizeof(hostName));
+    StartSession(false);
+    CHECK(memcmp(gSaveBlock2Ptr->playerName, hostName, sizeof(hostName)) == 0,
+        "hosting keeps the host's own scenario name");
+}
+
 static void AcceptGuestSnapshot(void)
 {
     uint8_t result[CTR_COOP_AUTH_RESULT_SIZE];
+    uint8_t info[CTR_COOP_JOIN_INFO_SIZE];
 
     CtrCoop_MenuFrame();
     CHECK(LastPacket(CTR_COOP_AUTH_PACKET) != NULL, "guest sends authentication once in session");
     CtrCoopProtocol_EncodeAuthResult(true, result, sizeof(result));
     CtrCoop_HandlePacket(PEER_ID, result, sizeof(result));
     CHECK(LastPacket(CTR_COOP_IDENTITY_PACKET) != NULL, "accepted guest sends profile identity");
+    CtrCoopProtocol_EncodeJoinInfo(false, info, sizeof(info));
+    CtrCoop_HandlePacket(PEER_ID, info, sizeof(info));
 }
 
 static void TestGuestJoinFlow(void)
@@ -406,9 +468,11 @@ static void TestGuestJoinFlow(void)
     SendTransfer(CtrCoopProtocol_EncodeSaveBegin, CtrCoopProtocol_EncodeSaveChunk,
         payload, sizeof(payload), CtrCoopProtocol_Checksum(payload, sizeof(payload)), true, 0);
     CHECK(sSaveBlock1.money == 9876, "valid initial snapshot is applied");
+    CHECK(memcmp(gSaveBlock2Ptr->playerName, sProfile.guestName, sizeof(gSaveBlock2Ptr->playerName)) == 0,
+        "packet-based join uses the guest's own name for scenario placeholders");
     CHECK(LastPacket(CTR_COOP_SAVE_READY_PACKET) != NULL, "valid initial snapshot is confirmed");
-    CHECK(CtrCoop_InitialTeamSelection(), "first join requires team selection");
-    CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING, "world stays closed during initial team selection");
+    CHECK(CtrCoop_InitialTeamSelection(), "loaded guest team still needs host confirmation");
+    CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING, "world stays closed until team confirmation");
     for (uint8_t i = 0; i < PARTY_SIZE; i++)
         CHECK(gPlayerParty[i].box.species == 41 + i, "guest receives its saved row instead of host party");
 
@@ -418,9 +482,8 @@ static void TestGuestJoinFlow(void)
     CtrCoopProtocol_EncodePcResult(true, packet, CTR_COOP_PC_RESULT_SIZE);
     CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_PC_RESULT_SIZE);
     CtrCoop_MenuFrame();
-    CHECK(sPcOpenCount == 1, "guest PC opens only after lock grant");
-    CtrCoop_CommitPC();
-    CHECK(!CtrCoop_InitialTeamSelection(), "team commit completes local selection");
+    CHECK(sPcOpenCount == 0, "saved guest team is submitted without opening a PC menu");
+    CHECK(!CtrCoop_InitialTeamSelection(), "saved team is submitted automatically after the lock grant");
     CHECK(LastPacket(CTR_COOP_PC_SYNC_BEGIN_PACKET) != NULL, "team commit starts atomic PC transfer");
 
     spawn.mapGroup = 0;
@@ -463,6 +526,8 @@ static void TestLogoutTransaction(void)
         for (uint8_t i = 0; i < PARTY_SIZE; i++)
             CHECK(sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][CTR_COOP_STORAGE_ROW_SIZE + i].species == 21 + i, "bad logout checksum preserves old row");
         CHECK(LastPacket(CTR_COOP_LOGOUT_READY_PACKET) == NULL, "bad logout is not confirmed");
+        CHECK(CtrCoop_StorageSlotLocked(CTR_COOP_STORAGE_BOX_ID, CTR_COOP_STORAGE_ROW_SIZE),
+              "incomplete logout keeps the guest row locked");
 
         SendTransfer(CtrCoopProtocol_EncodeLogoutBegin, CtrCoopProtocol_EncodeLogoutChunk,
             (const uint8_t *)party, sizeof(party), checksum, false, 0);
@@ -490,7 +555,7 @@ static void TestTrainerReservation(void)
     CHECK(packet != NULL && CtrCoopProtocol_DecodeBattleReserveResult(packet->data, packet->len, &trainerId, &accepted) && trainerId == 7 && accepted, "first trainer reservation succeeds");
     CtrCoop_HandlePacket(PEER_ID, reserve, sizeof(reserve));
     packet = LastPacket(CTR_COOP_BATTLE_RESERVE_RESULT_PACKET);
-    CHECK(packet != NULL && CtrCoopProtocol_DecodeBattleReserveResult(packet->data, packet->len, &trainerId, &accepted) && !accepted, "same trainer cannot be reserved twice");
+    CHECK(packet != NULL && CtrCoopProtocol_DecodeBattleReserveResult(packet->data, packet->len, &trainerId, &accepted) && accepted, "repeated reservation acknowledges the same owner without starting another battle");
     gBattleTypeFlags = BATTLE_TYPE_TRAINER;
     gTrainerBattleOpponent_A = 7;
     CHECK(!CtrCoop_BattleStart(), "host cannot start guest-reserved trainer");
@@ -510,7 +575,7 @@ static void TestTrainerReservation(void)
 #if CTR_COOP_TEST_MAX_SPRINT >= 6
 static CtrCoopSnapshot RemoteAt(int16_t x, int16_t y)
 {
-    CtrCoopSnapshot remote = {0, 9, LAYOUT_LITTLEROOT_TOWN, x, y, DIR_SOUTH, CTR_COOP_ACTION_FACE_DOWN, 105};
+    CtrCoopSnapshot remote = {0, 9, LAYOUT_LITTLEROOT_TOWN, x, y, DIR_SOUTH, CTR_COOP_ACTION_FACE_DOWN, 105, 0, 0};
     return remote;
 }
 
@@ -601,8 +666,298 @@ static void TestBattleStorageCollision(void)
 }
 #endif
 
+#if CTR_COOP_TEST_MAX_SPRINT >= 5
+static void SetBattleMoney(uint32_t value) { sSaveBlock1.money = value ^ sSaveBlock2.encryptionKey; }
+static uint32_t BattleMoney(void) { return sSaveBlock1.money ^ sSaveBlock2.encryptionKey; }
+static uint16_t BattleCoins(void) { return sSaveBlock1.coins ^ (uint16_t)sSaveBlock2.encryptionKey; }
+
+#if CTR_COOP_TEST_MAX_SPRINT >= 6
+static void TestDoubleResultHeader(void)
+{
+    static uint8_t payload[BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE + BATTLE_STORAGE_RECORD_SIZE];
+    uint32_t size;
+
+    ReadyHost();
+    CHECK(BATTLE_HEADER_SIZE % 4 == 0, "double result keeps party data aligned");
+    CHECK(BeginLocalBattle(), "double result fixture begins a local battle");
+    sCoop.doubleState = DOUBLE_STATE_ACTIVE;
+    sCoop.doubleInitiator = true;
+    SendBattleResult();
+    CHECK(ReadBattle16(sBattleSendData, 14) == 1 && ReadBattle16(sBattleSendData, 16) == 1,
+          "double result has separate sequence and battle-kind fields");
+
+    ReadyHost();
+    SetBattleMoney(100);
+    size = BuildBattlePayload(payload, 91);
+    payload[4] = 50;
+    payload[14] = 1;
+    payload[16] = 1;
+    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
+        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    CHECK(BattleMoney() == 100 && sStorage.boxes[0][0].species == 91,
+          "double result applies storage without duplicating the shared reward");
+    CHECK(sRemotePartyValid && sRemoteParty[0].box.species == 71,
+          "double result refreshes the remote party cache");
+    ClearPackets();
+    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
+        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    CHECK(BattleMoney() == 100 && sStorage.boxes[0][1].species == 0
+       && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL,
+          "double result replay is acknowledged without a second catch or reward");
+}
+#endif
+
+static void TestBattleEncryptedDelta(void)
+{
+    uint32_t offset;
+
+    ReadyHost();
+    sSaveBlock2.encryptionKey = 0x12345678;
+    SetBattleMoney(1000);
+    sSaveBlock1.coins = 50 ^ (uint16_t)sSaveBlock2.encryptionKey;
+    sSaveBlock1.bagPocket_Items[0].itemId = 13;
+    sSaveBlock1.bagPocket_Items[0].quantity = 4 ^ (uint16_t)sSaveBlock2.encryptionKey;
+    CHECK(CtrCoop_BattleStart(), "host starts its own wild battle");
+    /* CB2_InitBattle moves/rekeys the save blocks after our start hook. */
+    sSaveBlock2.encryptionKey = 0x87654321;
+    SetBattleMoney(1100);
+    sSaveBlock1.coins = 53 ^ (uint16_t)sSaveBlock2.encryptionKey;
+    sSaveBlock1.bagPocket_Items[0].quantity = 3 ^ (uint16_t)sSaveBlock2.encryptionKey;
+    CtrCoop_BattleEnd();
+    CHECK(ReadBattle32(sBattleSendData, 4) == 100, "money delta uses the original and current encryption keys");
+    CHECK(ReadBattle16(sBattleSendData, 8) == 3, "coin delta is computed from decoded quantities");
+    CHECK(ReadBattle16(sBattleSendData, 10) == 0 && ReadBattle16(sBattleSendData, 12) == 1,
+        "rekeying itself does not generate inventory or storage changes");
+    offset = BATTLE_HEADER_SIZE + sizeof(gPlayerParty);
+    CHECK(ReadBattle16(sBattleSendData, offset) == 13
+       && (int16_t)ReadBattle16(sBattleSendData, offset + 2) == -1, "used item has a single decoded delta");
+    CHECK(ReadBattle16(sBattleSendData, 14) == 1, "each frozen result has a sequence number");
+    CHECK(sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][0].species == 1, "host result stays in the host row");
+}
+
+static uint32_t BuildRewardPayload(uint8_t *payload, uint16_t sequence)
+{
+    uint32_t size = BuildBattlePayload(payload, 91);
+    payload[4] = 50;
+    payload[8] = 2;
+    payload[12] = 1;
+    payload[14] = sequence & 255;
+    payload[15] = sequence >> 8;
+    payload[size++] = 13;
+    payload[size++] = 0;
+    payload[size++] = 1;
+    payload[size++] = 0;
+    return size;
+}
+
+static void ReceiveBattlePayload(const uint8_t *payload, uint32_t size)
+{
+    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
+        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+}
+
+static void TestBattleResultExactlyOnce(void)
+{
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE + BATTLE_ITEM_RECORD_SIZE];
+    uint32_t size = BuildRewardPayload(payload, 1);
+    struct PokemonStorage before;
+
+    ReadyHost();
+    sSaveBlock2.encryptionKey = 0x12345678;
+    SetBattleMoney(100);
+    sSaveBlock1.coins = 10 ^ (uint16_t)sSaveBlock2.encryptionKey;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 150 && BattleCoins() == 12, "remote reward is decoded into the local encrypted save");
+    CHECK(sSaveBlock1.bagPocket_Items[0].itemId == 13
+       && (sSaveBlock1.bagPocket_Items[0].quantity ^ (uint16_t)sSaveBlock2.encryptionKey) == 1,
+        "remote item is applied once");
+    before = sStorage;
+    ClearPackets();
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 150 && BattleCoins() == 12 && memcmp(&before, &sStorage, sizeof(before)) == 0,
+        "lost acknowledgement cannot duplicate money, coins or a relocated catch");
+    CHECK((sSaveBlock1.bagPocket_Items[0].quantity ^ (uint16_t)sSaveBlock2.encryptionKey) == 1
+       && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL, "duplicate is acknowledged without adding another item");
+    payload[14] = 2;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 200, "a later battle with identical rewards still applies");
+    payload[14] = 1;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 200, "an older result cannot replay after a newer battle");
+}
+
+static void TestConcurrentBattleAndPcResults(void)
+{
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE + BATTLE_ITEM_RECORD_SIZE];
+    uint32_t size = BuildRewardPayload(payload, 1);
+
+    ReadyHost();
+    SetBattleMoney(100);
+    CHECK(CtrCoop_BattleStart(), "local battle can run while the peer fights independently");
+    SetBattleMoney(120);
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 120 && sCoop.battleReceiveState == BATTLE_SYNC_READY,
+        "peer result is held until the local battle has frozen its own changes");
+    CHECK(LastPacket(CTR_COOP_BATTLE_READY_PACKET) == NULL, "queued result is not acknowledged before application");
+    CtrCoop_BattleEnd();
+    CHECK(ReadBattle32(sBattleSendData, 4) == 20, "local result excludes the other player's reward");
+    CtrCoop_BattleTick();
+    CHECK(BattleMoney() == 170 && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL,
+        "queued result applies after local battle end");
+    CHECK(ReadBattle32(sBattleSendData, 4) == 20, "receiving a result never mutates the frozen outgoing result");
+
+    ReadyHost();
+    CHECK(CtrCoop_RequestPC(), "host opens PC before peer battle ends");
+    ReceiveBattlePayload(payload, size);
+    CHECK(sStorage.boxes[0][0].species == 0 && sCoop.battleReceiveState == BATTLE_SYNC_READY,
+        "incoming catch cannot overwrite a live PC transaction");
+    CtrCoop_ReleasePC();
+    CtrCoop_BattleTick();
+    CHECK(sStorage.boxes[0][0].species == 91, "catch applies after the PC is released");
+}
+
+static void TestBattleInventoryRollbackAndRetry(void)
+{
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE + BATTLE_ITEM_RECORD_SIZE];
+    uint32_t size = BuildRewardPayload(payload, 1);
+    struct PokemonStorage before;
+
+    ReadyHost();
+    before = sStorage;
+    SetBattleMoney(100);
+    sFailBagChange = true;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 100 && memcmp(&before, &sStorage, sizeof(before)) == 0,
+        "failed item application leaves money, catches and party rows unchanged");
+    CHECK(LastPacket(CTR_COOP_BATTLE_READY_PACKET) == NULL, "failed result is not acknowledged");
+    sFailBagChange = false;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 150 && sStorage.boxes[0][0].species == 91,
+        "same sequence can retry successfully after storage becomes available");
+}
+
+static void TestBattleAndPcArbitration(void)
+{
+    uint8_t packet[CTR_COOP_BATTLE_RESERVE_SIZE];
+    const struct SentPacket *last;
+    uint16_t trainer;
+    bool accepted;
+
+    ReadyHost();
+    CHECK(CtrCoop_BattleStart(), "host starts wild battle");
+    CHECK(!CtrCoop_RequestPC(), "host PC stays closed while its own battle is active");
+    CtrCoop_HandlePacket(PEER_ID,(uint8_t[]){CTR_COOP_PC_REQUEST_PACKET,CTR_COOP_PROTOCOL_VERSION},CTR_COOP_PC_CONTROL_SIZE);
+    last=LastPacket(CTR_COOP_PC_RESULT_PACKET);
+    CHECK(last && CtrCoopProtocol_DecodePcResult(last->data,last->len,&accepted) && !accepted,
+        "guest PC request cannot race an active host battle");
+    CtrCoopProtocol_EncodeBattleReserve(0,packet,sizeof(packet));
+    CtrCoop_HandlePacket(PEER_ID,packet,sizeof(packet));
+    last=LastPacket(CTR_COOP_BATTLE_RESERVE_RESULT_PACKET);
+    CHECK(last && CtrCoopProtocol_DecodeBattleReserveResult(last->data,last->len,&trainer,&accepted) && accepted,
+        "host and guest can still fight wild battles concurrently");
+
+    ReadyHost();
+    CtrCoopProtocol_EncodeBattleReserve(0,packet,sizeof(packet));
+    CtrCoop_HandlePacket(PEER_ID,packet,sizeof(packet));
+    CHECK(sCoop.peerBattleActive && !CtrCoop_RequestPC(), "guest battle grant protects storage before the guest starts");
+    CtrCoop_HandlePacket(PEER_ID,(uint8_t[]){CTR_COOP_BATTLE_RELEASE_PACKET,CTR_COOP_PROTOCOL_VERSION,0,0},sizeof(packet));
+    CHECK(!sCoop.peerBattleActive && CtrCoop_RequestPC(), "wild battle release unlocks the PC again");
+    CtrCoopProtocol_EncodeBattleReserve(0,packet,sizeof(packet));
+    CtrCoop_HandlePacket(PEER_ID,packet,sizeof(packet));
+    last=LastPacket(CTR_COOP_BATTLE_RESERVE_RESULT_PACKET);
+    CHECK(last && CtrCoopProtocol_DecodeBattleReserveResult(last->data,last->len,&trainer,&accepted) && !accepted,
+        "a pending guest battle waits for an already open PC visit");
+}
+
+static void TestMultipleBattleCatchDestinations(void)
+{
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE * 2];
+    struct BoxPokemon second;
+    uint32_t size = BuildBattlePayload(payload, 91);
+
+    ReadyHost();
+    SetBoxMon(&sStorage.boxes[0][0], 90);
+    payload[10] = 2;
+    payload[size] = 0;
+    payload[size+1] = 1;
+    SetBoxMon(&second,92);
+    memcpy(payload+size+2,&second,sizeof(second));
+    size += BATTLE_STORAGE_RECORD_SIZE;
+    ReceiveBattlePayload(payload,size);
+    CHECK(sStorage.boxes[0][0].species == 90 && sStorage.boxes[0][1].species == 92
+       && sStorage.boxes[0][2].species == 91, "relocation reserves later direct catch targets without overwriting either catch");
+
+    ReadyHost();
+    payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty)] = CTR_COOP_STORAGE_BOX_ID;
+    ReceiveBattlePayload(payload,size);
+    CHECK(LastPacket(CTR_COOP_BATTLE_READY_PACKET) == NULL
+       && sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][0].species == 1,
+        "battle catch records cannot overwrite a protected player row");
+}
+
+static void TestBattleTransferResumeAndReservationRetry(void)
+{
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE];
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    uint32_t size = BuildBattlePayload(payload, 91), offset;
+    const struct SentPacket *last;
+    bool accepted;
+    uint16_t trainer;
+
+    ReadyHost();
+    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    CtrCoopProtocol_EncodeBattleChunk(0, payload, CTR_COOP_SAVE_CHUNK_DATA_MAX, packet, CTR_COOP_SAVE_CHUNK_MAX);
+    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_CHUNK_MAX);
+    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    last = LastPacket(CTR_COOP_BATTLE_REQUEST_PACKET);
+    CHECK(last && CtrCoopProtocol_DecodeBattleRequest(last->data,last->len,&offset) && offset == CTR_COOP_SAVE_CHUNK_DATA_MAX,
+        "sender retry resumes a stalled transfer at the next missing chunk");
+
+    ReadyHost();
+    sCoop.guest = true;
+    sCoop.authenticated = sCoop.saveReady = true;
+    gBattleTypeFlags = BATTLE_TYPE_TRAINER;
+    gTrainerBattleOpponent_A = 7;
+    CHECK(!CtrCoop_BattleStart(), "guest waits for trainer reservation");
+    ClearPackets();
+    for (int i=0; i<120; i++) CtrCoop_BattleTick();
+    CHECK(CountPacket(CTR_COOP_BATTLE_RESERVE_PACKET) == 1, "missing reservation acknowledgement is retried");
+    CtrCoopProtocol_EncodeBattleReserveResult(7,true,packet,CTR_COOP_BATTLE_RESERVE_RESULT_SIZE);
+    CtrCoop_HandlePacket(PEER_ID,packet,CTR_COOP_BATTLE_RESERVE_RESULT_SIZE);
+    CHECK(CtrCoop_BattleStart(), "guest starts only after reservation grant");
+    CHECK(CtrCoop_BattleStart(), "battle initialization does not start a second transaction");
+    CtrCoopProtocol_EncodeBattleReserveResult(7,true,packet,CTR_COOP_BATTLE_RESERVE_RESULT_SIZE);
+    CHECK(CtrCoopProtocol_DecodeBattleReserveResult(packet,CTR_COOP_BATTLE_RESERVE_RESULT_SIZE,&trainer,&accepted)
+       && trainer == 7 && accepted, "reservation response remains valid under the integrated protocol");
+    gBattleOutcome = B_OUTCOME_RAN;
+    CtrCoop_BattleEnd();
+    ClearPackets();
+    ReleaseTrainerReservation();
+    CHECK(CountPacket(CTR_COOP_BATTLE_RELEASE_PACKET) == 0,
+        "PC protection remains held until the battle result is confirmed");
+    CtrCoop_HandlePacket(PEER_ID,(uint8_t[]){CTR_COOP_BATTLE_READY_PACKET,CTR_COOP_PROTOCOL_VERSION},CTR_COOP_SAVE_READY_SIZE);
+    ReleaseTrainerReservation();
+    CHECK(CountPacket(CTR_COOP_BATTLE_RELEASE_PACKET) == 1,
+        "confirmed battle result permits the reservation to be released");
+
+    ReadyHost();
+    sCoop.peerTrainerId = 7;
+    sCoop.peerBattleActive = true;
+    gBattleTypeFlags = BATTLE_TYPE_TRAINER;
+    gTrainerBattleOpponent_A = 7;
+    gMain.savedCallback = CB2_Overworld;
+    CHECK(!CtrCoop_BattleStart(), "host waits while guest owns trainer");
+    sSaveBlock1.flags[(TRAINER_FLAGS_START+7)/8] |= 1 << ((TRAINER_FLAGS_START+7)&7);
+    CHECK(!CtrCoop_BattleStart() && !sCoop.battleActive && sMainCallback == CB2_Overworld,
+        "trainer defeated by peer cancels waiting battle without another reward");
+}
+#endif
+
 int main(void)
 {
+    TestGuestNameAfterHostSnapshot();
     TestStorageMigration();
     TestHostJoinAndPcLock();
     TestPcTransactionAndSpawn();
@@ -613,9 +968,17 @@ int main(void)
 #if CTR_COOP_TEST_MAX_SPRINT >= 5
     TestTrainerReservation();
     TestBattleStorageCollision();
+    TestBattleEncryptedDelta();
+    TestBattleResultExactlyOnce();
+    TestConcurrentBattleAndPcResults();
+    TestBattleInventoryRollbackAndRetry();
+    TestBattleTransferResumeAndReservationRetry();
+    TestMultipleBattleCatchDestinations();
+    TestBattleAndPcArbitration();
 #endif
 #if CTR_COOP_TEST_MAX_SPRINT >= 6
     TestDoubleBattleState();
+    TestDoubleResultHeader();
 #endif
     if (sFailures != 0)
     {
@@ -699,13 +1062,35 @@ void ObjectEventSetHeldMovement(struct ObjectEvent *objectEvent, uint8_t movemen
 void MoveObjectEventToMapCoords(struct ObjectEvent *objectEvent, int16_t x, int16_t y) { objectEvent->currentCoords.x = x; objectEvent->currentCoords.y = y; }
 void ShowPokemonStorageSystemPC(void) { sPcOpenCount++; }
 void PlaySE(uint16_t song) { (void)song; }
+void CB2_Overworld(void) {}
+void CB2_InitStarterSelection(void) {}
+bool8 CB2_StarterSelectionActive(void) { return FALSE; }
+void SaveObjectEvents(void) {}
+void LoadObjEventTemplatesFromHeader(void) {}
+void RemoveObjectEventByLocalIdAndMap(u8 localId, u8 mapNum, u8 mapGroup) { (void)localId; (void)mapNum; (void)mapGroup; }
+void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphics) { object->graphicsId = graphics; }
+u8 TrySpawnObjectEvent(u8 localId, u8 mapNum, u8 mapGroup) { (void)localId; (void)mapNum; (void)mapGroup; return OBJECT_EVENTS_COUNT; }
+void ScriptContext_Enable(void) {}
+void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, bool8 hasFixedPersonality, u32 personality, u8 otIdType, u32 fixedOtId)
+{
+    (void)level; (void)fixedIV; (void)hasFixedPersonality; (void)personality; (void)otIdType; (void)fixedOtId;
+    SetMon(mon, species);
+}
 uint16_t Random(void) { return 0x1234; }
 void CB2_InitBattle(void) {}
 void CB2_InitEndLinkBattle(void) {}
 void SetMainCallback2(MainCallback callback) { sMainCallback = callback; }
-bool AddBagItem(uint16_t itemId, uint16_t quantity) { (void)itemId; (void)quantity; return true; }
+bool AddBagItem(uint16_t itemId, uint16_t quantity)
+{
+    struct ItemSlot *slot = &sSaveBlock1.bagPocket_Items[0];
+    if (sFailBagChange) return false;
+    uint16_t count = slot->itemId == itemId ? slot->quantity ^ (uint16_t)sSaveBlock2.encryptionKey : 0;
+    slot->itemId = itemId;
+    slot->quantity = (count + quantity) ^ (uint16_t)sSaveBlock2.encryptionKey;
+    return true;
+}
 bool RemoveBagItem(uint16_t itemId, uint16_t quantity) { (void)itemId; (void)quantity; return true; }
-uint32_t GetMoney(uint32_t *money) { return *money; }
-void AddMoney(uint32_t *money, uint32_t amount) { *money += amount; }
-void RemoveMoney(uint32_t *money, uint32_t amount) { if (*money > amount) *money -= amount; else *money = 0; }
+uint32_t GetMoney(uint32_t *money) { return *money ^ sSaveBlock2.encryptionKey; }
+void AddMoney(uint32_t *money, uint32_t amount) { *money = (GetMoney(money) + amount) ^ sSaveBlock2.encryptionKey; }
+void RemoveMoney(uint32_t *money, uint32_t amount) { uint32_t value = GetMoney(money); *money = (value > amount ? value - amount : 0) ^ sSaveBlock2.encryptionKey; }
 bool FlagGet(uint16_t id) { return id != 0 && id < SPECIAL_FLAGS_START && (sSaveBlock1.flags[id / 8] & (1 << (id & 7))) != 0; }

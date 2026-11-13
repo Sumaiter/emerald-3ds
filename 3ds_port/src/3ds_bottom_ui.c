@@ -2271,6 +2271,7 @@ typedef struct
 typedef struct
 {
     u8 mode, screen, pressed, gender, inBattle;
+    u8 pcBusy, pcBusyName[8];
     u8 title;                         /* MODE_OFF on the title screen */
     u16 enabled;                      /* bit per section */
     /* Whether the dock and the header are on screen (not under the game's
@@ -3538,6 +3539,11 @@ static void Snapshot(ViewState *s, u8 mode, u8 pressed)
 {
     memset(s, 0, sizeof(*s));
     s->mode = mode;
+    if (mode == MODE_FIELD && CtrCoop_PCNoticeName() != NULL)
+    {
+        s->pcBusy = TRUE;
+        memcpy(s->pcBusyName, CtrCoop_PCNoticeName(), sizeof(s->pcBusyName));
+    }
     s->pressed = pressed;
     s->pickMapsec = MAPSEC_NONE;
     if (s->mode == MODE_OFF)
@@ -5157,6 +5163,22 @@ static void MapCacheTake(void)
 #define CTR_RENDER_SLOW_MS 4.0f
 #define CTR_RENDER_SLOW_LINES 60
 
+static void DrawPcBusy(const ViewState *s)
+{
+    const Rgb ink = {30, 57, 61};
+    const u8 *line = Ascii("PC wird gerade von");
+    ShadeRect(0, 0, W, H);
+    FillRect(14, 71, W - 28, 108, PackRgb(24, 116, 100));
+    FillRect(17, 74, W - 34, 102, PackRgb(252, 245, 234));
+    DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2, 83, 4, ink, sCream, NULL);
+    DrawSmoothStr(&sNormal, s->pcBusyName, (W - SmoothInkWidth(&sNormal, s->pcBusyName, 6)) / 2,
+                  105, 6, ink, sCream, NULL);
+    line = Ascii("benutzt.");
+    DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2, 133, 4, ink, sCream, NULL);
+    line = Ascii("A / B oder tippen: Zurueck");
+    DrawSmoothStr(&sSmall, line, (W - SmoothInkWidth(&sSmall, line, 4)) / 2, 156, 4, ink, sCream, NULL);
+}
+
 static void Render(const ViewState *s)
 {
     bool8 cacheable = MapCacheable(s), blitted = FALSE;
@@ -5260,6 +5282,8 @@ static void Render(const ViewState *s)
         DrawHeader(s);
         DrawDock(s);
     }
+    if (s->pcBusy)
+        DrawPcBusy(s);
     phase[3] = CtrPlatform_Ticks();
     phase[4] = CtrPlatform_Ticks();
     /* The game's window is the compositor's while it draws there, and the
@@ -5443,6 +5467,8 @@ static bool8 DirtyRect(const ViewState *now, const ViewState *shown, Rect *r)
     bool8 battle = now->mode >= MODE_BATTLE_INFO;
     bool8 iconsOnly = FALSE;
 
+    if (now->pcBusy || shown->pcBusy)
+        return FALSE;
     if (now->mode != shown->mode || now->screen != shown->screen || now->dock != shown->dock)
         return FALSE;
     if (!battle && !now->dock)
@@ -6620,6 +6646,16 @@ static u8 ProcessTouch(u8 mode)
 {
     const CtrInput *in = CtrInput_Get();
 
+    if (CtrCoop_PCNoticeName() != NULL)
+    {
+        sTouch.active = sTouch.bag = FALSE;
+        if (in->touchDown && sShown.pcBusy)
+        {
+            CtrCoop_DismissPCNotice();
+            sSwallow = TRUE;
+        }
+        return HIT_NONE;
+    }
     if (mode != sShown.mode)
     {
         /* A touch that began on another screen does not act on this one. */
@@ -6843,7 +6879,8 @@ uint16_t CtrBottom_FilterKeys(uint16_t held)
      * forbids the reset (a link save). */
     if ((held & CTR_SOFT_RESET_KEYS) == CTR_SOFT_RESET_KEYS && !gSoftResetDisabled)
         return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow ? CTR_SOFT_RESET_KEYS : held;
-    return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow || sMapFly ? 0 : held;
+    return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow || sMapFly
+        || CtrCoop_PCNoticeName() != NULL ? 0 : held;
 }
 
 /* Whether the dock is on screen: not in battle, not under the boxes or the
@@ -6992,6 +7029,15 @@ static void ProcessKeys(u8 mode)
     u16 down = in->down;
     bool8 x = (in->physicalDown & CTR_KEY_X) != 0;
 
+    if (CtrCoop_PCNoticeName() != NULL)
+    {
+        if (sShown.pcBusy && (down & (A_BUTTON | B_BUTTON)))
+        {
+            CtrCoop_DismissPCNotice();
+            sSwallow = TRUE;
+        }
+        return;
+    }
     if (sSwallow && !(in->held & CTR_KEY_GAME) && !(in->physicalHeld & (CTR_KEY_X | CTR_KEY_Y)))
         sSwallow = FALSE;
     if (!ColumnShown(mode))

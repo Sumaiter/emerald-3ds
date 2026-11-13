@@ -39,6 +39,9 @@ builder/payload/
 /Koop-Prototyp/
 /Emerald3DS-*-SD.zip
 
+# Local character review HTML includes native game reference images
+/Figuren-Galerie.html
+
 # Python, logs, editors, agents
 __pycache__/
 *.py[cod]

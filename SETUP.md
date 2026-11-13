@@ -4,12 +4,10 @@ Diese Anleitung richtet Emerald 3DS mit dem Local-Co-op-Mod unter Windows ein. D
 
 ## Entwicklungsbranch auswählen
 
-- `main`: Sprint-3-Teststand mit gemeinsamer Oberwelt
-- `sprint-4`: Team-Reihen und PC-Sperren
-- `sprint-5`: unabhängige Einzelkämpfe
-- `sprint-6`: gemeinsame Doppelkämpfe
-- `sprint-7`: Abmeldung und Abbruchbehandlung
-- `sprint-8`: aktuelle Stabilisierung und Testvorbereitung
+- `main`: integrierter Stand bis Sprint 5 mit allen 99 Figuren
+- `sprint-6`: aktueller main plus gemeinsame Doppelkämpfe
+- `sprint-7`: aktualisierter Sprint 6 plus Abmeldung und Abbruchbehandlung
+- `sprint-8`: aktualisierter Sprint 7 plus Stabilisierung und Testvorbereitung
 
 Beispiel: `git switch sprint-8`. Vor einem Build die Portdateien desselben Branches nach `build/upstream/3ds_port/` kopieren. Keine Spielstände oder ROMs aus einem anderen Branch oder PC übernehmen, ohne vorher eine Sicherung anzulegen.
 

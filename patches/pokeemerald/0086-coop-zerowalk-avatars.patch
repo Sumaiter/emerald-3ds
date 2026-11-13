@@ -1,0 +1,49 @@
+--- a/src/multiplayer_menu.c
++++ b/src/multiplayer_menu.c
+@@ -3,6 +3,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_coop.h"
+ #include "3ds_coop_profile.h"
++#include "3ds_coop_walk.h"
+ #include "3ds_input.h"
+ #include "3ds_locale.h"
+ #include "bg.h"
+@@ -256,6 +257,21 @@
+     {OBJ_EVENT_GFX_BRANDON, _("BRANDON")},
+     {OBJ_EVENT_GFX_LINK_RS_BRENDAN, _("RS BRENDAN")},
+     {OBJ_EVENT_GFX_LINK_RS_MAY, _("RS MAY")},
++    {OBJ_EVENT_GFX_COOK, _("COOK")},
++    {OBJ_EVENT_GFX_OLD_MAN, _("OLD MAN")},
++    {OBJ_EVENT_GFX_SIDNEY, _("SIDNEY")},
++    {OBJ_EVENT_GFX_PHOEBE, _("PHOEBE")},
++    {OBJ_EVENT_GFX_GLACIA, _("GLACIA")},
++    {OBJ_EVENT_GFX_DRAKE, _("DRAKE")},
++    {OBJ_EVENT_GFX_ROXANNE, _("ROXANNE")},
++    {OBJ_EVENT_GFX_BRAWLY, _("BRAWLY")},
++    {OBJ_EVENT_GFX_WATTSON, _("WATTSON")},
++    {OBJ_EVENT_GFX_FLANNERY, _("FLANNERY")},
++    {OBJ_EVENT_GFX_WINONA, _("WINONA")},
++    {OBJ_EVENT_GFX_LIZA, _("LIZA")},
++    {OBJ_EVENT_GFX_TATE, _("TATE")},
++    {OBJ_EVENT_GFX_GAMEBOY_KID, _("GAMEBOY KID")},
++    {OBJ_EVENT_GFX_MYSTERY_GIFT_MAN, _("MYSTERY GIFT MAN")},
+ };
+ 
+ static void Task_MultiplayerInput(u8 taskId);
+@@ -464,6 +480,7 @@
+             DestroySprite(&gSprites[sPreviewSpriteIds[i]]);
+         sPreviewSpriteIds[i] = MAX_SPRITES;
+     }
++    CtrCoopWalk_FreePreviewPalettes();
+     sPreviewPage = 0xFF;
+     if (sPage == PAGE_CHARACTER)
+     {
+@@ -472,7 +489,7 @@
+             u8 x = (i % CHARACTER_COLS) * 30 + 15;
+             u8 y = (i / CHARACTER_COLS) * 40 + 64;
+ 
+-            sPreviewSpriteIds[i] = CreateObjectGraphicsSprite(sCharacters[sCharacterTop + i].graphicsId, SpriteCallbackDummy, x, y, 0);
++            sPreviewSpriteIds[i] = CtrCoopWalk_CreatePreview(sCharacters[sCharacterTop + i].graphicsId, SpriteCallbackDummy, x, y, 0);
+             if (sPreviewSpriteIds[i] != MAX_SPRITES)
+                 gSprites[sPreviewSpriteIds[i]].oam.priority = 0;
+         }

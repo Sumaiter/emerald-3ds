@@ -35,6 +35,9 @@ paths = [
 
 [media]
 # Images and binary assets allowed in the repository, with their provenance.
+"3ds_port/assets/coop_battle_back/*.png" = "new battle rear-view drawings generated with Imagegen; native game pictures remain numeric references only"
+"3ds_port/assets/coop_bike/*.png" = "new bicycle animation drawings generated with Imagegen; native game pictures remain numeric references only"
+"3ds_port/assets/coop_walk/*.png" = "new walking drawings generated with built-in Imagegen; original NPC art remains in private ROM data"
 "3ds_port/assets/voxel/trees/tree_crown.png" = "original art by the Emerald 3DS author"
 "3ds_port/assets/voxel/trees/tree_trunk.png" = "original art by the Emerald 3DS author"
 "3ds_port/assets/voxel/trees/tree_small_crown.png" = "original art by the Emerald 3DS author"

@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "global.h"
 #include "3ds_coop.h"
 #include "3ds_coop_protocol.h"
@@ -33,7 +34,6 @@
 #include "pokemon.h"
 #include "pokemon_storage_system.h"
 #include "random.h"
-#include <stdlib.h>
 #include "script.h"
 #include "sound.h"
 #include "constants/songs.h"

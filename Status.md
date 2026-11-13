@@ -202,18 +202,35 @@ Abgenommen auf Branch `sprint-4` mit zwei isolierten Azahar-Instanzen und neun a
 
 ## Sprint 5: Unabhängige Einzelkämpfe und gemeinsame Trainerwelt
 
-**Status: Offen**
+**Status: Integriert aus origin/sprint-5; automatische Tests bestanden, Emulator-/Hardware-Abnahme offen.**
 
 ### Aufgaben
 
-- [ ] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen.
-- [ ] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen.
-- [ ] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben.
+- [x] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen.
+- [x] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen.
+- [x] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben.
 - [ ] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren.
-- [ ] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen.
-- [ ] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen.
-- [ ] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln.
-- [ ] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners verhindern.
+- [x] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen.
+- [x] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen.
+- [x] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln.
+- [x] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners verhindern.
+
+
+Integrierte Quelle: `1be2515` (Implementierung `dbb9ff0` plus Sprint-5-Tests).
+Der neuere main-Stand und alle lokalen Grafik-, Gastnamen-, Beitritts- und
+PC-Meldungskorrekturen bleiben erhalten. Protokollversion 11 verwendet freie
+Kampf-Paketnummern 33..39. Ergebnisse haben Sequenznummern, werden atomar und
+ohne doppelte Belohnungen angewendet und warten bei aktiven lokalen Kaempfen
+oder PC-Besuchen. Auch wilde Gastkaempfe stimmen den Start mit dem Host ab;
+der PC bleibt waehrend aktiver Kaempfe und offener Ergebnisuebertragungen
+gesperrt. Zwei unabhaengige Kaempfe bleiben moeglich.
+
+Automatisch geprueft: Reservierung/Wiederholung, getrennte Spielerreihen,
+verschluesselte Geld-/Itemmengen nach Save-Rekey, wiederholte/alte Ergebnisse,
+Kollisionen mehrerer Faenge, volle Boxen ohne Teiluebernahme, Inventarfehler,
+Transferfortsetzung sowie Kampf-/PC-Rennen. Statische einmalige Wildgegner
+haben im uebernommenen Branch noch keine eigene Gegnerreservierung; dieser
+Teil der Aufgabe bleibt offen. Die Abnahme unten ist ein manueller Nutzertest.
 
 ### Akzeptanzkriterien
 
@@ -297,4 +314,4 @@ Abgenommen auf Branch `sprint-4` mit zwei isolierten Azahar-Instanzen und neun a
 
 ## Aktueller Gesamtstand
 
-Sprint 0 bis Sprint 4 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Startteam, PC-Sperre über den gesamten PC-Besuch, atomare Übernahme, Reihensperren und laufende Gruppensynchronisierung sind abgenommen. Der Bestand bleibt in den geprüften Abläufen auch nach hartem Gast-Abbruch, Entnahme aus der freigegebenen Gast-Reihe, Host-Speichern, vollständigem Neustart und Wiederbeitritt erhalten. Alle neun automatisierten Testsuiten und der Release-Build bestehen. Sprint 5 ist als Nächstes vorgesehen und noch nicht begonnen. Hardwaretests bleiben offen. `HANDOFF.md` enthält Details, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0 bis Sprint 4 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Startteam, PC-Sperre über den gesamten PC-Besuch, atomare Übernahme, Reihensperren und laufende Gruppensynchronisierung sind abgenommen. Der Bestand bleibt in den geprüften Abläufen auch nach hartem Gast-Abbruch, Entnahme aus der freigegebenen Gast-Reihe, Host-Speichern, vollständigem Neustart und Wiederbeitritt erhalten. Alle neun automatisierten Testsuiten und der Release-Build bestehen. Sprint 5 ist aus origin/sprint-5 integriert und automatisch geprueft; die interaktive Abnahme und die Reservierung einmaliger Wildgegner bleiben offen. Hardwaretests bleiben offen. `HANDOFF.md` enthält Details, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

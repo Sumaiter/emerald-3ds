@@ -1,0 +1,973 @@
+{
+  "version": 1,
+  "date": "2026-11-13",
+  "generator": "Built-in Imagegen tool",
+  "prompt_file": "prompts.json",
+  "normalizer": "3ds_port/scripts/prepare_coop_bike.py normalize",
+  "normalization": "Whole sheet nearest-neighbor resize to 288x96, binary alpha threshold 128, shared 15-color palette; no generated poses or drawn pixels added by scripts.",
+  "layout_reference_sha256": "e3da0cfce9487182bedaa8a843f44691506ba12cc64ef53db94cca8a3b6a7301",
+  "visual_review": "All 82 identities compared with local source references and all 27 frames reviewed at 2x in 14 preview pages. Twin, Rich Boy and Camper received Imagegen background cleanup before final normalization.",
+  "native_policy": "Brendan 100 -> Mach 101 / Acro 102; May 105 -> Mach 106 / Acro 107. Original native game art and palettes are resolved at runtime, not copied here.",
+  "entries": [
+    {
+      "symbol": "OBJ_EVENT_GFX_QUINTY_PLUMP",
+      "image": "quinty_plump.png",
+      "sha256": "8bd92ba62a260b1a8836ab4d33b0884e7f41fedaa359d0004498128a22a22ded",
+      "generated_source": "exec-f5929a93-6827-4703-a006-93fba9745a15.png",
+      "generated_source_sha256": "3898a40436d333b597c6b0c71a41beef12ec61896b3cc01ef0f29a00681fda16",
+      "identity_reference_sha256": "a62fdbbd859706addf85528433b10c9bbc4f402303afc230689dafff15191915",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_NINJA_BOY",
+      "image": "ninja_boy.png",
+      "sha256": "5ee6be27b9582adb861d68f9d0ff0c843c34db86775ca58573140f40a82bdb0e",
+      "generated_source": "exec-5bfd8cb8-5d13-417a-b58f-70d59e2edaac.png",
+      "generated_source_sha256": "d76e62c827e5d469715ba919636a5b04a9caf13e583d741eead84adfe835357c",
+      "identity_reference_sha256": "fc6d73f7a9b54950ed47292daae57571a39cc8e7d8530da97a206ddba14eb3ea",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TWIN",
+      "image": "twin.png",
+      "sha256": "cc42c291d9bb0e159fe71d044ce1acb2fc1f2fd365d55d656cab60a91c1f32a6",
+      "generated_source": "exec-90e99fc3-664c-4477-ac8d-3279362c695a.png",
+      "generated_source_sha256": "3ab00c361eb126cfd588fc0c065261f0b9731fbb3b63e847e124306532afb5ae",
+      "identity_reference_sha256": "c1c9162b6df2c286a1e9a59b98a12283a03180daad223b54ce31c100369a5f84",
+      "background_cleanup": true
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BOY_1",
+      "image": "boy_1.png",
+      "sha256": "511f8f32e0903f045066e2ed3734cb929202fcaeaa1889c4a784f8bf76f71f2d",
+      "generated_source": "exec-7bebe7e1-69a1-47ce-a789-7d2949934966.png",
+      "generated_source_sha256": "a0eebfd8358fd749d3cc75ecb671eabc5f6d1809f0f36ce82ae5c7df34be6f96",
+      "identity_reference_sha256": "ee77a0f4c0288db343a1421cdb2ce83db0bb5f0ef94c3e4c9ae251d991950158",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GIRL_1",
+      "image": "girl_1.png",
+      "sha256": "486cca4094c16892a7ed884bb4d380384bcf13f3dda22ff3667054efb3394e2f",
+      "generated_source": "exec-573bb39d-7ef4-4795-a658-aa620bbc2a12.png",
+      "generated_source_sha256": "883645ff482845b2b07f95fe7f5cd3240320af4a953866016ae9cfb3c873b2b3",
+      "identity_reference_sha256": "7c95c9b4b112bcef384aae503a93b7cf5be2dc36b9f79e61e606f77471ae5b15",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BOY_2",
+      "image": "boy_2.png",
+      "sha256": "1a9446df7a51e590e04f8e30c9fb168729a1b0807d71068b86a079b2854ac17c",
+      "generated_source": "exec-c0fd8b22-1c23-48ff-9951-98dff96e05bf.png",
+      "generated_source_sha256": "c548dd5c8eb512169b54af5d27913b944b1a0ce9f238a18e72d5a2ec0b3f0a6b",
+      "identity_reference_sha256": "f7ac01996d03bf5106214cfaa486db93ede89e688f8786a58e454ea4d7521c07",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GIRL_2",
+      "image": "girl_2.png",
+      "sha256": "aec6b9b57bd9fc5143c1e78fe280d204df25315a4ec3248d552f32f115504541",
+      "generated_source": "exec-d6fe6d3d-bb30-40bc-88ce-d5d53e752e7a.png",
+      "generated_source_sha256": "f8ed4837da293ede935bbaf8d4fecc6f481d793fc38be2bdfb8e776706987225",
+      "identity_reference_sha256": "4319685ac9b7c5946461ce2c6fe8bef150ae53d5ee0899c5c984194de940dbbe",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LITTLE_BOY",
+      "image": "little_boy.png",
+      "sha256": "e834c6369a71e556245fed536241d558a0e4d2e14392fe150d87532a407af6ae",
+      "generated_source": "exec-2ba14b48-8a87-428f-8188-7cf2c6e7ca6e.png",
+      "generated_source_sha256": "5bde9be0319c0e1ddb6e65876accfe733bcba655de253543f700ecd04861d951",
+      "identity_reference_sha256": "3d2dd0c11418810530df8b3b4398a29f3ebb10c1cfd6addc500446e58886419d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LITTLE_GIRL",
+      "image": "little_girl.png",
+      "sha256": "903142ec0f43ccce33e7bcf6b139c4f3548e2b9e26c0de3d0727690e5c0cff84",
+      "generated_source": "exec-af642bc4-d765-4763-8771-7272ea8981b0.png",
+      "generated_source_sha256": "39b442c1e0fd1c56ce05950b9ee2d451d30b1abffd3cd325db84f5015e1b2a6e",
+      "identity_reference_sha256": "93846490b0c990e931da94286fdf871eeda091603252157053511b818c8444a1",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BOY_3",
+      "image": "boy_3.png",
+      "sha256": "3dd6e34663be299fd874068d2147e724cfa72db9c142622cf7d1906a144ca113",
+      "generated_source": "exec-022cc5f5-7b9b-4912-98fa-0732431ca067.png",
+      "generated_source_sha256": "dea4013d28b89f929e055af0ba6e649e338cfae2b690ae125f51f43942f4665d",
+      "identity_reference_sha256": "2cc8a9d3e920a0e5862b23579516cedadb6cc5d86514d256bc111368b7367ffe",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GIRL_3",
+      "image": "girl_3.png",
+      "sha256": "966968f6b15b4286b3d794856cc0477673a5ecbad2c46242254630900647ca1d",
+      "generated_source": "exec-c1f00847-81ab-4c34-bef6-29a0c4359222.png",
+      "generated_source_sha256": "4e33f777620db4b013bae8a5a6135ed95866d8b491894cbaeedb91f78608d9f5",
+      "identity_reference_sha256": "29836b7633503227ba29b1098401111584ff24a3ec625cdd388a74c34959a451",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_RICH_BOY",
+      "image": "rich_boy.png",
+      "sha256": "48b412e3d71176d6f11bb1d79c00fd6f1a60d537a0be538b9fef11ef11390d4b",
+      "generated_source": "exec-b4c70051-1d11-4bea-8e97-413bbc1761be.png",
+      "generated_source_sha256": "65331f511542c125543567efc5420eeb3a98ec8d91f0b9a5fc75acb17742b0a6",
+      "identity_reference_sha256": "55b62d251e98dce4e5daac2bdb09f176b524672c793ff0b7b39001706fd3f7bd",
+      "background_cleanup": true
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WOMAN_1",
+      "image": "woman_1.png",
+      "sha256": "6054c509b1f2b2aac3bcefc3cb3a6d576d525d03d851d661f1854ce50bc42211",
+      "generated_source": "exec-4156b869-769a-4886-9ada-2c460bd4298f.png",
+      "generated_source_sha256": "8362ae410d774d822830ccb69869c27da7ff778aa7d95b0b6029a9cfb3312394",
+      "identity_reference_sha256": "641607f3c21b95501c2b4fa58095c91853a4c6b28a19903c764e572582ac7a79",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_FAT_MAN",
+      "image": "fat_man.png",
+      "sha256": "fa2d67f0e7abb09b239e53749f602553c3edb9c81e209742a5a3f2082fcde1d8",
+      "generated_source": "exec-7c34da13-415a-424f-b89d-876e2139b198.png",
+      "generated_source_sha256": "6741653248cf7d0ddd9c5733e5d6f4d5f4c959ffa0a5277c703eda1752938e9f",
+      "identity_reference_sha256": "fa1d39ff484eb55c1e6966654caeabd9efa2c37bb51674af9acd0e0fba208440",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_POKEFAN_F",
+      "image": "pokefan_f.png",
+      "sha256": "be0f0118c96e295f3431833437d89b39170ca3361888238e118ef2fbf7cf9415",
+      "generated_source": "exec-38690936-8962-41ac-a317-036262b7d77c.png",
+      "generated_source_sha256": "bbc509e150eaf35733863dd63342e142320da7f325eb7b393c4714bc4942dc0a",
+      "identity_reference_sha256": "623cfc8c563422d7cc1094a07d153bcb6d9f86eee373c45c9243208964aa890d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAN_1",
+      "image": "man_1.png",
+      "sha256": "5d13c8c7226f741a2a9a6b5398716d6d14ed3557431c02c4b11968c2c3dedb50",
+      "generated_source": "exec-775528a1-49ec-4a5a-9c0b-515c75cbd8d1.png",
+      "generated_source_sha256": "008b28eb7a8e9327efdafdb6d02328610896190d7c2affb5b9c1e3c20087e916",
+      "identity_reference_sha256": "b6b06e1fe06a810d9a962cccaedcfd3a2c81a48277e7f4e07b9890a3554eec73",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WOMAN_2",
+      "image": "woman_2.png",
+      "sha256": "0459380b35a33d1e5dfba4a5254a105665748259a8e098ac647f73a43c9aec43",
+      "generated_source": "exec-4d8a6839-5da4-41b1-bd97-64b7f88656a6.png",
+      "generated_source_sha256": "47b9afbce68926226ab5bd9eab78c71abfc9be89053c9964ba44e1a9dc32f2d9",
+      "identity_reference_sha256": "5b8724a44db4bda59bc6508358effba803d5227098d88fc2ded7056f3eb08884",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_EXPERT_M",
+      "image": "expert_m.png",
+      "sha256": "ba3ad5c68d590393da34100543e0a8012979f4fd77e03df8257b73697ac80128",
+      "generated_source": "exec-6237f948-6e1f-42a3-bc82-1216c397bd87.png",
+      "generated_source_sha256": "e811e5cde10e35bf7d77200747f79c02fcdfe0f1c9ab5b1ec4834606fd55ff1d",
+      "identity_reference_sha256": "21135572545ce923d09f43ea5cc2d420abffe39fe08fe6430a49cfff6a239fe5",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_EXPERT_F",
+      "image": "expert_f.png",
+      "sha256": "5979bec82fc2df3525e34b27111e1987188ace84345b64a373dd77970fe9038f",
+      "generated_source": "exec-1a5c30b5-be67-4f51-93e1-489c526d31aa.png",
+      "generated_source_sha256": "921a0ca2846cfe7640e75f9831bb869e2e1c6a42fc9a44c0278a13797f409f95",
+      "identity_reference_sha256": "18540ac4f4fb7fee569f2f269c69643bb07a21ead0f1ba10015123a7a4b79610",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAN_2",
+      "image": "man_2.png",
+      "sha256": "8a68bde757340ef4533b20d4f5a40553594b52aa56dd252a3d3a0887e65aa865",
+      "generated_source": "exec-e026a594-122b-43d2-ae07-8654e72bf3dd.png",
+      "generated_source_sha256": "03e509338d39586065ab7174f3f09a19bd92529462fbc6a47fef5b660b8d98ba",
+      "identity_reference_sha256": "03bce17f2121b6de814b47008837f69413e05832b1f0d978d86135838ad30ea2",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WOMAN_3",
+      "image": "woman_3.png",
+      "sha256": "a6116cb15acba7a15c0ffb4ad20d44292653693b3fab745545dd4cc4b8290512",
+      "generated_source": "exec-891d19de-41b6-4f61-aae7-dd973e08c36c.png",
+      "generated_source_sha256": "9c192c56429d090039dd59012136c2d03d82e77a9a1c62292283944e574915df",
+      "identity_reference_sha256": "f27acba0551016dbb9f581a8d99c0e9688b987bfd8f7dbaa3c618ec9388cfdb7",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_POKEFAN_M",
+      "image": "pokefan_m.png",
+      "sha256": "a5094f42dfd473a365aedc995e08d586aa5a8df1abda48aac365154aff974f06",
+      "generated_source": "exec-d99d4aaa-77a3-4ea7-8180-66f69d1a338a.png",
+      "generated_source_sha256": "790cfe786dd020fcc2651d0c98c234b29409068e48e73379737776339676ab0c",
+      "identity_reference_sha256": "8ad4b32c34a41978ed7bcbe99f3305fd23f1cb6cea8543d0e16ee7907c71b1ec",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WOMAN_4",
+      "image": "woman_4.png",
+      "sha256": "f95df42cc3744342fdc18ba78156aecb296e401c73323ae33d24808388c49564",
+      "generated_source": "exec-fc426dca-b26c-4102-913c-80f0564c9458.png",
+      "generated_source_sha256": "3f1413c3a93494a47dd2af270b85ae805a9763c0e4f1ce6146ad0bdaecf60bd6",
+      "identity_reference_sha256": "dd8af1d84db3111fbb16f250a18d254e607896f669a7538765637829cbf5923e",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_OLD_WOMAN",
+      "image": "old_woman.png",
+      "sha256": "3cf8d60be4070d022409cd9724929dbfc682f50a6b12c14e85f48182eeb8f5de",
+      "generated_source": "exec-17723fce-fd2d-465e-a489-ac31c3544fc2.png",
+      "generated_source_sha256": "1ed6cf2c0650b04bcd92b0c33eca17f3aafc2ff830a466eeb4451df42586df47",
+      "identity_reference_sha256": "feb95c8a46dd9fec9a5032e6209ce00033246343821fb17ba9c1ca19291fe078",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_CAMPER",
+      "image": "camper.png",
+      "sha256": "59577bd394d165fca3a24e92c7dda580fd8a52f7976189b39dcdf90390810ed5",
+      "generated_source": "exec-70b236f2-29aa-4d8a-8532-7f8c0cebd9a4.png",
+      "generated_source_sha256": "dc952f4d6b7ae40782aad286700510219f82a124932971ad492aae84f5a2953a",
+      "identity_reference_sha256": "e3055bf257cd877d2a5b44885bdae041e0f0180380d9b472ae40501d8e1d5322",
+      "background_cleanup": true
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_PICNICKER",
+      "image": "picnicker.png",
+      "sha256": "9ca70824037f505f504fa930d0ff9b3616ab49104ddb7ff2fa337ad294401982",
+      "generated_source": "exec-b890d58d-eee5-4741-8d79-5fd1bce6a4a8.png",
+      "generated_source_sha256": "8990cd6a2d0d62593389a5104618adb524099135e299fcdc3176b7e853d46655",
+      "identity_reference_sha256": "c02871ae11ff9cbb1ece217563dfa6ad88e23eb7c754eaa238c580d96d777442",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAN_3",
+      "image": "man_3.png",
+      "sha256": "5cc49bf84a77704eeca50cb31205c0578290b4f9c0ad0a5418e3aba9d519cb2a",
+      "generated_source": "exec-184804a2-2411-4c72-bce4-1b81b8bfc371.png",
+      "generated_source_sha256": "384f824537b55ce06b8b20bf71bb0976600020bb1e517ae3f0712cccaf0bda2c",
+      "identity_reference_sha256": "c75a7c8e6548cb02fadb2e865f826f9450a48a8b0c457a744fe79ecd3ee7c619",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WOMAN_5",
+      "image": "woman_5.png",
+      "sha256": "cc5ce6d20333c88d247c0a1fecc07e588b14f262387fa87e56e03e7fc5c56a9f",
+      "generated_source": "exec-65ab87c4-bc5a-4c28-86d9-92af4d1e9ca0.png",
+      "generated_source_sha256": "c1f2305ba0449d6b2c8c0491fb147f0ee29f343e6f26bf0c65197bf132c2980f",
+      "identity_reference_sha256": "de28722a1dc0f517eb04d4ea67225bf2046090022bd169a68191e07d0a9ee5d6",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_YOUNGSTER",
+      "image": "youngster.png",
+      "sha256": "82d48ccfd4ded73665b60bb7c030cf009aeee7fb4166fae617cfe8e785d5c231",
+      "generated_source": "exec-72a3df2e-2566-42e5-b472-1185cd004647.png",
+      "generated_source_sha256": "1c2e1f6ee144cfe74ec67ad70e563e9597b7efb9f3af7b2d46b8891625af4dda",
+      "identity_reference_sha256": "4f4ef1f1f4baf117ab7718493769ecea93a0ac55ef00bf50a4d34436b8e36e3f",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BUG_CATCHER",
+      "image": "bug_catcher.png",
+      "sha256": "14e9ee80c6c7f8288db7792c76da9e9cf29eff47fac9ae59d642f86f28a67520",
+      "generated_source": "exec-75b3a212-74ea-4e67-bc67-88d7b00e5d66.png",
+      "generated_source_sha256": "8a36e3302392d33b5e0f0593bb56e3ca3712ee5c684166562f7d8aaa0125efd8",
+      "identity_reference_sha256": "ee70d09a189c77d9c0225b0dc2256cd53abf5bf95657be6936e2a0bf38f890bd",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_PSYCHIC_M",
+      "image": "psychic_m.png",
+      "sha256": "f0a07979c20d39079259748a5eb6f2642105603124ff94fe5f8fb492efa4d48d",
+      "generated_source": "exec-35754880-e56f-420d-8d87-28ef8a8309d1.png",
+      "generated_source_sha256": "ff3f1845630e2759c49de0e31f9ee7b70d26fe060d156aa75858e5f3384da4c7",
+      "identity_reference_sha256": "15b21ba3c70d8dec436a68571234faf24029bfe9f2b2c8e8843d7e1eb2d9d7eb",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SCHOOL_KID_M",
+      "image": "school_kid_m.png",
+      "sha256": "d2c97ffaed2541d2e4b0e52b8da2132d5017091c65f8b2912fa5341c76f60efb",
+      "generated_source": "exec-e439657f-d268-4cf6-8473-50157f73e9ac.png",
+      "generated_source_sha256": "e99f2b31b512b38c51301d7f5b4cab908efd1c80f057ce133e4d774cd33e0c57",
+      "identity_reference_sha256": "993275b4e15096d6f96133e739024f9b3d85076ae3d52a87585a8bb5d878171c",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MANIAC",
+      "image": "maniac.png",
+      "sha256": "8ccfe6350cdf6f728706e86847be54fb35b0c2d22d0993cb9f7e75a9aaaa5fe1",
+      "generated_source": "exec-70158bd1-64e3-44d0-bb20-640a97ba4a46.png",
+      "generated_source_sha256": "fca15f7b20a52efb4a53244f6725ef67415629927a70b7c874b6adc29154e02f",
+      "identity_reference_sha256": "8cf15c8a0aea75299b5afe84a53a625718954d00d75b507cb882496d900c10be",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_HEX_MANIAC",
+      "image": "hex_maniac.png",
+      "sha256": "96988cfca6d9d5e5ef6b5c8433909a0e536c041d3c9e5ef3f74ff5f16e4ba74e",
+      "generated_source": "exec-92b56d57-4280-46a2-8d59-743451008e4b.png",
+      "generated_source_sha256": "6a3a4134ea70953597278778b2172e374d444d90de9c541308bdfda02179ccf4",
+      "identity_reference_sha256": "989c1232490488d8b0c05e86d3c90e0dd41aad319734cbc19594c4bc8c70b8e9",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BLACK_BELT",
+      "image": "black_belt.png",
+      "sha256": "6222c67d08e8e74706f0a6b6cb062ef2f2cee55226234a633fab43b94fa903a2",
+      "generated_source": "exec-15e9b656-5a4c-4607-bde5-f791ff5b06af.png",
+      "generated_source_sha256": "36840283e060412887d604c5e73b67810ce44668367aef9ba6dc5c37ce3fd758",
+      "identity_reference_sha256": "f291a540fe4f880c94d08dfec989cb312b00acff05c762c33f148f4ecf4e19f1",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BEAUTY",
+      "image": "beauty.png",
+      "sha256": "58a78fb8c153177b7f65d70461fae679f7e5e1d81c18194f757d1a6f51358ad2",
+      "generated_source": "exec-b2b60011-baa9-4975-9be9-f7f44ec9d6bb.png",
+      "generated_source_sha256": "16cb0b4f28499a1169748843dcbd2914985c8655ba7cfa56e3f11cfe65e4bbd4",
+      "identity_reference_sha256": "e93942e6910737fcab6500a13a4c03631f52b590aa250fa466f7895c43df14f6",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SCIENTIST_1",
+      "image": "scientist_1.png",
+      "sha256": "e8938e27a34f844c492d41d31e95031a611ea28c9054b13329608ef1b3b9c1f2",
+      "generated_source": "exec-c3dfbba5-8919-48c1-862f-3167ae4439bf.png",
+      "generated_source_sha256": "b1832c938c0ca9e42ce91249f3ff43994e919c84b46f1a7c1a73d1984992fae5",
+      "identity_reference_sha256": "337b3293cc09733e497891376a52cdc61732ef31be504424859d4ce6225a26a1",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LASS",
+      "image": "lass.png",
+      "sha256": "0ddc1eeeda4264ef83ba1eac5f16388394d1f733cc9df77f6c9fdf288b4398c7",
+      "generated_source": "exec-047ee11f-d4b5-49a3-9cd7-b47be3022fcc.png",
+      "generated_source_sha256": "f57690c0fbf793c9a38aef8f14dfa4a2da1775a58d21c33bb08526b61de7dd43",
+      "identity_reference_sha256": "ada874944194072b8502540a16b72329d2a402d9f7fec5f219b3d32327ec4029",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GENTLEMAN",
+      "image": "gentleman.png",
+      "sha256": "75128f38cf63679cb662849f14efe8bfe2747ad08a0a89383f1e19493dabe549",
+      "generated_source": "exec-2e4b2e2d-60f6-4a33-ae5f-27daea651bf8.png",
+      "generated_source_sha256": "1225549df56223dbefd5f1c6c20119b2c3627b26c291f0287f0758a5b44c0c33",
+      "identity_reference_sha256": "e8a168eb5a482a200b29d8bad9b356c4d677e785ea29ce7de6a1afe6c376f82d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SAILOR",
+      "image": "sailor.png",
+      "sha256": "6662f3bd5e48a9acf673ce13a641599a1e88990306b0c5b316b94b79a66cd63b",
+      "generated_source": "exec-d03e691c-f457-473f-8e47-6f8487a59237.png",
+      "generated_source_sha256": "623ea9545ee85a1435debe4135aed7b12671b72e871351df7e253d928b22d760",
+      "identity_reference_sha256": "27cb8f0cf5546b3a75810df1945b90960da3921e4e3d9305f8bd438b3aed671d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_FISHERMAN",
+      "image": "fisherman.png",
+      "sha256": "5ef1edea5906d81b7f1eebf327449eeceb7a3cd2cbe114508200d351cf210e41",
+      "generated_source": "exec-e91480d1-5ca0-4bab-b2ec-37762a283568.png",
+      "generated_source_sha256": "4c5df61876411a9dddfe0f770914decd7e74212442200a293a070a5094a53d0d",
+      "identity_reference_sha256": "381193d9d9ca777270368140a6539a8cd54c137d0f06a3d5db53f41a61d1b7d6",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_RUNNING_TRIATHLETE_M",
+      "image": "running_triathlete_m.png",
+      "sha256": "212c36c89a7361befa656ba386b99c0afe664c18824819ab9326328d12634cd5",
+      "generated_source": "exec-76cfba7c-8055-495e-8408-0f9c105d0e6b.png",
+      "generated_source_sha256": "ce3c65415c08dcd1cf478e022edcb2cae1cc5c1afdf03888151ef96f284b46dc",
+      "identity_reference_sha256": "6e27cf2a92b82d98c61511d1e230238fe5e97f9b199fc42ea48b4c7b8d49f6a7",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_RUNNING_TRIATHLETE_F",
+      "image": "running_triathlete_f.png",
+      "sha256": "565633ea194f8ae8cb806413844ec79c77d02b87c85bfa98cc4c11579e6dc578",
+      "generated_source": "exec-31acb1b1-719e-4be9-bf2b-c8169bcc5214.png",
+      "generated_source_sha256": "e88bf02126c0b110a52472888ce16d0c51a42827a786e751869a915a26e51705",
+      "identity_reference_sha256": "ac53cd8435c39cae027d24dc76a2cc0cdbc1d8d62ae19dbd4e93e6b66d121184",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TUBER_F",
+      "image": "tuber_f.png",
+      "sha256": "31a705b83bb13edb7e07e9025d42d2ffdb312c751b13d86b8e68b00a3292aa30",
+      "generated_source": "exec-3981dd37-189d-4a82-a9b6-22aeb83167ff.png",
+      "generated_source_sha256": "40fb87cf03f77db6eb442b26392595ab8df4af5cb540fb4aa1f8dda17f8cb750",
+      "identity_reference_sha256": "0f766fb2f82202f2f12dd9bb9cebe56ba96f92c6bdb7c0ee2b612abef09019d3",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TUBER_M",
+      "image": "tuber_m.png",
+      "sha256": "def25fe6ccc5c2b47d99c38e9df9f69107965b26b92a5cbc24cc17046cde074e",
+      "generated_source": "exec-763cd0b5-941f-48eb-b7b5-ad9c84e05459.png",
+      "generated_source_sha256": "237dfffaa2ee9c66431eafa0a2491d626a8e117d86b02621b7d097e8b97ef108",
+      "identity_reference_sha256": "77169de9b5254bfaa0fec3c8761a209bac3941d972df2f98cfc9e7e7ec1d704d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_HIKER",
+      "image": "hiker.png",
+      "sha256": "0f0bdeef6db53bec6d04485d3822a65a8a4b6ee2acf61dc89c1b77d7b328e5bd",
+      "generated_source": "exec-89240659-c47e-4d0b-a43b-d7fd873933fc.png",
+      "generated_source_sha256": "a468af65b2c53054a3e2b5dcc4bdd74accad0e5a3940462c6009f22aa5151a8c",
+      "identity_reference_sha256": "d8dab5db8943174b377934d3287e8d58736f098dca282c055c36849e5fde548a",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_PROF_BIRCH",
+      "image": "prof_birch.png",
+      "sha256": "24cc2a3761769469b8bdf0019cefe25120ba978f9550f5add0ecf3da42f01510",
+      "generated_source": "exec-fcacc393-095b-4411-a18d-66fccb0c4916.png",
+      "generated_source_sha256": "fc62616aff8191e52872d43d2b5eb06f9f731aca2bfedd2b21043a7d97611455",
+      "identity_reference_sha256": "739b8715af552b4a9372649e0b61cadaf44a6a26752268c577191df2ab1e59bf",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAN_4",
+      "image": "man_4.png",
+      "sha256": "49ed93836a565ff6a5cd6d3553fc56c8263799869111ca22993103fa26f74185",
+      "generated_source": "exec-c3af2b66-c82c-4d38-aab3-8eddd981c366.png",
+      "generated_source_sha256": "2eed10807281048945727d7a13e4af2d8df6f3e312e9fc2db0c07e0e7f7ea121",
+      "identity_reference_sha256": "1cb0931ab93d20326402549a68fa563487f523e9109bdb9ae05f886379862578",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAN_5",
+      "image": "man_5.png",
+      "sha256": "902fe50ab37fcf69816ef4f14e82ce484293e84adbeae397e894029ef36900a8",
+      "generated_source": "exec-62b6d740-0f51-406e-9d66-f2ec9d33e2c9.png",
+      "generated_source_sha256": "7ac1661c1b5882a0f117c603b1a10187acbbada5ea1910c80b096a85b74571c9",
+      "identity_reference_sha256": "ad7cd32d5416f94be523b429dbc90ee634deade13d8ad2628a5ead99e3bd1937",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_REPORTER_M",
+      "image": "reporter_m.png",
+      "sha256": "608304404947f8f8df8158f35db6fc55a8c0041ed6061cd1ab178cfd15437bac",
+      "generated_source": "exec-f5d55b5b-3347-4319-aa66-970e10ac8cbf.png",
+      "generated_source_sha256": "e94d4d82b48318af26f58ad59238d525f9643c5f3c92cf922f8b0bea5d72b959",
+      "identity_reference_sha256": "8d83e9095df11f9f9efaf65a1a5e471c7f8a07d661046b98aba998091c57e805",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_REPORTER_F",
+      "image": "reporter_f.png",
+      "sha256": "a91064c328505526def2873230d3625a6b76ac9bfafdb6cb3a029d6c7ccd9889",
+      "generated_source": "exec-a5d99345-528f-452f-a416-3a2d44860bc6.png",
+      "generated_source_sha256": "8c5ac6a0c82e1ed6ed85e9c4119a92d4454bb25c59266fa79b5854297252d8c5",
+      "identity_reference_sha256": "16800647f447ee484e54ca609f08d4e5b6a4eaede74ab1ccdc9f145b8c170a1b",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BARD",
+      "image": "bard.png",
+      "sha256": "bba282598d713b62e9364a568529333e01e883c1aee2c6a7e42036a0c8b73996",
+      "generated_source": "exec-0db060bd-420c-4bab-adc5-cab1577cbc62.png",
+      "generated_source_sha256": "80bfbd1ee0567a55de1c58420a38e94580a485a998efb2eb6b976302714eac28",
+      "identity_reference_sha256": "de9daa1aa4381c1f25ae5c1792fdd9dc8192da1b36a581f4e15dd5fece334f22",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_ANABEL",
+      "image": "anabel.png",
+      "sha256": "df266d5eff1fc9c8033c83738a8fd2d34f79aaedcaf4a8242d2a94d85e18332e",
+      "generated_source": "exec-8680e8d1-0768-4058-87d3-09a12a4c025e.png",
+      "generated_source_sha256": "8fe35bff7e537863bb85a3483cd3bf62b59a55777f9fdfbea8351149894fdec8",
+      "identity_reference_sha256": "64ec77fc9e7ac1f95bb47b22d2f0fa0e79e9c24c509288003e40d26e96a58878",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TUCKER",
+      "image": "tucker.png",
+      "sha256": "ac0e6e937a96481da3c496e90c8df41981fbeb37723f5d31c746a298e179888b",
+      "generated_source": "exec-e17e0e3f-33af-4487-a2d0-4cde13858c77.png",
+      "generated_source_sha256": "15a936f46bf010ddbaa6c71061e6bf632bb720c4048c14ebd0e16238f87beb28",
+      "identity_reference_sha256": "31cb3836f0537fc645c6bde9b3f25602ee8d3ccb600bfd3431f831ed5335b83d",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GRETA",
+      "image": "greta.png",
+      "sha256": "d96dc7f17e1d19a3d38d9559cf4404371c1663185c68ddb367bf286e073fde40",
+      "generated_source": "exec-8d95af5a-5a03-4a61-bcfa-33cf499ff4f8.png",
+      "generated_source_sha256": "f81034401048d58f34c6f84b2bc9c2e59e3d65d710bcf518e4c1856bac71c71b",
+      "identity_reference_sha256": "80cc5a38db345930b15cdfb8b16ef358c437eb16645c7a665c73ddda6c0e870b",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SPENSER",
+      "image": "spenser.png",
+      "sha256": "1d3b00bbabe4ddb846c7272f8fc538160cd747b1c47ab89d4076c7c2e3efeb86",
+      "generated_source": "exec-c3c57d25-1299-4643-bf2e-7cb4596252e8.png",
+      "generated_source_sha256": "8c41d8b24f1ce5b4915ed16a2619e1d5dbf23fe2520d78ada7976979d209a2f1",
+      "identity_reference_sha256": "3ab0ecb57cfaa3d3c28deadc06919b5358cae6db1b2e07d7d07714c9f222c062",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_NOLAND",
+      "image": "noland.png",
+      "sha256": "8d16ceaaf64e7b652a092adc55eb4dabc15e4fe2d60514136905a59fc1440479",
+      "generated_source": "exec-38bafaec-ae12-410e-91bb-e5d53f103f37.png",
+      "generated_source_sha256": "44cfb195b26777bbd3862c4d739a71ef068713771fd1108d5acd98c294f50dbe",
+      "identity_reference_sha256": "3644dcac3c818e7361b4f5b443815dcee291f4f2170e90165101ffea7dd3ce56",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LUCY",
+      "image": "lucy.png",
+      "sha256": "f1a09833e6596473f297c07a045fb27060112935853f0b97d23cbc548049258e",
+      "generated_source": "exec-d0513380-7464-4706-ae76-34e1b1ed06fb.png",
+      "generated_source_sha256": "d20fc66caa19d3f3907c2dfa14c43ac203a7c463488674ca9d11e3ebe6e37205",
+      "identity_reference_sha256": "8d7a83e916bbcd6fc463f69007855ac561193804a503052c0f17b5762625714f",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TEALA",
+      "image": "teala.png",
+      "sha256": "b94339bdd660750dc5e585103aba700a2b20e7134414ac2a0a6b367fa40796a7",
+      "generated_source": "exec-361e2ba8-252b-49b5-9ee1-f044e12528c9.png",
+      "generated_source_sha256": "c1bda8211aba3413e76c3bb657415bd30732da1ee85043eb552c9edf957d6d51",
+      "identity_reference_sha256": "54d51bcd93fcda35927da426826b86bfefd7b2c4f1c95b83eaa02136e37fa9b3",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_ARTIST",
+      "image": "artist.png",
+      "sha256": "bf0615ec7f68f8b86e3b077542943a2c0ec30ef494a66374472e4f6bdb16a897",
+      "generated_source": "exec-6b368028-88d6-45d0-abf4-3c1ea770c851.png",
+      "generated_source_sha256": "11b6886cdd47f52bb075ff49b980fcfcee395c2621ed9b16c95b13b5b42711bc",
+      "identity_reference_sha256": "252d9c0be24c251837f48033d1b6820c443c096c82b98217ec5f5007b1af4b7a",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_CAMERAMAN",
+      "image": "cameraman.png",
+      "sha256": "4633582984a9abf27d795c7233ef46cb3557ac2a2206e4ef7ce8f4378ab3a7d8",
+      "generated_source": "exec-4da9ef9c-20a4-40f8-87cf-72284861ab2c.png",
+      "generated_source_sha256": "2825d40b0fe3af2e4376282e395f0abe0a2a2c579889a061a0372056033d383d",
+      "identity_reference_sha256": "15abeab2c50f5dc191c6987a12cc815dfa10156ccd304e8e760fcffe08e81058",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SCIENTIST_2",
+      "image": "scientist_2.png",
+      "sha256": "6429ebb2730f4ec588c7aefa18685828dadb632065d69af0f1d5c02d240daa2f",
+      "generated_source": "exec-47e07a54-7d19-4e66-9907-a4611e960128.png",
+      "generated_source_sha256": "bee5ad4709525ebe50187b336f39abfdace7fed8c7cec9ab55063c2b401053ef",
+      "identity_reference_sha256": "367c2d3f1e8743654f85de6cb32b789fc89dd4ff1a113af40b570b8f69936d8e",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_DEVON_EMPLOYEE",
+      "image": "devon_employee.png",
+      "sha256": "2a6716581d705b3d3592cffd189a0bebc9e2bb5ec745aa66b0e8f283783a5e41",
+      "generated_source": "exec-633eaa49-6995-4764-a310-38b68faae053.png",
+      "generated_source_sha256": "4e950c0d9305474cf459c3ddfa02b4d4b8d44b68aa4871c3e7882af8da3f59b9",
+      "identity_reference_sha256": "8e69f28f55e066805a0e127d51f29ddbbdc76ef3e788f31c0baa2244c354bf72",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_AQUA_MEMBER_M",
+      "image": "aqua_member_m.png",
+      "sha256": "591c203c5becd1b8b496ee00413d79367b61617b31b3cdd72fe0e4d98d941632",
+      "generated_source": "exec-8fcbdabc-2990-467d-9915-9f1ea7c49eae.png",
+      "generated_source_sha256": "72147500e709ded7a3c473b756b326353803050391436a9c7f8a5f29c7dcf904",
+      "identity_reference_sha256": "4c03302d202273ddda0dbd4e6f57965372b44373171a019328036bb75fda2401",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_AQUA_MEMBER_F",
+      "image": "aqua_member_f.png",
+      "sha256": "34c29a658504c5d2d6c7e856a6bfe156182d66097247385089d801174b1b6155",
+      "generated_source": "exec-8fac6bbf-7bbd-4078-a8db-e2ce9971f690.png",
+      "generated_source_sha256": "65013180473a489cca807774e7976caf17b5caf8cc38c42577cb3a701a716bd8",
+      "identity_reference_sha256": "cd510c3628bddd29791fddcb7be8e02e36b697358e2e511bc2b7fa4a3ff29aeb",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAGMA_MEMBER_M",
+      "image": "magma_member_m.png",
+      "sha256": "2df551e79fb40919ec1922e3622022b2cd8e4b9ebaf812b96a65f4a615d59bfb",
+      "generated_source": "exec-a822ae99-60e2-4c75-af87-1c0f7330c7cf.png",
+      "generated_source_sha256": "88e31ffcb49753c03fcf4aafaac1eb5ccddca326d974edc8d8e4665688ceaa5b",
+      "identity_reference_sha256": "33ec59e8ac7a432d266e7b6443cfadd4d537536d8a5ccda9a0413bba0ee58290",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAGMA_MEMBER_F",
+      "image": "magma_member_f.png",
+      "sha256": "e0c3c5d9782310f7edc3315851ecc5a0f677a8668c40d1f5f40dbf6a7f307ae4",
+      "generated_source": "exec-eb902fb8-5cd1-4cce-a3c6-44cbe6fd04f2.png",
+      "generated_source_sha256": "0c08e13d7806ed656b64a87951fad2f26e5a3794beb2fe3dce0d0ee1675038c0",
+      "identity_reference_sha256": "69f211ea6673c44f3d7a5fe1f8830efdf2e53f83e66ef1980d0dba3f399605c7",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_NORMAN",
+      "image": "norman.png",
+      "sha256": "afc872d0a352671e03c6b9d7bd0a24a4d01ebbf2647de4b1123384f20cd05905",
+      "generated_source": "exec-bc9ff47c-dcee-4d1f-bef5-5b831bcb5870.png",
+      "generated_source_sha256": "cb2d63880b1311c02c865bf4619a137aa1a0f039367be990703d7f60a726fe3b",
+      "identity_reference_sha256": "c4b577117b167ac56e3633f458b56a873c831b4c9f85fbcaa968d4960cec864c",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WALLACE",
+      "image": "wallace.png",
+      "sha256": "a91bde8c7b6ffae8dc50f6c15489be7c712399415d8b9d90f5de97ed6c1a3b71",
+      "generated_source": "exec-dedbd292-9402-4768-b92c-db6cdaa697e1.png",
+      "generated_source_sha256": "a8337eb038771099d0084d887f22a835c4bf7e2785978e8eb60d72713f8a8813",
+      "identity_reference_sha256": "3c43c03bee39e820183b194b74cb3fe431b95f6b695b79a7412d1a09bd2c09e3",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_STEVEN",
+      "image": "steven.png",
+      "sha256": "6b02c78992b3b988cd8f3b9b2d7d1d1cba03c9f0bfcfb2591bf7e9609b931b23",
+      "generated_source": "exec-df6ec52b-de53-4be6-8bb2-c170814f6dc4.png",
+      "generated_source_sha256": "f291d792183abd92ed0da60e09eaab464a5f686bc4d775ec6689799235f67ecd",
+      "identity_reference_sha256": "a3ccb8609aa15f9fb56d3228649f92feb3609198987da4cef50dde1c20b979e9",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WALLY",
+      "image": "wally.png",
+      "sha256": "ee3303415ddcb5d8393d27e3ba7dec40c54d85f957d6d0052d940b5c5cce14b3",
+      "generated_source": "exec-df66240f-0f37-42a8-b466-656075f18d66.png",
+      "generated_source_sha256": "724a367eede1e79658acd8bfbc7d3a011ede383d27d80dd62e0684c90f85968f",
+      "identity_reference_sha256": "46bbffca6b6010fcb87c12cd526c6b92d7e6efce3c1ae12f2e804ebf08e4038f",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LITTLE_BOY_3",
+      "image": "little_boy_3.png",
+      "sha256": "23e6310d4a92c9a3ec4a818093955e2301ab54062b810b6af672d0d406f1056c",
+      "generated_source": "exec-025e7755-543d-458b-b54c-2a971ff69326.png",
+      "generated_source_sha256": "e37a9dd8f5fb9ce4dc6b5899eb080b4a14e800dd50e3f86f54de002eb2407f18",
+      "identity_reference_sha256": "0f583526c36c3d6c1f1ea92abf46f9a0fd7d55783d9b6e8d439bfba5e96a6485",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_ARCHIE",
+      "image": "archie.png",
+      "sha256": "a867ff7104a53d599ac3d5b61ff19cb75488afb16af9700ba2ffb129183e4045",
+      "generated_source": "exec-2f579974-b48c-4a9b-a18b-be8004b47880.png",
+      "generated_source_sha256": "9cf6663755f02bcc4bdde31638fca346d95e53d0790793e9cac67ac0237aadd9",
+      "identity_reference_sha256": "f192231c87e53f63fcdb71718651225d29f0129a6a9eb2318482f2d3f269b784",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MAXIE",
+      "image": "maxie.png",
+      "sha256": "e3444551c8a1f78e70fd5de29f355690bec514cb06ccd25314e1191f8f2f2414",
+      "generated_source": "exec-1840cf35-c994-454f-8bac-0b36a73a2bb4.png",
+      "generated_source_sha256": "38375e8949adda68965ca727fa63f6d286343d62f71f7225d8a7df6e20ea578f",
+      "identity_reference_sha256": "a8ffbbeef7bbc82cee4c333efc693d36daeb8a0ededd690b595786cc06bcd3f5",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MOM",
+      "image": "mom.png",
+      "sha256": "ba5630c0ccd53dfbc5d759f950b3df36a8d0aa3acd067aa94dae17943db6ba30",
+      "generated_source": "exec-f56b3876-7488-4ca1-bc40-e2589140bda5.png",
+      "generated_source_sha256": "9c36bcb8afde8f564c28ae7acce76e8e616b168ee74ef7842de86d2d515d9aec",
+      "identity_reference_sha256": "a0ad81195acad65230b001f973d846170fd0daa1950d3fbb54d77340cac3885a",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_JUAN",
+      "image": "juan.png",
+      "sha256": "6493b27b9a804522f917e8921f2f2bc05dd9d6ed088aa36c78a95e23dbb6499d",
+      "generated_source": "exec-561da56c-6905-474b-a301-a33ee2c38449.png",
+      "generated_source_sha256": "d16e19855f33754aa12748bab14170e33861bdb1736349bf73b6c800040f24ab",
+      "identity_reference_sha256": "c272721f7c3f1199d3a863518012bd25a8e01f20a6a980a367f7b563efb36be4",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SCOTT",
+      "image": "scott.png",
+      "sha256": "81fd30758e29996fecd0c661a2d121a18a66ddb30ec3576f323c0420bd7dbc6b",
+      "generated_source": "exec-999b4ac4-7297-43c4-bc81-44f61dfb760b.png",
+      "generated_source_sha256": "05ccb50065b016848edc27663dbb327fd41ba527ccf2c18e392bcb2a3332d078",
+      "identity_reference_sha256": "ff11660f3055426179ed25c561b42b8e6b1147858370d97f0b39b7544ea841d0",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_RED",
+      "image": "red.png",
+      "sha256": "d0fb76e5ee68fa1c8b5ce3e2f6fa97610f3285c1d2542f48523bc258d1891a67",
+      "generated_source": "exec-9ee46475-5f75-4087-ab01-2ad5ccd10d0f.png",
+      "generated_source_sha256": "e2191caa4515d7d8b87b1d301471dd29180ad32d77e1788196bf4a47c72a29e3",
+      "identity_reference_sha256": "d942cfc3eae8bcb7497acdadaafa699b166a3de4255f081f6a6036dc062ee767",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LEAF",
+      "image": "leaf.png",
+      "sha256": "f32b748f57a411eec1e2f92571354a51b0a2f7433df34c1c4ccb1c01f5925ad4",
+      "generated_source": "exec-2affd0fd-de29-4574-902f-b6fb361f3bb4.png",
+      "generated_source_sha256": "4d13c31eb75cf812bd3bd15fa73866585f015a2eb3f38b8acd48987041a41f2e",
+      "identity_reference_sha256": "b997e0032dc5bc66b8dfabc618b2117d3961d70958288fced789c545cd33eb43",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BRANDON",
+      "image": "brandon.png",
+      "sha256": "e260657633ceb0a508a0f6ef8827443f72bd18a1d71d8e0f3e7a540ea4af9981",
+      "generated_source": "exec-cf4012f4-333a-4be6-90de-14a474649c39.png",
+      "generated_source_sha256": "4bae0483e353f8a331978b7eb6cd7e4b766c3e6de48674e892a4310080ac23f6",
+      "identity_reference_sha256": "15108e7c414e4f7a9b54c25b4073e878d14f03701b88b3a5a75c9cdc364a56b4",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LINK_RS_BRENDAN",
+      "image": "link_rs_brendan.png",
+      "sha256": "16a4989c6ed251e3bf3223825dd9b0a71e871d6c1d00a1a64af4c9c488aa0e10",
+      "generated_source": "exec-61b5ae9c-cd1a-4fe7-8bd4-cfcbd738d4e1.png",
+      "generated_source_sha256": "3dd552da6843e884c92dcf99091c500d4375407ff154db82bc059c1e9cf39dd1",
+      "identity_reference_sha256": "e8f2e26afa63e2dde50cd1a8dfa911716ab5578610fd960684e5a2ca026d85f1",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LINK_RS_MAY",
+      "image": "link_rs_may.png",
+      "sha256": "f85b3a162dd3a58493bfbd77da5e79a3cabaf4b4e172b85c093c4e1464998e7b",
+      "generated_source": "exec-8bf65c99-4973-4959-ba96-fbaf78fd40b6.png",
+      "generated_source_sha256": "1463b8f6bdb9127e73e8bb92a1c47acc2275f21f2dd2c0d2596b0d9ed0bcb911",
+      "identity_reference_sha256": "1b283bc4afed65fb923e9ae89f3800163324ab043102c52bc3ee15d41e8764f4",
+      "background_cleanup": false
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_COOK",
+      "graphics_id": 27,
+      "image": "cook.png",
+      "sha256": "c8998ce7e5c65ec1142f995c0f1f19818f405cbbc94b5397554e1ee27a2ae822",
+      "generated_source": "exec-8eb5aa94-e217-45fb-a3d2-22917291db0f.png",
+      "generated_source_sha256": "2b9118f97dd4a06487fd192ff19e1fd4f6b45e337ed8af89acfcf480930c5ca0",
+      "identity_reference": "graphics/object_events/pics/people/cook.png",
+      "identity_reference_sha256": "26ed0d115b0d0d4e5a128ff6b05247ac1a835d83f2ae1e1e5263fb7a109ffd36",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_OLD_MAN",
+      "graphics_id": 29,
+      "image": "old_man.png",
+      "sha256": "3e36a1663293e2f76012ab4baa3a7ce688bbfd57c3c1e7330135a2e6f46fa989",
+      "generated_source": "exec-cf130792-102f-4515-a37a-893dfd866430.png",
+      "generated_source_sha256": "5d4fd280cd17bb13fab4a12252ba0fe93fa0355509c95420a9ddc0a135815fbe",
+      "identity_reference": "graphics/object_events/pics/people/old_man.png",
+      "identity_reference_sha256": "f21983ffc824e67981ab275001b568b44d008d39c5ee5dde2d9ae40a4d79fd35",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_SIDNEY",
+      "graphics_id": 121,
+      "image": "sidney.png",
+      "sha256": "94135f3efe4594cf907c8987dcfc8f7b1420a3f8cb99bbdc5286846206fb584f",
+      "generated_source": "exec-1783ed8d-abc5-4070-92e0-760c11c853d4.png",
+      "generated_source_sha256": "d0da72e7d48b9fda57f6272f377b23405aaefa0027cc0422d6d4590f5dcd95b6",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/sidney.png",
+      "identity_reference_sha256": "bc4a4ee53902ad21ac20c9524d156d0f51bc8aece28b97a03c744686a1064da7",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_PHOEBE",
+      "graphics_id": 122,
+      "image": "phoebe.png",
+      "sha256": "e81c38cb55c517cdcbbfe92d579ae572db15df21c10f741bf9826603200f91d0",
+      "generated_source": "exec-f4bdd6f5-e4b0-4fda-a497-90231cad33e9.png",
+      "generated_source_sha256": "a1f89551da95cd90d5e2f5621927651e543e5cb3f8cfbacfdc336b0c76caae84",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/phoebe.png",
+      "identity_reference_sha256": "e49b3fbf0e5c2af6f97d1cff8fedfe514fcf352a5d3035289ec59425781d4f85",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GLACIA",
+      "graphics_id": 123,
+      "image": "glacia.png",
+      "sha256": "3b3dbd55901823ba6b27a240f808d00052be70eb716078f6ba64d6a7a3e281e8",
+      "generated_source": "exec-0cacacbd-9745-4b66-9d14-f6533246c19e.png",
+      "generated_source_sha256": "fc01439e45c6052b09ec7ef3817afc42bb8e4e2a79af741aff0dd931332c5281",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/glacia.png",
+      "identity_reference_sha256": "6e3547b1666f22341dd46e6120e40940e7f9edb9dd3d72b0dc9096bd58d95675",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_DRAKE",
+      "graphics_id": 124,
+      "image": "drake.png",
+      "sha256": "3b6e712092b109e9f7f0a536126f173e4ec7ca3b09413e52b1185ef3a83f5ddb",
+      "generated_source": "exec-4c6a7486-3fb8-46d6-b2a9-ab54a2a8dcbb.png",
+      "generated_source_sha256": "8b57a2e95b309cb758ec5561485464829a5e7f65f87bfcbb77fa0cfa6c3606ce",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/drake.png",
+      "identity_reference_sha256": "11ab61ab2116cfe70ce5b5288eb83885e32e82f9501b94ce1fc067ed93b20912",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_ROXANNE",
+      "graphics_id": 125,
+      "image": "roxanne.png",
+      "sha256": "bb8006c03fad49b53563a9e9a381a45ef25f7265b2e3739ff8378a27e0dd0293",
+      "generated_source": "exec-9c81e554-1c77-460f-9bfa-61b7a258cb7c.png",
+      "generated_source_sha256": "61d2309fa9ec4027b811b02c74fb40a5d5139f97f593f140fb7de8b1222677f8",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/roxanne.png",
+      "identity_reference_sha256": "9b632bf313010a509cfd83b45782ecfdb489982ac7bae4eb613f93f1603615d1",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": true,
+      "review_scope": "all frames at final game resolution, identity reference comparison",
+      "cleanup_input": "exec-2868272e-1452-4ac0-89c6-78b5b7ceef71.png",
+      "cleanup_input_sha256": "5440811817f930ea2daeb6e64f0f2b972778a520adeef27db2f4068f4b53925f"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_BRAWLY",
+      "graphics_id": 126,
+      "image": "brawly.png",
+      "sha256": "ae3b0aa62e9abdf0f2ced989151a6719032b63053fb3fc8e7195249aa680e17f",
+      "generated_source": "exec-ff99ff88-cf31-4f77-94e1-ba4d51cda9ae.png",
+      "generated_source_sha256": "3ba42e08dbc97d0edec70af5dfcb765b9aa9cc38e385d66645214996aafdc47d",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/brawly.png",
+      "identity_reference_sha256": "1b070acff814a7282e079410001904bcfbcfc1391dd3e0c97029bb0fc22df57e",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WATTSON",
+      "graphics_id": 127,
+      "image": "wattson.png",
+      "sha256": "802d6d0be04407c6f753bb2549e370e9d00812546319385a501ee5f01d6a99d6",
+      "generated_source": "exec-0ad13176-ca9a-4228-9a6b-9d18a6e8bc11.png",
+      "generated_source_sha256": "56580bd385e4fca1ce86a683b9243c12bc1c76df155063b287cca0045d89e85e",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/wattson.png",
+      "identity_reference_sha256": "e2d3c939b5ce1f9f972d3bc4e35c5e1bf5b2cf2bd35bce7a3d533da4b70adf5e",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_FLANNERY",
+      "graphics_id": 128,
+      "image": "flannery.png",
+      "sha256": "37a39144a004c7100850002d7b2a3dfbf4bdf324a9c764a2ae2dd213bb7c4205",
+      "generated_source": "exec-a5580a56-6e8f-43bd-8a2c-674e62338e6c.png",
+      "generated_source_sha256": "88432ee73918c07b4342a584f598824fed027e0c1e73d11f6e6e931d6e6cf374",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/flannery.png",
+      "identity_reference_sha256": "6321b8debcd8d7daf3b8be465f962eaf465a404ec693545a15ee822d8c9b6ef3",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_WINONA",
+      "graphics_id": 130,
+      "image": "winona.png",
+      "sha256": "196dadfdd6969e65b3e22b06f72a6420c1752071632761ed10811fcfc1300c8d",
+      "generated_source": "exec-f86a6173-85a7-4919-9a48-6c25327d7117.png",
+      "generated_source_sha256": "4bc685503d5b4f507a2e50703762faaa28afcc572be3e0c7ce1e1cf16bbde8fa",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/winona.png",
+      "identity_reference_sha256": "6ddd7825acb273beef198a5848ae66d36a010ed0b17071f2e3f391301387f705",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_LIZA",
+      "graphics_id": 131,
+      "image": "liza.png",
+      "sha256": "c4512bd4857a0dd70dfcfb55cf1e1afa72790225fa33c56f26dbee2388a69529",
+      "generated_source": "exec-263fe1c9-ac82-4e7c-ba2c-63ab7b5aa21f.png",
+      "generated_source_sha256": "92c531d5a225fe3b33b7400ab6070cd0d4da8b2bf7074536b3611662a343a67c",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/liza.png",
+      "identity_reference_sha256": "956dde694ece6c261aafbd19fd99435e643ab27c03b129b05c068a1b219847df",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_TATE",
+      "graphics_id": 132,
+      "image": "tate.png",
+      "sha256": "4bf2c4ff8b91d8242010a14822c92853d4ecb62ba8d4d7ed29e42b37c195b604",
+      "generated_source": "exec-914cfcdb-559a-46bf-846d-bd9a59f7c79c.png",
+      "generated_source_sha256": "c412ec99c7663fae3b2dd62a95db1c21f81526af8bbef0fbc182b27cf4a0580d",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/tate.png",
+      "identity_reference_sha256": "61cc2fd40adc7cb5036da9492b4755cf59a8f68023f1f2e898a2bc77a5be8c57",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_GAMEBOY_KID",
+      "graphics_id": 189,
+      "image": "gameboy_kid.png",
+      "sha256": "f4ded704a1c01fa8e42676a3062bd48de7519786175389870b02b086d1febd73",
+      "generated_source": "exec-6399a094-8a18-4edb-8230-46f50c33407b.png",
+      "generated_source_sha256": "40f90c7ed94d83ac6978f6b22e2dd4ade86a655d6fbfbc8d1960b2a81bf758ad",
+      "identity_reference": "graphics/object_events/pics/people/gameboy_kid.png",
+      "identity_reference_sha256": "10a29677d248d96e3344b0ba18fb2a98ff626f33f5d9568520c68bf2564ad587",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    },
+    {
+      "symbol": "OBJ_EVENT_GFX_MYSTERY_GIFT_MAN",
+      "graphics_id": 223,
+      "image": "mystery_gift_man.png",
+      "sha256": "a18a31d445571f3a8e4566e21a33cbbdb8a62a38b55dd26f38666b046a0070ea",
+      "generated_source": "exec-537e0b2e-0291-486e-a0ad-1a2590f92756.png",
+      "generated_source_sha256": "f7a6f0b5f60c212258023130a3de9884070d5f091892efbb78943dbf99a0686f",
+      "identity_reference": "graphics/object_events/pics/people/mystery_event_deliveryman.png",
+      "identity_reference_sha256": "cf2754a06f6b9c0fc2a9eeb56e4ec6ad3418e4c0a6774807aee42cb71343bfb4",
+      "visual_review": "passed",
+      "generator": "image_gen.imagegen",
+      "background_cleanup": false,
+      "review_scope": "all frames at final game resolution, identity reference comparison"
+    }
+  ],
+  "zerowalk_extension": {
+    "count": 15,
+    "date": "2026-11-13",
+    "tool": "image_gen.imagegen",
+    "original_pixels_copied": false,
+    "visual_review": "passed",
+    "normalizer": "3ds_port/scripts/prepare_coop_walk.py normalize; shared normalization function with target sizes96x96,288x96,64x64",
+    "normalization": "Walking: nine complete drawn figures cropped and registered to 3x3 cells with one uniform scale and foot baseline y30. Bicycle/back: whole-sheet nearest-neighbor resize. All: binary alpha threshold128 and at most15 visible colors; no scripted drawing or synthesized poses.",
+    "local_review_sheets": "build/zerowalk-art/review-01.png through review-05.png"
+  }
+}

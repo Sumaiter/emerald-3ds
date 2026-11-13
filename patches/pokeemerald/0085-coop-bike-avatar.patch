@@ -1,0 +1,483 @@
+--- a/src/field_player_avatar.c
++++ b/src/field_player_avatar.c
+@@ -2,6 +2,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #include "3ds_coop.h"
++#include "3ds_coop_bike.h"
+ #endif
+ #include "main.h"
+ #include "bike.h"
+@@ -1252,8 +1253,7 @@
+ u8 GetPlayerAvatarGraphicsIdByStateIdAndGender(u8 state, u8 gender)
+ {
+ #ifdef PLATFORM_3DS
+-    if (state == PLAYER_AVATAR_STATE_NORMAL && CtrCoop_UseCustomGraphicsId())
+-        return CtrCoop_LocalGraphicsId();
++    return CtrCoopBike_LocalAvatarGraphicsId(state, sPlayerAvatarGfxIds[state][gender]);
+ #endif
+     return sPlayerAvatarGfxIds[state][gender];
+ }
+@@ -1369,6 +1369,10 @@
+ static u8 GetPlayerAvatarStateTransitionByGraphicsId(u8 graphicsId, u8 gender)
+ {
+     u8 i;
++#ifdef PLATFORM_3DS
++    if (CtrCoop_UseCustomGraphicsId() && graphicsId == CtrCoop_LocalGraphicsId())
++        return CtrCoopBike_LocalStateFlag(PLAYER_AVATAR_FLAG_ON_FOOT);
++#endif
+ 
+     for (i = 0; i < ARRAY_COUNT(sPlayerAvatarGfxToStateFlag[0]); i++)
+     {
+@@ -1382,6 +1386,10 @@
+ {
+     u8 i;
+     u8 flags = gPlayerAvatar.flags;
++#ifdef PLATFORM_3DS
++    if (CtrCoop_UseCustomGraphicsId() && (flags & (PLAYER_AVATAR_FLAG_ON_FOOT | PLAYER_AVATAR_FLAG_MACH_BIKE | PLAYER_AVATAR_FLAG_ACRO_BIKE)))
++        return CtrCoop_LocalGraphicsId();
++#endif
+ 
+     for (i = 0; i < ARRAY_COUNT(sPlayerAvatarGfxToStateFlag[0]); i++)
+     {
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -28,6 +28,7 @@
+ #ifdef PLATFORM_3DS
+ #include "follower_mon.h"
+ #include "wild_encounter.h"
++#include "3ds_coop_bike.h"
+ #endif
+ #include "constants/event_object_movement.h"
+ #include "constants/event_objects.h"
+@@ -51,6 +52,24 @@
+ #if OBJECT_EVENT_TEMPLATES_COUNT >= SPECIAL_LOCALIDS_START
+ #error "OBJECT_EVENT_TEMPLATES_COUNT is too large. Object event local IDs may overlap with reserved IDs."
+ #endif
++
++#ifdef PLATFORM_3DS
++#define OBJECT_GRAPHICS_INFO(object) CtrCoopBike_ObjectGraphicsInfo((object), GetObjectEventGraphicsInfo((object)->graphicsId))
++#define OBJECT_FRAME_SIZE(object, info) CtrCoopBike_AllocationSize((object)->localId, (object)->movementType, (info)->size)
++#else
++#define OBJECT_GRAPHICS_INFO(object) GetObjectEventGraphicsInfo((object)->graphicsId)
++#define OBJECT_FRAME_SIZE(object, info) ((info)->size)
++#endif
++
++static const struct ObjectEventGraphicsInfo *TemplateGraphicsInfo(const struct ObjectEventTemplate *template)
++{
++    const struct ObjectEventGraphicsInfo *info = GetObjectEventGraphicsInfo(template->graphicsId);
++#ifdef PLATFORM_3DS
++    return CtrCoopBike_GraphicsInfo(template->graphicsId, template->localId, template->movementType, info);
++#else
++    return info;
++#endif
++}
+ 
+ // this file was known as evobjmv.c in Game Freak's original source
+ 
+@@ -1410,7 +1429,7 @@
+ static void RemoveObjectEventInternal(struct ObjectEvent *objectEvent)
+ {
+     struct SpriteFrameImage image = {0};
+-    image.size = GetObjectEventGraphicsInfo(objectEvent->graphicsId)->size;
++    image.size = OBJECT_FRAME_SIZE(objectEvent, OBJECT_GRAPHICS_INFO(objectEvent));
+     gSprites[objectEvent->spriteId].images = &image;
+     DestroySprite(&gSprites[objectEvent->spriteId]);
+ }
+@@ -1440,22 +1459,26 @@
+         return OBJECT_EVENTS_COUNT;
+ 
+     objectEvent = &gObjectEvents[objectEventId];
+-    graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    graphicsInfo = OBJECT_GRAPHICS_INFO(objectEvent);
+     paletteSlot = graphicsInfo->paletteSlot;
+-    if (paletteSlot == PALSLOT_PLAYER)
+-    {
+-        LoadPlayerObjectReflectionPalette(graphicsInfo->paletteTag, paletteSlot);
+-    }
+-    else if (paletteSlot == PALSLOT_NPC_SPECIAL)
+-    {
+-        LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, paletteSlot);
+-    }
+-    else if (paletteSlot >= 16)
+-    {
+-        paletteSlot -= 16;
+-        _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
+-    }
+-
++#ifdef PLATFORM_3DS
++    if (!CtrCoopBike_UsesOwnPalette(objectEvent->graphicsId, objectEvent->localId, objectEvent->movementType))
++#endif
++    {
++        if (paletteSlot == PALSLOT_PLAYER)
++        {
++            LoadPlayerObjectReflectionPalette(graphicsInfo->paletteTag, paletteSlot);
++        }
++        else if (paletteSlot == PALSLOT_NPC_SPECIAL)
++        {
++            LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, paletteSlot);
++        }
++        else if (paletteSlot >= 16)
++        {
++            paletteSlot -= 16;
++            _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
++        }
++    }
+     if (objectEvent->movementType == MOVEMENT_TYPE_INVISIBLE)
+         objectEvent->invisible = TRUE;
+ 
+@@ -1498,9 +1521,9 @@
+     const struct ObjectEventGraphicsInfo *graphicsInfo;
+     const struct SubspriteTable *subspriteTables = NULL;
+ 
+-    graphicsInfo = GetObjectEventGraphicsInfo(objectEventTemplate->graphicsId);
++    graphicsInfo = TemplateGraphicsInfo(objectEventTemplate);
+     MakeSpriteTemplateFromObjectEventTemplate(objectEventTemplate, &spriteTemplate, &subspriteTables);
+-    spriteFrameImage.size = graphicsInfo->size;
++    spriteFrameImage.size = OBJECT_FRAME_SIZE(objectEventTemplate, graphicsInfo);
+     spriteTemplate.images = &spriteFrameImage;
+     objectEventId = TrySetupObjectEventSprite(objectEventTemplate, &spriteTemplate, mapNum, mapGroup, cameraX, cameraY);
+     if (objectEventId == OBJECT_EVENTS_COUNT)
+@@ -1509,6 +1532,10 @@
+     gSprites[gObjectEvents[objectEventId].spriteId].images = graphicsInfo->images;
+     if (subspriteTables)
+         SetSubspriteTables(&gSprites[gObjectEvents[objectEventId].spriteId], subspriteTables);
++
++#ifdef PLATFORM_3DS
++    CtrCoopBike_BindSprite(&gObjectEvents[objectEventId], &gSprites[gObjectEvents[objectEventId].spriteId]);
++#endif
+ 
+     return objectEventId;
+ }
+@@ -1555,9 +1582,8 @@
+     return TrySpawnObjectEventTemplate(objectEventTemplate, mapNum, mapGroup, cameraX, cameraY);
+ }
+ 
+-static void CopyObjectGraphicsInfoToSpriteTemplate(u16 graphicsId, void (*callback)(struct Sprite *), struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
+-{
+-    const struct ObjectEventGraphicsInfo *graphicsInfo = GetObjectEventGraphicsInfo(graphicsId);
++static void CopyResolvedGraphicsInfoToSpriteTemplate(const struct ObjectEventGraphicsInfo *graphicsInfo, void (*callback)(struct Sprite *), struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
++{
+ 
+     spriteTemplate->tileTag = graphicsInfo->tileTag;
+     spriteTemplate->paletteTag = graphicsInfo->paletteTag;
+@@ -1569,6 +1595,11 @@
+     *subspriteTables = graphicsInfo->subspriteTables;
+ }
+ 
++static void CopyObjectGraphicsInfoToSpriteTemplate(u16 graphicsId, void (*callback)(struct Sprite *), struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
++{
++    CopyResolvedGraphicsInfoToSpriteTemplate(GetObjectEventGraphicsInfo(graphicsId), callback, spriteTemplate, subspriteTables);
++}
++
+ static void CopyObjectGraphicsInfoToSpriteTemplate_WithMovementType(u16 graphicsId, u16 movementType, struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
+ {
+     CopyObjectGraphicsInfoToSpriteTemplate(graphicsId, sMovementTypeCallbacks[movementType], spriteTemplate, subspriteTables);
+@@ -1576,7 +1607,7 @@
+ 
+ static void MakeSpriteTemplateFromObjectEventTemplate(const struct ObjectEventTemplate *objectEventTemplate, struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
+ {
+-    CopyObjectGraphicsInfoToSpriteTemplate_WithMovementType(objectEventTemplate->graphicsId, objectEventTemplate->movementType, spriteTemplate, subspriteTables);
++    CopyResolvedGraphicsInfoToSpriteTemplate(TemplateGraphicsInfo(objectEventTemplate), sMovementTypeCallbacks[objectEventTemplate->movementType], spriteTemplate, subspriteTables);
+ }
+ 
+ // Used to create a sprite using a graphicsId associated with object events.
+@@ -1992,25 +2023,30 @@
+ 
+     objectEvent = &gObjectEvents[objectEventId];
+     subspriteTables = NULL;
+-    graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
+-    spriteFrameImage.size = graphicsInfo->size;
+-    CopyObjectGraphicsInfoToSpriteTemplate_WithMovementType(objectEvent->graphicsId, objectEvent->movementType, &spriteTemplate, &subspriteTables);
++    graphicsInfo = OBJECT_GRAPHICS_INFO(objectEvent);
++    spriteFrameImage.size = OBJECT_FRAME_SIZE(objectEvent, graphicsInfo);
++    CopyResolvedGraphicsInfoToSpriteTemplate(graphicsInfo, sMovementTypeCallbacks[objectEvent->movementType], &spriteTemplate, &subspriteTables);
+     spriteTemplate.images = &spriteFrameImage;
+ 
+     *(u16 *)&spriteTemplate.paletteTag = TAG_NONE;
+     paletteSlot = graphicsInfo->paletteSlot;
+-    if (paletteSlot == PALSLOT_PLAYER)
+-    {
+-        LoadPlayerObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
+-    }
+-    else if (paletteSlot == PALSLOT_NPC_SPECIAL)
+-    {
+-        LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
+-    }
+-    else if (paletteSlot >= 16)
+-    {
+-        paletteSlot -= 16;
+-        _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
++#ifdef PLATFORM_3DS
++    if (!CtrCoopBike_UsesOwnPalette(objectEvent->graphicsId, objectEvent->localId, objectEvent->movementType))
++#endif
++    {
++        if (paletteSlot == PALSLOT_PLAYER)
++        {
++            LoadPlayerObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
++        }
++        else if (paletteSlot == PALSLOT_NPC_SPECIAL)
++        {
++            LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
++        }
++        else if (paletteSlot >= 16)
++        {
++            paletteSlot -= 16;
++            _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
++        }
+     }
+     *(u16 *)&spriteTemplate.paletteTag = TAG_NONE;
+ 
+@@ -2040,6 +2076,9 @@
+         sprite->coordOffsetEnabled = TRUE;
+         sprite->sObjEventId = objectEventId;
+         objectEvent->spriteId = i;
++#ifdef PLATFORM_3DS
++        CtrCoopBike_BindSprite(objectEvent, sprite);
++#endif
+         if (!objectEvent->inanimate && objectEvent->movementType != MOVEMENT_TYPE_PLAYER)
+             StartSpriteAnim(sprite, GetFaceDirectionAnimNum(objectEvent->facingDirection));
+ 
+@@ -2076,20 +2115,28 @@
+     u8 paletteSlot;
+ 
+     graphicsInfo = GetObjectEventGraphicsInfo(graphicsId);
++#ifdef PLATFORM_3DS
++    graphicsInfo = CtrCoopBike_GraphicsInfo(graphicsId, objectEvent->localId, objectEvent->movementType, graphicsInfo);
++#endif
+     sprite = &gSprites[objectEvent->spriteId];
+     paletteSlot = graphicsInfo->paletteSlot;
+-    if (paletteSlot == PALSLOT_PLAYER)
+-    {
+-        PatchObjectPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
+-    }
+-    else if (paletteSlot == PALSLOT_NPC_SPECIAL)
+-    {
+-        LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
+-    }
+-    else if (paletteSlot >= 16)
+-    {
+-        paletteSlot -= 16;
+-        _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
++#ifdef PLATFORM_3DS
++    if (!CtrCoopBike_UsesOwnPalette(graphicsId, objectEvent->localId, objectEvent->movementType))
++#endif
++    {
++        if (paletteSlot == PALSLOT_PLAYER)
++        {
++            PatchObjectPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
++        }
++        else if (paletteSlot == PALSLOT_NPC_SPECIAL)
++        {
++            LoadSpecialObjectReflectionPalette(graphicsInfo->paletteTag, graphicsInfo->paletteSlot);
++        }
++        else if (paletteSlot >= 16)
++        {
++            paletteSlot -= 16;
++            _PatchObjectPalette(graphicsInfo->paletteTag, paletteSlot);
++        }
+     }
+     sprite->oam.shape = graphicsInfo->oam->shape;
+     sprite->oam.size = graphicsInfo->oam->size;
+@@ -2099,6 +2146,9 @@
+     sprite->oam.paletteNum = paletteSlot;
+     objectEvent->inanimate = graphicsInfo->inanimate;
+     objectEvent->graphicsId = graphicsId;
++#ifdef PLATFORM_3DS
++    CtrCoopBike_BindSprite(objectEvent, sprite);
++#endif
+     SetSpritePosToMapCoords(objectEvent->currentCoords.x, objectEvent->currentCoords.y, &sprite->x, &sprite->y);
+     sprite->centerToCornerVecX = -(graphicsInfo->width >> 1);
+     sprite->centerToCornerVecY = -(graphicsInfo->height >> 1);
+@@ -2305,6 +2355,17 @@
+     return LoadSpritePalette(spritePalette);
+ }
+ 
++#ifdef PLATFORM_3DS
++const uint16_t *CtrCoopBike_ObjectPalette(uint16_t tag)
++{
++    unsigned i;
++    for (i = 0; i < ARRAY_COUNT(sObjectEventSpritePalettes); ++i)
++        if (sObjectEventSpritePalettes[i].tag == tag)
++            return sObjectEventSpritePalettes[i].data;
++    return NULL;
++}
++#endif
++
+ void PatchObjectPalette(u16 paletteTag, u8 paletteSlot)
+ {
+     // paletteTag is assumed to exist in sObjectEventSpritePalettes
+@@ -2401,7 +2462,7 @@
+     const struct ObjectEventGraphicsInfo *graphicsInfo;
+ 
+     sprite = &gSprites[objectEvent->spriteId];
+-    graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    graphicsInfo = OBJECT_GRAPHICS_INFO(objectEvent);
+     SetObjectEventCoords(objectEvent, x, y);
+     SetSpritePosToMapCoords(objectEvent->currentCoords.x, objectEvent->currentCoords.y, &sprite->x, &sprite->y);
+     sprite->centerToCornerVecX = -(graphicsInfo->width >> 1);
+@@ -5161,6 +5222,9 @@
+     objectEvent->heldMovementActive = TRUE;
+     objectEvent->heldMovementFinished = FALSE;
+     gSprites[objectEvent->spriteId].sActionFuncId = 0;
++#ifdef PLATFORM_3DS
++    CtrCoopBike_MovementStarted(objectEvent, movementActionId);
++#endif
+     return FALSE;
+ }
+ 
+@@ -6748,7 +6812,7 @@
+ 
+ bool8 MovementAction_RestoreAnimation_Step0(struct ObjectEvent *objectEvent, struct Sprite *sprite)
+ {
+-    objectEvent->inanimate = GetObjectEventGraphicsInfo(objectEvent->graphicsId)->inanimate;
++    objectEvent->inanimate = OBJECT_GRAPHICS_INFO(objectEvent)->inanimate;
+     sprite->sActionFuncId = 1;
+     return TRUE;
+ }
+@@ -7647,7 +7711,7 @@
+ 
+     objectEvent->offScreen = FALSE;
+ 
+-    graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    graphicsInfo = OBJECT_GRAPHICS_INFO(objectEvent);
+     if (sprite->coordOffsetEnabled)
+     {
+         x = sprite->x + sprite->x2 + sprite->centerToCornerVecX + gSpriteCoordOffsetX;
+@@ -7919,7 +7983,7 @@
+ 
+ static u8 ObjectEventGetNearbyReflectionType(struct ObjectEvent *objEvent)
+ {
+-    const struct ObjectEventGraphicsInfo *info = GetObjectEventGraphicsInfo(objEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *info = OBJECT_GRAPHICS_INFO(objEvent);
+ 
+     // ceil div by tile width?
+     s16 width = (info->width + 8) >> 4;
+@@ -8169,13 +8233,13 @@
+ 
+ void GroundEffect_SandTracks(struct ObjectEvent *objEvent, struct Sprite *sprite)
+ {
+-    const struct ObjectEventGraphicsInfo *info = GetObjectEventGraphicsInfo(objEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *info = OBJECT_GRAPHICS_INFO(objEvent);
+     sGroundEffectTracksFuncs[info->tracks](objEvent, sprite, FALSE);
+ }
+ 
+ void GroundEffect_DeepSandTracks(struct ObjectEvent *objEvent, struct Sprite *sprite)
+ {
+-    const struct ObjectEventGraphicsInfo *info = GetObjectEventGraphicsInfo(objEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *info = OBJECT_GRAPHICS_INFO(objEvent);
+     sGroundEffectTracksFuncs[info->tracks](objEvent, sprite, TRUE);
+ }
+ 
+@@ -9082,7 +9146,7 @@
+ 
+ static void DoRippleFieldEffect(struct ObjectEvent *objectEvent, struct Sprite *sprite)
+ {
+-    const struct ObjectEventGraphicsInfo *graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *graphicsInfo = OBJECT_GRAPHICS_INFO(objectEvent);
+     gFieldEffectArguments[0] = sprite->x;
+     gFieldEffectArguments[1] = sprite->y + (graphicsInfo->height >> 1) - 2;
+     gFieldEffectArguments[2] = 151;
+@@ -9177,7 +9241,7 @@
+             FREE_AND_SET_NULL(sLockedAnimObjectEvents);
+         if (ableToStore == TRUE)
+         {
+-            objectEvent->inanimate = GetObjectEventGraphicsInfo(objectEvent->graphicsId)->inanimate;
++            objectEvent->inanimate = OBJECT_GRAPHICS_INFO(objectEvent)->inanimate;
+             objectEvent->facingDirectionLocked = FALSE;
+             sprite->animPaused = 0;
+         }
+--- a/src/field_effect_helpers.c
++++ b/src/field_effect_helpers.c
+@@ -15,11 +15,18 @@
+ #endif
+ #ifdef PLATFORM_3DS
+ #include "follower_mon.h"
++#include "3ds_coop_bike.h"
+ #endif
+ #include "constants/field_effects.h"
+ #include "constants/songs.h"
+ 
+ #define OBJ_EVENT_PAL_TAG_NONE 0x11FF // duplicate of define in event_object_movement.c
++
++#ifdef PLATFORM_3DS
++#define REFLECTION_GRAPHICS_INFO(object) CtrCoopBike_ObjectGraphicsInfo((object), GetObjectEventGraphicsInfo((object)->graphicsId))
++#else
++#define REFLECTION_GRAPHICS_INFO(object) GetObjectEventGraphicsInfo((object)->graphicsId)
++#endif
+ 
+ static void UpdateObjectReflectionSprite(struct Sprite *);
+ static void LoadObjectReflectionPalette(struct ObjectEvent *objectEvent, struct Sprite *sprite);
+@@ -81,7 +88,7 @@
+ 
+ static s16 GetReflectionVerticalOffset(struct ObjectEvent *objectEvent)
+ {
+-    return GetObjectEventGraphicsInfo(objectEvent->graphicsId)->height - 2;
++    return REFLECTION_GRAPHICS_INFO(objectEvent)->height - 2;
+ }
+ 
+ static void LoadObjectReflectionPalette(struct ObjectEvent *objectEvent, struct Sprite *reflectionSprite)
+@@ -93,22 +100,33 @@
+         [BRIDGE_TYPE_POND_HIGH - 1] = 44
+     };
+     reflectionSprite->sReflectionVerticalOffset = 0;
+-    if (!GetObjectEventGraphicsInfo(objectEvent->graphicsId)->disableReflectionPaletteLoad
++    if (!REFLECTION_GRAPHICS_INFO(objectEvent)->disableReflectionPaletteLoad
+      && ((bridgeType = MetatileBehavior_GetBridgeType(objectEvent->previousMetatileBehavior))
+       || (bridgeType = MetatileBehavior_GetBridgeType(objectEvent->currentMetatileBehavior))))
+     {
+         reflectionSprite->sReflectionVerticalOffset = bridgeReflectionVerticalOffsets[bridgeType - 1];
++#ifdef PLATFORM_3DS
++        if (CtrCoopBike_UsesOwnPalette(objectEvent->graphicsId, objectEvent->localId, objectEvent->movementType))
++            CtrCoopBike_BindReflection(objectEvent, &gSprites[objectEvent->spriteId], reflectionSprite,
++                REFLECTION_GRAPHICS_INFO(objectEvent)->reflectionPaletteTag);
++        else
++#endif
+         LoadObjectHighBridgeReflectionPalette(objectEvent, reflectionSprite->oam.paletteNum);
+     }
+     else
+     {
++#ifdef PLATFORM_3DS
++        if (CtrCoopBike_UsesOwnPalette(objectEvent->graphicsId, objectEvent->localId, objectEvent->movementType))
++            CtrCoopBike_BindReflection(objectEvent, &gSprites[objectEvent->spriteId], reflectionSprite, 65535);
++        else
++#endif
+         LoadObjectRegularReflectionPalette(objectEvent, reflectionSprite->oam.paletteNum);
+     }
+ }
+ 
+ static void LoadObjectRegularReflectionPalette(struct ObjectEvent *objectEvent, u8 paletteIndex)
+ {
+-    const struct ObjectEventGraphicsInfo *graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *graphicsInfo = REFLECTION_GRAPHICS_INFO(objectEvent);
+     if (graphicsInfo->reflectionPaletteTag != OBJ_EVENT_PAL_TAG_NONE)
+     {
+         if (graphicsInfo->paletteSlot == PALSLOT_PLAYER)
+@@ -125,7 +143,7 @@
+ // This is so the sprite blends in with the dark water metatile underneath the bridge.
+ static void LoadObjectHighBridgeReflectionPalette(struct ObjectEvent *objectEvent, u8 paletteNum)
+ {
+-    const struct ObjectEventGraphicsInfo *graphicsInfo = GetObjectEventGraphicsInfo(objectEvent->graphicsId);
++    const struct ObjectEventGraphicsInfo *graphicsInfo = REFLECTION_GRAPHICS_INFO(objectEvent);
+     if (graphicsInfo->reflectionPaletteTag != OBJ_EVENT_PAL_TAG_NONE)
+     {
+         PatchObjectPalette(graphicsInfo->reflectionPaletteTag, paletteNum);
+@@ -144,6 +162,10 @@
+     else
+     {
+         reflectionSprite->oam.paletteNum = gReflectionEffectPaletteMap[mainSprite->oam.paletteNum];
++#ifdef PLATFORM_3DS
++        if (CtrCoopBike_UsesOwnPalette(objectEvent->graphicsId, objectEvent->localId, objectEvent->movementType))
++            LoadObjectReflectionPalette(objectEvent, reflectionSprite);
++#endif
+         reflectionSprite->oam.shape = mainSprite->oam.shape;
+         reflectionSprite->oam.size = mainSprite->oam.size;
+         reflectionSprite->oam.matrixNum = mainSprite->oam.matrixNum | ST_OAM_VFLIP;
+@@ -177,6 +199,7 @@
+ #undef sReflectionObjEventId
+ #undef sReflectionObjEventLocalId
+ #undef sReflectionVerticalOffset
++#undef REFLECTION_GRAPHICS_INFO
+ #undef sIsStillReflection
+ 
+ extern const struct SpriteTemplate *const gFieldEffectObjectTemplatePointers[];

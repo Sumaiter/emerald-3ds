@@ -5,8 +5,7 @@
 #define _(text) text
 #define INCBIN_U16(...) {0}
 #define INCBIN_U32(...) {0}
-#include "../../build/upstream/src/main_menu.c"
-#include "../../build/upstream/src/task.c"
+#include "starter_menu_engine.inc"
 
 struct Main gMain;
 struct Task gTasks[NUM_TASKS];
@@ -19,9 +18,16 @@ static int sFailures;
 static int sHighlightValue = -1;
 static int sChosenSpecies;
 static int sChooseCount;
+static bool sChooseAccepted = true;
+static int sAnimateCount;
 static MainCallback sCallback;
 static bool sPcOpen;
 static int sStopCount;
+static int sMainMenuCount;
+
+static void JoinGamePrint(u8 windowId, const u8 *text) { (void)windowId; (void)text; }
+static void InitJoinGameMenu(void) {}
+static u32 InitMainMenu(bool8 returning) { (void)returning; sMainMenuCount++; return 0; }
 
 #define CHECK(condition, message) do { if (!(condition)) { sFailures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, message); } } while (0)
 
@@ -32,7 +38,7 @@ void SetGpuReg(u8 reg, u32 value)
 }
 
 void PlaySE(u16 song) { (void)song; }
-void AnimateSprites(void) {}
+void AnimateSprites(void) { sAnimateCount++; }
 void BuildOamBuffer(void) {}
 u8 UpdatePaletteFade(void) { return 0; }
 struct WindowTemplate CreateWindowTemplate(u8 bg, u8 left, u8 top, u8 width, u8 height, u8 paletteNum, u16 baseBlock)
@@ -45,7 +51,7 @@ void CreateYesNoMenu(const struct WindowTemplate *window, u16 baseTileNum, u8 pa
 {
     (void)window; (void)baseTileNum; (void)paletteNum; (void)initialCursorPos;
 }
-void SetMainCallback2(MainCallback callback) { sCallback = callback; }
+void SetMainCallback2(MainCallback callback) { sCallback = callback; gMain.callback2 = callback; }
 void CB2_InitMultiplayerGuestPassword(void) {}
 void CB2_ContinueSavedGame(void) {}
 void CtrCoop_MenuFrame(void) {}
@@ -68,7 +74,7 @@ bool CtrCoop_ChooseStarter(uint16_t species)
 {
     sChosenSpecies = species;
     sChooseCount++;
-    return true;
+    return sChooseAccepted;
 }
 
 static void Press(uint16_t key)
@@ -84,6 +90,8 @@ static void ResetStarter(void)
     sHighlightValue = -1;
     sChosenSpecies = 0;
     sChooseCount = 0;
+    sChooseAccepted = true;
+    sAnimateCount = 0;
     sCallback = NULL;
     CB2_InitStarterSelection();
 }
@@ -100,6 +108,11 @@ int main(void)
     gMain.newKeys = 0;
     CHECK(sStopCount == 0 && sJoining, "B in the initial PC does not cancel the parent join task");
     sPcOpen = false;
+    gMain.newKeys = B_BUTTON;
+    Task_JoinGameSearch(joinTask);
+    gMain.newKeys = 0;
+    CHECK(sStopCount == 1 && !sJoining && sMainMenuCount == 1,
+          "B outside the initial PC cancels joining and returns to the main menu");
     ResetStarter();
     CHECK(FuncIsActiveTask(Task_StarterSelection), "starter task is created");
     CHECK(CB2_StarterSelectionActive(), "active starter task is detected");
@@ -123,6 +136,28 @@ int main(void)
     CHECK(sChosenSpecies == SPECIES_TORCHIC, "A confirms the highlighted species");
     CHECK(sCallback == CB2_InitJoinGameMenu, "confirmed starter returns to join menu");
     CHECK(!CB2_StarterSelectionActive(), "confirmed starter task is closed");
+    CHECK(sAnimateCount == 5, "callback handoff skips rendering after the starter task closes");
+
+    ResetStarter();
+    sChooseAccepted = false;
+    Press(A_BUTTON);
+    CHECK(CB2_StarterSelectionActive() && sCallback == CB2_MainMenu,
+          "a rejected starter keeps the selection active");
+    CHECK(sChooseCount == 1 && sAnimateCount == 1,
+          "a rejected starter is attempted once and the menu keeps rendering");
+    sChooseAccepted = true;
+    Press(A_BUTTON);
+    CHECK(sChooseCount == 2 && !CB2_StarterSelectionActive(),
+          "retry after a rejected starter succeeds without leaving an active task");
+
+    ResetTasks();
+    CreateTask(TaskDummy, 0);
+    joinTask = CreateTask(Task_JoinGameSearch, 0);
+    CB2_InitStarterSelection();
+    CHECK(!FuncIsActiveTask(Task_JoinGameSearch) && CB2_StarterSelectionActive(),
+          "starter initialization replaces a join task outside slot zero");
+    CHECK(GetTaskCount() == 2 && FuncIsActiveTask(TaskDummy),
+          "replacing the join task preserves unrelated scheduled tasks");
 
     ResetStarter();
     Press(A_BUTTON);

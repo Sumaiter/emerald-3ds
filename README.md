@@ -12,7 +12,7 @@ Dieser Fork enthält den vollständigen Originalquelltext sowie die Änderungen 
 - bis zu zehn gespeicherte Gastnamen mit eigener Rückkehrposition; aktuell Host plus ein Gast gleichzeitig, Host plus drei Gäste ist für den nächsten Ausbau vorgesehen
 - Übertragung von Position, Blickrichtung, Animation und Avatar-Grafik
 - Menüs für Host, Gast und Passwort
-- Charakterauswahl mit 84 Originalfiguren, Namen und PC-Handcursor
+- Charakterauswahl mit 99 Figuren, Namen und PC-Handcursor; 15 vormals statische Figuren besitzen neue Lauf- und Fahrradbilder
 - Spielstandschreiben und cheatähnliche Spielregeln nur für den Host
 - laufende Synchronisierung der aktuellen Gruppe in die Koop-Box; die zuletzt vollständig übertragene Gruppe bleibt beim Host, wenn der Gast ausschaltet
 - Entfernen der Gastfigur beim Verbindungsabbruch
@@ -20,7 +20,7 @@ Dieser Fork enthält den vollständigen Originalquelltext sowie die Änderungen 
 - Protokoll- und Profiltests
 - Integrationspatch `patches/pokeemerald/0083-local-coop.patch`
 
-Ausgeschlossene Figuren ohne echte Laufbewegung sind in `ZEROWALK.md` dokumentiert. Der aktuelle Entwicklungsstand und die übrigen Sprints stehen in `Status.md`. Für die Arbeit an einer neuen Sitzung steht die aktuelle Diagnose in `HANDOFF.md`; die Ersteinrichtung auf einem PC beschreibt `SETUP.md`. **Sprint 3 und Sprint 4 sind mit zwei Emulatoren abgenommen. Startteam, PC-Sperre, atomare Box-Übernahme und laufende Gruppensynchronisierung sind umgesetzt. Sprint 5 wurde noch nicht begonnen; Hardwaretests bleiben offen.**
+Die 15 Figuren mit ergaenzten Laufbewegungen sind in `ZEROWALK.md` dokumentiert. Der aktuelle Entwicklungsstand und die übrigen Sprints stehen in `Status.md`. Für die Arbeit an einer neuen Sitzung steht die aktuelle Diagnose in `HANDOFF.md`; die Ersteinrichtung auf einem PC beschreibt `SETUP.md`. **Sprint 3 und Sprint 4 sind mit zwei Emulatoren abgenommen. Startteam, PC-Sperre, atomare Box-Übernahme und laufende Gruppensynchronisierung sind umgesetzt. Sprint 5 (unabhaengige Einzelkaempfe und Trainerreservierungen) ist lokal integriert und automatisch geprueft; die interaktive Abnahme, Reservierung einmaliger Wildgegner und Hardwaretests bleiben offen.**
 
 ## Bauen
 

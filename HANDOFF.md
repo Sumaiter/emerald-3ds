@@ -1,6 +1,237 @@
-# Übergabe: Emerald 3DS Local Co-op
+# Uebergabe: Emerald 3DS Local Co-op
 
-Stand: 2026-11-12
+Stand: 2026-11-13. Der zuvor lokale Stand nach main fdc4b48 wird fuer die
+Branch-Aktualisierung versioniert: Sprint 5, alle 99 Figuren und reparierte
+Hintergrundtests. Die folgenden aelteren Abnahmen dokumentieren ihre jeweiligen
+Builds; fuer den aktuellen Teststand gelten die ersten Abschnitte.
+
+## Branch-Pflege
+
+Nutzerauftrag: Nur main sowie sprint-6, sprint-7 und sprint-8 behalten; die drei
+Sprint-Branches mit dem neuesten main aktualisieren. Die Funktionen aus Sprint
+6 bis 8 bleiben in ihren Entwicklungsbranches; ihre Emulator-Abnahme ist offen.
+Vorheriger Branchbestand inklusive Remote-Refs ist lokal unter
+`build/branch-refresh/before-cleanup.bundle` gesichert. Das Bundle bleibt privat.
+Die bereits dateiweise integrierte Sprint-5-Historie wird als Merge-Vorfahr
+festgehalten, damit weitere Merges die alten Sprint-5-Aenderungen nicht erneut
+als neue Implementierung behandeln. Die Hintergrundtests vor der Pflege bestehen.
+
+## Hintergrundtests: Reparatur vom 2026-11-13
+
+Nutzervorgabe: Emulator-Tests macht der Nutzer selbst. Nur noch Tests im
+Hintergrund ausfuehren; keine Emulatorbedienung oder Testinstanzen starten.
+Die zuletzt gestarteten isolierten BBHost-/BBGast-Prozesse und ihr Server
+wurden beendet; alle acht Originalprofil-Dateien blieben laut SHA256 gleich.
+
+Der komplette `make -C 3ds_port verify-coop` besteht jetzt auch nach einem
+erzwungenen Neubau mit dem normalen MinGW-gcc, ohne besondere HOSTCC-Flags.
+Beleg: `build/coop-tests-fixed-clean.log`. Alle acht C-Suiten, Join-Flow,
+drei Grafik-Laufzeitpruefungen, 8+7+3 Packer-Tests und echte Fahrrad-Enginehooks
+bestanden; Sitzungssuite mit null erwarteten Fehlern.
+
+Startertest repariert: `scripts/prepare_starter_menu_test.py` selektiert
+unveraenderte Starter-/Join-/Menuecallback-Funktionen aus der gestagten Engine.
+Dadurch werden unter MinGW nicht laenger unbenutzte Hauptmenue-Grafiken und
+Texte mitverlinkt. Renderer/Mainmenue-Rueckkehr bleiben Testprobes. Der native
+Scheduler nutzt die feldbasierte Variante derselben task.c; die festen
+32-Bit-ARM-Raw-Offsets sind auf dem 64-Bit-Testrechner nicht anwendbar.
+Zusaetzliche Regressionen: abgelehnte Starterwahl und Retry, Callbackwechsel
+ohne anschliessendes Rendering, Join-Task ausserhalb Slot 0, andere Tasks
+bleiben bestehen, B-Abbruch nur ausserhalb des anfaenglichen PC-Zugriffs.
+Der SetMainCallback2-Probe aktualisiert jetzt auch gMain.callback2 korrekt.
+
+Fahrrad-Hooktest repariert: HOSTCC mit Optionen wird in Programm und Argumente
+aufgeteilt, statt als einzelner ungueltiger Programmname gestartet zu werden.
+Beide Varianten (normaler gcc und HOSTCC mit Optionen) sind erfolgreich geprueft.
+Diese Reparaturen betreffen die Testinfrastruktur, nicht den Spielbuild.
+Die manuelle Sprint-5-Abnahme bleibt offen.
+
+## ZeroWalk und fertige HTML-Galerie
+
+Nutzerfreigabe: Nach Sichtung der vollstaendigen Galerie wurden die Grafiken
+aller 99 Figuren mit "ok die passen alle nice" visuell abgenommen. Keine
+weiteren grafischen Korrekturen beauftragt. Diese Freigabe betrifft Bilder
+und Animationsdarstellung in der Galerie; sie ersetzt keine Funktionsabnahme
+der Koop-/Kampf-/Fahrradablaeufe im Emulator oder auf Hardware.
+
+ZeroWalk-Agent `19fe966c-3634-4d2d-ac8f-1827d90b4d93` ist fertig (auto-review).
+Alle 15 Figuren haben neun Lauf-/27 Radframes und ein eigenes Kampfrueckenbild;
+alle 45 neuen PNGs sind formatiert und vom Agenten auf fuenf Vergleichsboegen
+gegen die Originalreferenzen sichtgeprueft. Alle 158 PNGs der bisherigen
+84 Figuren stimmen mit ihren alten Hashes ueberein. Auswahl: 99 Figuren,
+Fahrrad:97 generiert/2 nativ, Kampf:91 generiert/8 nativ. Details und finale
+Metadaten stehen in assets/coop_walk, assets/coop_bike und assets/coop_battle_back.
+
+Gemeinsame Anbindung abgeschlossen: Walk-Modul und walks.bin in full.mk,
+verify-coop-walk samt Bike-Headerabhaengigkeit in Makefile, Engine-Klassifizierung
+in staging.py und Auditfreigabe fuer neue Walk-PNGs. Alles nach build/upstream
+uebernommen. 0086 ist bereits angewendet; Reverse-Check und Enginehash passen.
+Nicht erneut anwenden. Packs: walks 69728, bikes 1345228, backpics 190080 Byte.
+C-Lauf-/Fahrrad-/Kampftests, echte Enginehooks sowie Python 8+7+3 bestanden.
+Gemeinsamer ARM-/Release-/PAK-Build erfolgreich, aktueller Build siehe unten.
+
+Die verlangte lokale HTML-Galerie ist vollstaendig und selbststaendig oeffenbar:
+`build/character-gallery/index.html` (99 Figuren, 15 neu, 0 fehlende Grafiken).
+Generator: `tools/build_character_gallery.py`, Vorlage: `tools/character_gallery.html`.
+Strikter Aufruf: `C:/Python314/python.exe tools/build_character_gallery.py --expect-count 99`.
+Drei Tests in tools/test_character_gallery.py pruefen native Bildfolgen/Dauern,
+Quinty-Sonderspiegelung, Richtungen, native Kampfwuerfe und alle 99 Figuren.
+Auch neue RUN-Folgen werden aus 3ds_coop_walk.c mit [5,3,5,3] Takt gelesen.
+JavaScript-Syntax sowie echte Wiedergabefunktion commandAt bei Bildgrenzen,
+Schleifen und endlichen Animationen bestanden. Mach 9/Acro 27 Frames; generierte
+Kampfruecken ehrlich statisch. Suche, Filter, Richtung, Tempo, Einzelbilder,
+lokale Notizen und JSON-Pruefbericht-Export/Import sind vorhanden.
+
+Die Galerie enthaelt native Originalgrafiken und bleibt im ignorierten build/.
+Die visuelle Browser-Abnahme wurde nicht durchgefuehrt: Browserhost nicht
+verfuegbar; nach Start von Chrome wurde die Navigation zur lokalen Galerie
+mit "Computer Use was not approved to use Google Chrome" abgelehnt. Danach
+keine weitere Browserbedienung oder Umgehung. Nutzer fragte nach dem Zweck;
+es wurde erklaert, dass Chrome nur fuer die HTML-Sichtpruefung gedacht war.
+HTML direkt verlinken; Nutzer kann seinen bevorzugten Browser verwenden.
+
+## Sprint-5-Integration vom 2026-11-13
+
+Quelle: origin/sprint-5 `1be2515ff4d13d8ab3a62d8941882748dfbd7260`
+(Implementierung dbb9ff0 plus Tests 1be2515). Nach Fetch dateiweise per
+Dreiwege-Zusammenfuehrung in den aktuellen lokalen Stand uebernommen,
+keine Ruecknahme neuerer main-Korrekturen und kein Push/Commit. Vollstaendige
+Sicherung vor Integration: `build/sprint5-integration/before-sprint5.zip`.
+Basis/ours/theirs/merged und Quellen-IDs stehen im selben ignorierten Ordner.
+
+Kampfstart/-ende/-tick sind ueber 0083 an battle_main.c und CB2_WhiteOut
+angebunden; der isoliert gepruefte Zusatzpatch ist bereits in build/upstream
+angewendet. Nicht nochmals anwenden. Protokoll 11 hat Kampf-Pakettypen 33..39,
+unveraendert 15-Byte-Positionspakete und alle bisherigen NPC-/Party-/Join-Typen.
+Testsuite jetzt CTR_COOP_TEST_MAX_SPRINT=5, ohne erwartete Fehler.
+
+Zusaetzliche Integrationskorrekturen: wiederholte Reservierung ist idempotent,
+verlorene Freigaben werden erneut angefragt, ein waehrend des Wartens besiegter
+Trainer startet keinen zweiten Kampf. Ergebnisse tragen Sequenznummern;
+Doppel-/Altpakete geben keine mehrfachen Belohnungen. Empfangene Ergebnisse
+warten bis zum Ende eines lokalen Kampfs/PC-Besuchs, damit eingehende Effekte
+nicht als eigene Aenderungen zurueckgesendet werden. Save-Rekey wird fuer
+Geld, Muenzen und Bag-Mengen getrennt von der Kampfbasis entschluesselt.
+Box-Ziele werden vorab vollstaendig geplant, aktive Spielerreihen geschuetzt;
+Inventarfehler/volle Boxen bestaetigen keine Teiluebernahme. Unausgerichtete
+82-Byte-Boxrecords werden vor Enginezugriffen in ausgerichtete Daten kopiert.
+
+Auch wilde Gastkaempfe werden vom Host gegen PC-Zugriffe freigegeben; zwei
+unabhaengige Kaempfe sind gleichzeitig erlaubt. Der PC bleibt waehrend
+aktiver Kaempfe und noch unbestaetigter Ergebnisse gesperrt, um Faenge nicht
+mit einem vollstaendigen PC-Snapshot zu ueberschreiben. Bei vollstaendig vollen
+Boxen oder nicht anwendbarem Inventar bleibt das Ergebnis unbestaetigt im
+Sendepuffer; diese Grenzfaelle brauchen noch eine interaktive Abnahme.
+Statische einmalige Wildgegner besitzen im uebernommenen Sprint-5-Branch
+noch keine eigene Reservierung; dazu keine Vollstaendigkeitsbehauptung.
+
+Automatisch bestanden: acht Koop-Pruefgruppen, neue Sprint-5-Faelle fuer
+parallele Kaempfe/PC-Rennen, Wiederholung/Retry, Rekey, Faenge/Box-Kollisionen,
+Inventarfehler, Kampf-/Fahrradgrafiktests und ARM-Compile/Link.
+Die Emulator-/Hardware-Abnahme ist offen. Laufende Host/Gast-Prozesse beim
+Bauen nicht beendet oder ueberschrieben; danach ueber das Paseo-Script aktualisieren.
+
+## Aktueller gemeinsamer Testbuild
+
+Release und PAK erfolgreich gebaut: Build `03ecd34074355974`, ABI `ebf0f1f4`.
+3DSX/SMDH liegen unter `build/upstream/3ds_port/dist`, das zugehoerige PAK
+unter `build/upstream/3ds_port/build`. Dieser Build enthaelt alle neuen
+Kampf-/Fahrradgrafiken fuer 99 Figuren,15 neue Laufboegen und die PC-, Gastnamen- und Beitrittskorrekturen.
+
+Paseo-Script **Host und Gast starten** kopiert die zusammengehoerigen Dateien
+in die zentralen portablen Azahar-Profile und startet den lokalen Raumserver.
+Vor einer Aktualisierung beide Spielfenster schliessen; F6 laedt keine neuen
+Dateien aus dem Arbeitsbaum. Verbindung: 127.0.0.1:24872, Raumpasswort leer.
+Einstellungen, Pfade und Startvarianten stehen in `LOKAL_TESTEN.md`.
+
+## Behobene Koop-Ablaeufe
+
+Nach Starterwahl und beim Wiederbeitritt uebertraegt `OpenPCWhenReady()` das
+Gast-Team automatisch unter der Host-PC-Sperre. Erst bestaetigte atomare
+Uebertragung und Spawn-Paket erlauben das Betreten der Welt. Neue Gastnamen
+starten in Wurzelheim; bekannte Namen verwenden ihre gespeicherte Position.
+Es wird dabei kein Feld-PC ueber dem Verbindungsbildschirm geoeffnet.
+
+Nach `ApplyHostSave()` liest der Gast seinen eigenen Profilnamen aus dem
+lokalen `SaveBlock2.playerName`. Der Hostname wird fuer Besitzermeldungen
+separat bewahrt; Snapshot-Pruefsumme, andere Save-Felder und Gast-Speicherschutz
+bleiben erhalten. Ungueltige/leere Namen werden als GAST spielkodiert angezeigt.
+
+Ein durch den Mitspieler belegter PC zeigt unten dessen tatsaechlichen
+Spielnamen. A, B oder Tippen bestaetigt die Meldung und setzt das wartende
+Skript einmal fort. Die Sperre bleibt beim Besitzer. Paket-Reihenfolge,
+Disconnect, noch unbekannter Besitzer und die Eingabetaste beim Oeffnen sind
+beruecksichtigt und durch Laufzeit-/Sitzungstests abgesichert.
+
+## Basis der bisherigen 84 Figuren (vor der ZeroWalk-Erweiterung)
+
+Beide ausdruecklich beauftragten, in Paseo sichtbaren Subagenten arbeiteten
+mit auto-review und Abschlussbenachrichtigung. Ihre Arbeit ist abgeschlossen:
+Kampfbilder `8246f5c0-3978-4a0b-9d38-d5c0090751e3`, Fahrraeder
+`0a63a5b1-36c0-4771-9c63-5ee8dbe0656e`. Keine weiteren Bilder generieren.
+
+Kampf: 76 neue 64x64-Rueckenansichten und acht native Zuordnungen. Alle sechs
+finalen Vergleichsboegen wurden gegen die Figurenreferenzen geprueft;
+Manifest/Provenienz enthalten Sichtfreigabe und finale PNG-Hashes. CBK1 enthaelt
+158760 Byte. Nur lokale Spieler-/Safari-Controller verwenden die eigene
+Auswahl von Host/Gast. Native Bilder behalten ihre Animationen; generierte
+Bilder verwenden fuenf sichere Verweise auf dieselbe statische Ansicht. Der
+separate Palettenwechsel beim Pokeballwurf bleibt bei der eigenen Figur.
+Integration: `3ds_coop_battle.c`, `pack_coop_battle_back.py`, Patch 0084.
+
+Fahrrad: 82 neue 288x96-Boegen mit jeweils 27 Frames, binaerer Transparenz und
+hoechstens 15 sichtbaren RGB555-Farben; dazu zwei native Figuren. Alle 82
+Identitaeten und alle Frames wurden vom Bilder-Agenten geprueft. Strikter
+CBI1-Gesamtpack: 1137208 Byte. Brendan 100 verwendet native 101/102,
+May 105 verwendet 106/107. Prompts und versionierbare Provenienz inklusive
+finaler Hashes liegen jeweils neben den Assets; Originalreferenzen bleiben
+lokal in `build/bike-art/references`. Bildzeichnungen stammen aus Imagegen;
+Python dient nur Format, Palette, Transparenz und Skalierung.
+
+Protokollversion 11 hat 15-Byte-Positions-/Spawnpakete mit eigenem bikeMode
+(0 Fuss, 1 Mach, 2 Acro) und movementSequence fuer wiederholte Aktionen am Ort.
+SetRemote bedeutet ausschliesslich Kontextaenderung. Beim Moduswechsel wird
+nach Ende einer laufenden Bewegung dieselbe Objekt-ID neu gebunden.
+Sprites reservieren mindestens 512 Byte auch zu Fuss. ClearRemote entfernt
+nur Kontext; Reset gibt Art-/Palettenspeicher erst beim Soft-Reset frei.
+
+Alle ausgewaehlten lokalen/entfernten Spieler haben eigene Extpaletten,
+auch bei nativen Figuren und zu Fuss. Der begrenzte Engine-Tag-Lookup loest
+Originalpaletten auf. Legacy-Palettenwrites werden nur fuer echte Spieler
+umgangen; Grafik, Frames, Geometrie, Kamera und Position werden weiterhin
+aktualisiert. Reflexionen besitzen eigene Farben, passende Hoehe und die
+originale dunkelblaue Hochbrueckenpalette. Absteigen, Wetter und Menue-Rueckkehr
+sind durch Verhaltenstests abgesichert. Voxel-Kontext beruecksichtigt Groesse
+und Pixelpointer beim Fusspunkt-Cache.
+
+Die finale 0085 ist bereits angewendet. `build/applied-bike.patch` entspricht
+der angewendeten Fassung; nicht erneut darueber anwenden. Sie enthaelt genau
+drei Engine-Dateidiffs. Module, Make-Regeln und `staging.py` sind integriert;
+beide Assetpacks gehoeren zur Engine-RomFS, native Originalpixel zum privaten
+ROM-Datenpfad. Keine ROMs, SAVs, PAKs oder Emulatorprofile versionieren.
+
+## Verifikation und verbleibender Nutzertest
+
+Bestanden: acht Koop-Pruefgruppen (Protokoll, Profile, Speicher, Laufzeit,
+Sitzung, lokale Sitzung, Build-Kompatibilitaet, Join-Ablauf), Kampf-C-Suite
+und drei Packer-Tests, Fahrrad-C-Suite und sieben Packer-Tests sowie Probes
+aus den tatsaechlich angewendeten Engine-Grafik-/Reflexionsfunktionen.
+Gemeinsamer ARM-Compile/Link und Release-/PAK-Build bestanden. Finaler Audit
+inklusive aller neuen Dateien ohne Befund;
+git diff --check ohne Fehler. Der separate starter_menu_test kann mit dem
+vorhandenen MinGW-Linker wegen unaufgeloester anderer Hauptmenue-Textsymbole
+nicht linken und zaehlt nicht als bestanden. Diese Einschraenkung betrifft
+nicht den ARM-Release-Link.
+
+Die neuen Grafik-/Palettenablaeufe und die aktuellen PC-/Join-Korrekturen
+wurden noch nicht interaktiv im Emulator oder auf Hardware abgenommen.
+Mit verschiedenen Figuren fuer Host und Gast testen: eigener Kampfruecken
+auch beim Pokeballwurf; Mach/Acro in allen Richtungen samt Huepfen, Auf- und
+Absteigen, Spiegelung, Wetter und Menue-Rueckkehr; gegenseitige PC-Sperre mit
+richtigem Namen; Gastname in Szenariotexten; Starterbeitritt und Wiederbeitritt.
+Die aelteren Emulatorabnahmen unten sind kein Nachweis dieser neuen Aenderungen.
+
+## Fruehere Abnahmen und technischer Hintergrund
 
 Dieser Stand ist eine Entwicklungsversion, **keine vollständig spielbare Alpha**. Sprint 1 bis Sprint 4 sind geprüft und auf `main` zusammengeführt. Die unten dokumentierten Join-, NPC-, Starter-, PC-/Box-, Menü-, Gruppen-, Abbruch- und Wiederbeitrittstests wurden mit zwei isolierten Azahar-Instanzen ausgeführt. Hardwaretests bleiben offen. Sprint 5 wurde noch nicht begonnen. Der Branch `sprint-4` enthält weiterhin den abgenommenen Quellstand; neuere Multiplayer-Korrekturen aus dem bisherigen Arbeitsstand wurden erhalten.
 

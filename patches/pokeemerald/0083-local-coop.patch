@@ -1939,6 +1939,56 @@ diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
          if (sCursorArea == CURSOR_AREA_IN_PARTY && CountPartyAliveNonEggMonsExcept(sCursorPosition) == 0)
          {
              if (sStorage->displayMonIsEgg || GetMonData(&sStorage->movingMon, MON_DATA_HP) == 0)
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -1,5 +1,6 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #endif
+ #include "battle.h"
+@@ -601,4 +602,8 @@ void CB2_InitBattle(void)
+ {
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_BattleStart())
++        return;
++#endif
+     MoveSaveBlocks_ResetHeap();
+     AllocateBattleResources();
+     AllocateBattleSpritesData();
+@@ -1875,5 +1880,8 @@ static void CB2_PreInitMultiBattle(void)
+ void BattleMainCB2(void)
+ {
++#ifdef PLATFORM_3DS
++    CtrCoop_BattleTick();
++#endif
+     AnimateSprites();
+     BuildOamBuffer();
+     RunTextPrinters();
+@@ -5336,5 +5345,9 @@ static void ReturnFromBattleToOverworld(void)
+ 
+     m4aSongNumStop(SE_LOW_HEALTH);
++#ifdef PLATFORM_3DS
++    if (gBattleOutcome != B_OUTCOME_LOST && gBattleOutcome != B_OUTCOME_DREW)
++        CtrCoop_BattleEnd();
++#endif
+     SetMainCallback2(gMain.savedCallback);
+ }
+ 
+diff --git a/src/overworld.c b/src/overworld.c
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -1717,5 +1717,8 @@ void CB2_WhiteOut(void)
+         ResetSafariZoneFlag_();
+         DoWhiteOut();
++#ifdef PLATFORM_3DS
++        CtrCoop_BattleEnd();
++#endif
+         ResetInitialPlayerAvatarState();
+         ScriptContext_Init();
+         UnlockPlayerFieldControls();
 
 
 diff --git a/src/main_menu.c b/src/main_menu.c

@@ -432,21 +432,56 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	"$(PYTHON)" tests/coop_join_flow_test.py
 
 build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_storage.c include/3ds_coop_storage.h
-	@mkdir -p build
+	@mkdir -p $(@D)
 	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_storage_test.c src/3ds_coop_storage.c -o $@
 
 build/coop_session_test$(EXESUFFIX): tests/coop_session_test.c tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
 	@mkdir -p build
-	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=4 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
 
 STARTER_MENU_ROOT := $(if $(wildcard $(ROOT)/src/main_menu.c),$(ROOT),$(ROOT)/build/upstream)
+.PHONY: verify-coop-bike
+verify-coop: verify-coop-bike
+verify-coop-bike: build/coop_bike_test$(EXESUFFIX)
+	./build/coop_bike_test$(EXESUFFIX)
+	"$(PYTHON)" tests/test_coop_bike_pack.py
+	"$(PYTHON)" tests/test_coop_bike_hooks.py --source $(STARTER_MENU_ROOT)/src
+
+build/coop_bike_test$(EXESUFFIX): tests/coop_bike_test.c src/3ds_coop_bike.c include/3ds_coop_bike.h include/3ds_coop_protocol.h include/3ds_coop_walk.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -iquote include -iquote $(STARTER_MENU_ROOT)/include -iquote $(STARTER_MENU_ROOT)/include/constants -iquote $(STARTER_MENU_ROOT) -iquote $(STARTER_MENU_ROOT)/3ds_port/compat tests/coop_bike_test.c -o $@
+
+.PHONY: verify-coop-battle
+.PHONY: verify-coop-walk
+verify-coop: verify-coop-walk
+verify-coop-walk: build/coop_walk_test$(EXESUFFIX)
+	./build/coop_walk_test$(EXESUFFIX)
+	"$(PYTHON)" tests/test_coop_walk_pack.py
+
+build/coop_walk_test$(EXESUFFIX): tests/coop_walk_test.c src/3ds_coop_walk.c include/3ds_coop_walk.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -iquote include -iquote $(STARTER_MENU_ROOT)/include -iquote $(STARTER_MENU_ROOT)/include/constants -iquote $(STARTER_MENU_ROOT) -iquote $(STARTER_MENU_ROOT)/3ds_port/compat tests/coop_walk_test.c -o $@
+
+verify-coop: verify-coop-battle
+verify-coop-battle: build/coop_battle_test$(EXESUFFIX)
+	./build/coop_battle_test$(EXESUFFIX)
+	"$(PYTHON)" tests/test_coop_battle_pack.py
+
+build/coop_battle_test$(EXESUFFIX): tests/coop_battle_test.c src/3ds_coop_battle.c include/3ds_coop_battle.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -iquote include -iquote $(STARTER_MENU_ROOT)/include -iquote $(STARTER_MENU_ROOT)/include/constants -iquote $(STARTER_MENU_ROOT) -iquote $(STARTER_MENU_ROOT)/3ds_port/compat tests/coop_battle_test.c -o $@
+
 build/coop_runtime_test$(EXESUFFIX): tests/coop_runtime_test.c src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
 	@mkdir -p build
 	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=ignored-qualifiers -ffunction-sections -fdata-sections -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/coop_runtime_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -Wl,--gc-sections -o $@
 
-build/starter_menu_test$(EXESUFFIX): tests/starter_menu_test.c $(STARTER_MENU_ROOT)/src/main_menu.c $(STARTER_MENU_ROOT)/src/task.c
+build/starter_menu_engine.inc: scripts/prepare_starter_menu_test.py $(STARTER_MENU_ROOT)/src/main_menu.c $(STARTER_MENU_ROOT)/src/task.c
 	@mkdir -p build
-	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=pointer-to-int-cast -Wno-error=format -Wno-error=ignored-qualifiers -Wno-unused-parameter -Wno-unused-function -Wno-int-conversion -Wno-int-to-pointer-cast -ffunction-sections -fdata-sections -DSTARTER_MENU_TEST -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/starter_menu_test.c -Wl,--gc-sections -o $@
+	"$(PYTHON)" scripts/prepare_starter_menu_test.py --source $(STARTER_MENU_ROOT) --output $@
+
+build/starter_menu_test$(EXESUFFIX): tests/starter_menu_test.c build/starter_menu_engine.inc
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Wno-error=pointer-to-int-cast -Wno-error=format -Wno-error=ignored-qualifiers -Wno-unused-parameter -Wno-unused-function -Wno-int-conversion -Wno-int-to-pointer-cast -ffunction-sections -fdata-sections -DSTARTER_MENU_TEST -DPORTABLE -DPLATFORM_3DS -DPORT_BRIDGE -Ibuild -Iinclude -I$(STARTER_MENU_ROOT)/include -I$(STARTER_MENU_ROOT)/include/constants -I$(STARTER_MENU_ROOT) -I$(STARTER_MENU_ROOT)/3ds_port/compat tests/starter_menu_test.c -Wl,--gc-sections -o $@
 
 build/coop_protocol_test$(EXESUFFIX): tests/coop_protocol_test.c src/3ds_coop_protocol.c include/3ds_coop_protocol.h
 	@mkdir -p build

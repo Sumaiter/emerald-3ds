@@ -11,6 +11,9 @@ struct ObjectEvent gObjectEvents[OBJECT_EVENTS_COUNT];
 struct PlayerAvatar gPlayerAvatar;
 struct MapHeader gMapHeader;
 struct Main gMain;
+u32 gBattleTypeFlags;
+u16 gTrainerBattleOpponent_A;
+u8 gBattleOutcome;
 
 static struct SaveBlock1 sSave1;
 static struct SaveBlock2 sSave2;
@@ -30,6 +33,23 @@ static int sSpriteMutations;
 static int sRemovals;
 static uint8_t sSession = LOCAL_SESSION_IN;
 static int sPeerCount = 1;
+static uint8_t sLocalBikeMode, sLocalBikeSequence, sRemoteBikeGraphics, sRemoteBikeMode;
+static bool sRemoteBikeValid;
+static bool sRemoteMovementActive;
+static unsigned sBikeRebinds, sBikeActions;
+
+uint8_t CtrCoopBike_LocalMode(void) { return sLocalBikeMode; }
+uint8_t CtrCoopBike_LocalMovementSequence(void) { return sLocalBikeSequence; }
+bool CtrCoopBike_SetRemote(uint8_t id, uint8_t mode)
+{
+    bool changed = !sRemoteBikeValid || id != sRemoteBikeGraphics || mode != sRemoteBikeMode;
+    sRemoteBikeValid = true;
+    sRemoteBikeGraphics = id;
+    sRemoteBikeMode = mode;
+    return changed;
+}
+void CtrCoopBike_ClearRemote(void) { sRemoteBikeValid = false; }
+void CtrCoopBike_Reset(void) { CtrCoopBike_ClearRemote(); sLocalBikeMode = sLocalBikeSequence = 0; }
 
 #define CHECK(condition, message) do { if (!(condition)) { sFailures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, message); } } while (0)
 
@@ -115,8 +135,8 @@ void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, bool8 has
     mon->box.hasSpecies = TRUE;
 }
 bool8 FlagGet(u16 id) { return (sSave1.flags[id / 8] & (1 << (id % 8))) != 0; }
-bool8 ObjectEventSetHeldMovement(struct ObjectEvent *object, u8 action) { (void)object; (void)action; return FALSE; }
-bool8 ObjectEventIsHeldMovementActive(struct ObjectEvent *object) { (void)object; return FALSE; }
+bool8 ObjectEventSetHeldMovement(struct ObjectEvent *object, u8 action) { (void)object; (void)action; sBikeActions++; return FALSE; }
+bool8 ObjectEventIsHeldMovementActive(struct ObjectEvent *object) { (void)object; return sRemoteMovementActive; }
 u8 ObjectEventClearHeldMovementIfFinished(struct ObjectEvent *object) { (void)object; return 0; }
 void MoveObjectEventToMapCoords(struct ObjectEvent *object, s16 x, s16 y) { sSpriteMutations++; object->currentCoords.x = x; object->currentCoords.y = y; }
 void ObjectEventTurn(struct ObjectEvent *object, u8 direction) { sSpriteMutations++; object->facingDirection = direction; }
@@ -136,7 +156,7 @@ bool8 FreeObjectEventSlotNearPlayer(void) { return FALSE; }
 u8 MapGridGetElevationAt(int x, int y) { (void)x; (void)y; return 0; }
 u8 SpawnSpecialObjectEvent(struct ObjectEventTemplate *template) { (void)template; return OBJECT_EVENTS_COUNT; }
 u8 TrySpawnObjectEvent(u8 localId, u8 mapNum, u8 mapGroup) { (void)localId; (void)mapNum; (void)mapGroup; return OBJECT_EVENTS_COUNT; }
-void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphicsId) { object->graphicsId = graphicsId; }
+void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphicsId) { sBikeRebinds++; object->graphicsId = graphicsId; }
 const struct CtrCoopProfile *CtrCoopProfile_Get(void)
 {
     static const struct CtrCoopProfile profile;
@@ -173,6 +193,58 @@ static void ResetGuest(void)
     sLastPacketSize = 0;
     sRecordPackets = false;
     sPacketCount = 0;
+    sBikeRebinds = sBikeActions = 0;
+    sRemoteMovementActive = false;
+}
+
+static void TestRemoteBikeChanges(void)
+{
+    CtrCoopSnapshot local = {0};
+    ResetGuest();
+    gObjectEvents[0].active = TRUE;
+    sLocalBikeMode = CTR_COOP_BIKE_MACH;
+    sLocalBikeSequence = 42;
+    CHECK(LocalSnapshot(&local) && local.bikeMode == CTR_COOP_BIKE_MACH && local.movementSequence == 42,
+          "local snapshot includes its independent bicycle mode and action sequence");
+
+    gObjectEvents[2].active = TRUE;
+    gObjectEvents[2].localId = LOCALID_COOP_PLAYER;
+    gObjectEvents[2].graphicsId = 100;
+    gObjectEvents[2].currentCoords.x = 10;
+    gObjectEvents[2].currentCoords.y = 10;
+    sCoop.objectEventId = 2;
+    sCoop.remoteValid = sCoop.haveApplied = true;
+    sCoop.remote = (CtrCoopSnapshot){0, 0, 0, 10, 10, DIR_SOUTH, CTR_COOP_ACTION_FACE_DOWN, 100, 0, 0};
+    sCoop.applied = sCoop.remote;
+    CtrCoopBike_SetRemote(100, CTR_COOP_BIKE_NONE);
+    UpdateRemoteObject(&local);
+    CHECK(sBikeRebinds == 0, "unchanged base identity needs no sprite refresh");
+    sCoop.remote.bikeMode = CTR_COOP_BIKE_MACH;
+    UpdateRemoteObject(&local);
+    CHECK(sRemoteBikeMode == CTR_COOP_BIKE_MACH && sBikeRebinds == 1,
+          "mounting refreshes remote graphics although base character ID is unchanged");
+    CHECK(sRemovals == 0 && sCoop.objectEventId == 2, "mounting preserves the same remote actor");
+    sCoop.remote.bikeMode = CTR_COOP_BIKE_ACRO;
+    sCoop.remote.movementActionId = 0x70;
+    sCoop.remote.movementSequence = 1;
+    UpdateRemoteObject(&local);
+    CHECK(sBikeRebinds == 2 && sBikeActions == 1, "Acro hop at the same position starts once");
+    UpdateRemoteObject(&local);
+    CHECK(sBikeActions == 1, "unchanged hop heartbeat is ignored");
+    sCoop.remote.movementSequence = 2;
+    UpdateRemoteObject(&local);
+    CHECK(sBikeActions == 2 && sBikeRebinds == 2, "next identical hop animates without rebuilding the sprite");
+    sCoop.remote.bikeMode = CTR_COOP_BIKE_NONE;
+    sCoop.remote.movementActionId = CTR_COOP_ACTION_FACE_DOWN;
+    sRemoteMovementActive = true;
+    UpdateRemoteObject(&local);
+    CHECK(sBikeRebinds == 2 && sRemoteBikeMode == CTR_COOP_BIKE_ACRO,
+          "dismount waits for the current bike animation before changing frame tables");
+    sRemoteMovementActive = false;
+    UpdateRemoteObject(&local);
+    CHECK(sBikeRebinds == 3 && sRemoteBikeMode == CTR_COOP_BIKE_NONE, "dismounting restores the selected walking character");
+    CtrCoop_PeerLeft(2);
+    CHECK(!sRemoteBikeValid, "disconnect clears the remote bike context");
 }
 
 static void TestJoinOrdering(void)
@@ -193,6 +265,111 @@ static void TestJoinOrdering(void)
     CHECK(sStarterOpened == 1, "starter opens once snapshot and join information are ready");
     CHECK(CtrCoop_ChooseStarter(SPECIES_TREECKO), "starter can be created after the snapshot and join information");
     CHECK(!CtrCoop_ChooseStarter(SPECIES_TORCHIC), "starter confirmation cannot create a second Pokemon");
+}
+
+static void TestStarterJoinsWithoutPcMenu(void)
+{
+    static const u16 starters[] = {SPECIES_TREECKO, SPECIES_TORCHIC, SPECIES_MUDKIP};
+    uint8_t packet[CTR_COOP_SAVE_CHUNK_MAX];
+    CtrCoopSnapshot spawn = {0};
+    uint32_t size, checksum;
+
+    spawn.mapGroup = 0;
+    spawn.mapNum = 9;
+    spawn.mapLayoutId = 10;
+    spawn.x = 19;
+    spawn.y = 16;
+    spawn.facing = DIR_SOUTH;
+    spawn.movementActionId = CTR_COOP_ACTION_FACE_DOWN;
+    spawn.graphicsId = 100;
+    for (unsigned i = 0; i < ARRAY_COUNT(starters); i++)
+    {
+        ResetGuest();
+        CHECK(PrepareCoopStorage(), "starter join storage is prepared");
+        gMain.callback2 = MenuCallback;
+        sCoop.saveReady = sCoop.joinInfoReceived = true;
+        sCoop.initialTeamSelection = sCoop.starterRequired = true;
+        CHECK(CtrCoop_ChooseStarter(starters[i]), "each starter can begin a direct world join");
+        CtrCoop_MenuFrame();
+        CHECK(sCoop.pcPending && sPcOpened == 0 && !sCoop.initialTeamCommitted,
+            "starter waits for host transfer permission without opening a PC menu");
+        CHECK(CtrCoopProtocol_EncodePcResult(false, packet, CTR_COOP_PC_RESULT_SIZE), "busy result is encoded");
+        CtrCoop_HandlePacket(2, packet, CTR_COOP_PC_RESULT_SIZE);
+        CtrCoop_MenuFrame();
+        CHECK(sCoop.pcPending && gPlayerPartyCount == 1,
+            "a busy host is retried without recreating or losing the starter");
+        CHECK(CtrCoopProtocol_EncodePcResult(true, packet, CTR_COOP_PC_RESULT_SIZE), "grant result is encoded");
+        CtrCoop_HandlePacket(2, packet, CTR_COOP_PC_RESULT_SIZE);
+        CtrCoop_OverworldFrame();
+        CtrCoop_MenuFrame();
+        CHECK(sPcOpened == 0, "starter selection never opens the field PC over the join screen");
+        CHECK(sCoop.initialTeamCommitted && sCoop.syncState == PC_SYNC_SENDING,
+            "starter is automatically submitted through the atomic team transfer");
+        CHECK(CtrCoopProtocol_DecodePcSyncBegin(sLastPacket, sLastPacketSize, &size, &checksum)
+           && size == CTR_COOP_PC_SYNC_SIZE
+           && checksum == CtrCoopProtocol_Checksum(sSaveData, CTR_COOP_PC_SYNC_SIZE),
+            "automatic join submits a complete checksummed storage and party snapshot");
+        CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING,
+            "world entry still waits for the host acknowledgement and spawn");
+        if (i == 0)
+        {
+            CtrCoop_HandlePacket(2, (const uint8_t[]){CTR_COOP_PC_SYNC_READY_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_SAVE_READY_SIZE);
+            CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING,
+                "team acknowledgement alone cannot enter a world without a spawn");
+        }
+        CHECK(CtrCoopProtocol_EncodeSpawn(&spawn, packet, CTR_COOP_SPAWN_SIZE), "Littleroot spawn is encoded");
+        CtrCoop_HandlePacket(2, packet, CTR_COOP_SPAWN_SIZE);
+        if (i != 0)
+        {
+            CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING,
+                "spawn alone cannot bypass starter transfer confirmation");
+            CtrCoop_HandlePacket(2, (const uint8_t[]){CTR_COOP_PC_SYNC_READY_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_SAVE_READY_SIZE);
+        }
+        CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_IN && sPcOpened == 0,
+            "confirmed starter and Littleroot spawn complete the join directly");
+        CHECK(sCoop.spawn.mapGroup == 0 && sCoop.spawn.mapNum == 9 && gPlayerPartyCount == 1,
+            "direct join keeps the selected starter and the host's Littleroot destination");
+    }
+}
+
+static void TestSavedTeamRejoinsWithoutPcMenu(void)
+{
+    uint8_t packet[CTR_COOP_SPAWN_SIZE];
+    CtrCoopSnapshot savedSpawn = {0};
+
+    ResetGuest();
+    CHECK(PrepareCoopStorage(), "rejoin storage is prepared");
+    gMain.callback2 = MenuCallback;
+    sCoop.saveReady = sCoop.joinInfoReceived = sCoop.initialTeamSelection = true;
+    sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][7].hasSpecies = TRUE;
+    sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][7].personality = 12345;
+    LoadPartyRow(CTR_COOP_STORAGE_GUEST_ROW, gPlayerParty);
+    CtrCoop_MenuFrame();
+    CHECK(sCoop.pcPending && sStarterOpened == 0 && sPcOpened == 0,
+        "known guest retains its team without showing starter or PC menus");
+    CtrCoopProtocol_EncodePcResult(true, packet, CTR_COOP_PC_RESULT_SIZE);
+    CtrCoop_HandlePacket(2, packet, CTR_COOP_PC_RESULT_SIZE);
+    CtrCoop_MenuFrame();
+    CHECK(sCoop.initialTeamCommitted && sCoop.syncState == PC_SYNC_SENDING && sPcOpened == 0,
+        "rejoin automatically submits the restored team without overlaying the join menu");
+    CHECK(gPlayerPartyCount == 1 && gPlayerParty[0].box.personality == 12345,
+        "rejoin preserves and compacts the stored guest Pokemon");
+    savedSpawn.mapGroup = 2;
+    savedSpawn.mapNum = 3;
+    savedSpawn.mapLayoutId = 44;
+    savedSpawn.x = 30;
+    savedSpawn.y = 40;
+    savedSpawn.facing = DIR_SOUTH;
+    savedSpawn.movementActionId = CTR_COOP_ACTION_FACE_DOWN;
+    savedSpawn.graphicsId = 100;
+    CtrCoopProtocol_EncodeSpawn(&savedSpawn, packet, sizeof(packet));
+    CtrCoop_HandlePacket(2, packet, sizeof(packet));
+    CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_SEARCHING, "saved spawn still waits for team acknowledgement");
+    CtrCoop_HandlePacket(2, (const uint8_t[]){CTR_COOP_PC_SYNC_READY_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_SAVE_READY_SIZE);
+    CHECK(CtrCoop_GetSessionState() == LOCAL_SESSION_IN && sPcOpened == 0,
+        "acknowledged rejoin enters the world without a PC menu");
+    CHECK(sCoop.spawn.mapGroup == 2 && sCoop.spawn.mapNum == 3 && sCoop.spawn.x == 30 && sCoop.spawn.y == 40,
+        "known guest keeps its saved location instead of receiving the new-guest spawn");
 }
 
 static void TestGuestSaveProtection(void)
@@ -380,7 +557,7 @@ static void TestSpritesWaitForOverworld(void)
     gObjectEvents[2].localId = LOCALID_COOP_PLAYER;
     sCoop.objectEventId = 2;
     sCoop.remoteValid = true;
-    sCoop.remote = (CtrCoopSnapshot){0, 0, 0, 10, 10, 1, CTR_COOP_ACTION_FACE_DOWN, 0};
+    sCoop.remote = (CtrCoopSnapshot){0, 0, 0, 10, 10, 1, CTR_COOP_ACTION_FACE_DOWN, 0, 0, 0};
     gMain.callback2 = MenuCallback;
     sSpriteMutations = 0;
     CtrCoop_OverworldFrame();
@@ -431,12 +608,30 @@ static void TestPcDenialResumesScript(void)
     ResetGuest();
     sCoop.guest = false;
     sCoop.pcOwner = PC_OWNER_GUEST;
+    memcpy(sCoop.peerName, (uint8_t[]){0xC1, 0xBB, 0xCD, 0xCE, EOS}, 5);
     CHECK(!CtrCoop_RequestPC(), "occupied PC is denied");
     CHECK(sScriptResumed == 0, "denial waits until the special's waitstate");
+    CHECK(CtrCoop_PCNoticeName() != NULL && memcmp(CtrCoop_PCNoticeName(), sCoop.peerName, 5) == 0,
+        "host sees the actual guest's name in the PC notice");
     CtrCoop_OverworldFrame();
-    CHECK(sScriptResumed == 1, "denied host PC returns to the outer PC menu");
+    CHECK(sScriptResumed == 0, "occupied PC keeps its notice visible instead of silently returning");
+    CtrCoop_DismissPCNotice();
     CtrCoop_OverworldFrame();
-    CHECK(sScriptResumed == 1, "denial resumes the script once");
+    CHECK(sScriptResumed == 1 && CtrCoop_PCNoticeName() == NULL, "acknowledging the notice resumes the script");
+    CtrCoop_DismissPCNotice();
+    CtrCoop_OverworldFrame();
+    CHECK(sScriptResumed == 1, "notice resumes the script only once");
+    CHECK(sCoop.pcOwner == PC_OWNER_GUEST && !sCoop.pcOpen, "notice never steals the remote PC lock");
+
+    ResetGuest();
+    sCoop.guest = false;
+    sCoop.pcOwner = PC_OWNER_GUEST;
+    memcpy(sCoop.peerName, sDefaultGuestName, sizeof(sCoop.peerName));
+    CtrCoop_RequestPC();
+    CHECK(memcmp(CtrCoop_PCNoticeName(), (uint8_t[]){0xC1, 0xBB, 0xCD, 0xCE, EOS}, 5) == 0,
+          "legacy default guest identity is displayed in game-text encoding");
+    CHECK(memcmp(sCoop.peerName, sDefaultGuestName, sizeof(sCoop.peerName)) == 0,
+          "display correction preserves saved guest spawn identity");
 
     ResetGuest();
     sCoop.partySending = true;
@@ -454,10 +649,31 @@ static void TestPcDenialResumesScript(void)
 
     ResetGuest();
     sCoop.saveReady = true;
+    memcpy(sCoop.hostName, (uint8_t[]){0xC2, 0xC9, 0xCD, 0xCE, EOS}, 5);
     CtrCoop_RequestPC();
     CtrCoop_HandlePacket(2, claim, sizeof(claim));
     CtrCoop_OverworldFrame();
-    CHECK(sScriptResumed == 1, "simultaneous host claim resumes the guest's script");
+    CHECK(sScriptResumed == 0 && CtrCoop_PCNoticeName() != NULL,
+        "simultaneous host claim shows a notice before returning");
+    CHECK(memcmp(CtrCoop_PCNoticeName(), sCoop.hostName, 5) == 0, "guest sees the host's original name");
+    CtrCoop_HandlePacket(2, result, sizeof(result));
+    CHECK(CtrCoop_PCNoticeName() != NULL, "trailing rejection cannot erase the named notice");
+    CtrCoop_DismissPCNotice();
+    CtrCoop_OverworldFrame();
+    CHECK(sScriptResumed == 1, "guest can acknowledge host ownership");
+
+    ResetGuest();
+    sCoop.saveReady = true;
+    CtrCoop_RequestPC();
+    CtrCoop_HandlePacket(2, result, sizeof(result));
+    CtrCoop_HandlePacket(2, claim, sizeof(claim));
+    CtrCoop_OverworldFrame();
+    CHECK(sScriptResumed == 0 && CtrCoop_PCNoticeName() != NULL,
+        "reordered claim upgrades a pending rejection to the named notice");
+    CtrCoop_PeerLeft(2);
+    CtrCoop_OverworldFrame();
+    CHECK(sScriptResumed == 1 && CtrCoop_PCNoticeName() == NULL,
+        "disconnect dismisses the PC notice without stranding the script");
 
     ResetGuest();
     sCoop.saveReady = true;
@@ -626,7 +842,7 @@ static void TestTenSpawnNamesAndMigration(void)
     } legacy = {0};
     struct SaveBlock1 persisted;
     uint8_t name[CTR_COOP_PLAYER_NAME_SIZE];
-    CtrCoopSnapshot spawn = {0, 9, 10, 19, 16, 1, CTR_COOP_ACTION_FACE_DOWN, 100};
+    CtrCoopSnapshot spawn = {0, 9, 10, 19, 16, 1, CTR_COOP_ACTION_FACE_DOWN, 100, 0, 0};
 
     ResetGuest();
     legacy.magic = SPAWN_TABLE_MAGIC;
@@ -827,6 +1043,8 @@ static void TestContinuousPartySync(void)
 int main(void)
 {
     TestJoinOrdering();
+    TestStarterJoinsWithoutPcMenu();
+    TestSavedTeamRejoinsWithoutPcMenu();
     TestGuestSaveProtection();
     TestAuthenticationResult();
     TestHostPasswordCheck();
@@ -834,6 +1052,7 @@ int main(void)
     TestHostSnapshotThroughPackets();
     TestPcPreservesLiveParty();
     TestSpritesWaitForOverworld();
+    TestRemoteBikeChanges();
     TestPcMutualExclusion();
     TestPcDenialResumesScript();
     TestPcDisconnectAndDeferredJoin();
@@ -846,3 +1065,9 @@ int main(void)
     puts("co-op runtime tests passed");
     return 0;
 }
+
+bool8 AddBagItem(u16 itemId, u16 quantity) { (void)itemId; (void)quantity; return TRUE; }
+bool8 RemoveBagItem(u16 itemId, u16 quantity) { (void)itemId; (void)quantity; return TRUE; }
+u32 GetMoney(u32 *money) { return *money ^ gSaveBlock2Ptr->encryptionKey; }
+void AddMoney(u32 *money, u32 amount) { *money = (GetMoney(money) + amount) ^ gSaveBlock2Ptr->encryptionKey; }
+void RemoveMoney(u32 *money, u32 amount) { u32 value = GetMoney(money); *money = (value > amount ? value - amount : 0) ^ gSaveBlock2Ptr->encryptionKey; }

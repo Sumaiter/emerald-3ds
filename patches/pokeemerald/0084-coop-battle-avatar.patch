@@ -1,0 +1,128 @@
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -37,6 +37,7 @@
+ #include "constants/rgb.h"
+ #ifdef PLATFORM_3DS
+ #include "event_data.h"
++#include "3ds_coop_battle.h"
+ #include "constants/vars.h"
+ #endif
+ 
+@@ -2448,6 +2449,10 @@
+         trainerPicId = gSaveBlock2Ptr->playerGender;
+     }
+ 
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BackPicId(trainerPicId);
++#endif
++
+     if (gBattleTypeFlags & BATTLE_TYPE_MULTI)
+     {
+         if ((GetBattlerPosition(gActiveBattler) & BIT_FLANK) != B_FLANK_LEFT) // Second mon, on the right.
+@@ -2455,7 +2460,11 @@
+         else // First mon, on the left.
+             xPos = 32;
+ 
+-        if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gPartnerTrainerId != TRAINER_STEVEN_PARTNER)
++        if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gPartnerTrainerId != TRAINER_STEVEN_PARTNER
++#ifdef PLATFORM_3DS
++         && !CtrCoopBattle_Active()
++#endif
++        )
+         {
+             xPos = 90;
+             yPos = (8 - gTrainerFrontPicCoords[trainerPicId].size) * 4 + 80 + BATTLE_SIDE_SHIFT(B_SIDE_PLAYER);
+@@ -2473,7 +2482,11 @@
+     }
+ 
+     // Use front pic table for any tag battles unless your partner is Steven.
+-    if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gPartnerTrainerId != TRAINER_STEVEN_PARTNER)
++    if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gPartnerTrainerId != TRAINER_STEVEN_PARTNER
++#ifdef PLATFORM_3DS
++         && !CtrCoopBattle_Active()
++#endif
++        )
+     {
+         trainerPicId = PlayerGenderToFrontTrainerPicId(gSaveBlock2Ptr->playerGender);
+         DecompressTrainerFrontPic(trainerPicId, gActiveBattler);
+@@ -2493,6 +2506,9 @@
+     {
+         DecompressTrainerBackPic(trainerPicId, gActiveBattler);
+         SetMultiuseSpriteTemplateToTrainerBack(trainerPicId, GetBattlerPosition(gActiveBattler));
++#ifdef PLATFORM_3DS
++        CtrCoopBattle_Apply(gActiveBattler, &gMultiuseSpriteTemplate);
++#endif
+         gBattlerSpriteIds[gActiveBattler] = CreateSprite(&gMultiuseSpriteTemplate, xPos, yPos, GetBattlerSpriteSubpriority(gActiveBattler));
+ 
+         gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = gActiveBattler;
+@@ -2530,8 +2546,14 @@
+         trainerPicId = gSaveBlock2Ptr->playerGender + TRAINER_BACK_PIC_BRENDAN;
+     }
+ 
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BackPicId(trainerPicId);
++#endif
+     DecompressTrainerBackPic(trainerPicId, gActiveBattler);
+     SetMultiuseSpriteTemplateToTrainerBack(trainerPicId, GetBattlerPosition(gActiveBattler));
++#ifdef PLATFORM_3DS
++    CtrCoopBattle_Apply(gActiveBattler, &gMultiuseSpriteTemplate);
++#endif
+     gBattlerSpriteIds[gActiveBattler] = CreateSprite(&gMultiuseSpriteTemplate, 80, (8 - gTrainerBackPicCoords[trainerPicId].size) * 4 + 80 + BATTLE_SIDE_SHIFT(B_SIDE_PLAYER), 30);
+ 
+     gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = gActiveBattler;
+@@ -3159,6 +3181,10 @@
+ {
+     u8 paletteNum;
+     u8 taskId;
++    u16 trainerPicId = gSaveBlock2Ptr->playerGender;
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BackPicId(trainerPicId);
++#endif
+ 
+     SetSpritePrimaryCoordsFromSecondaryCoords(&gSprites[gBattlerSpriteIds[gActiveBattler]]);
+ 
+@@ -3172,7 +3198,10 @@
+     StartSpriteAnim(&gSprites[gBattlerSpriteIds[gActiveBattler]], 1);
+ 
+     paletteNum = AllocSpritePalette(0xD6F8);
+-    LoadCompressedPalette(gTrainerBackPicPaletteTable[gSaveBlock2Ptr->playerGender].data, OBJ_PLTT_ID(paletteNum), PLTT_SIZE_4BPP);
++    LoadCompressedPalette(gTrainerBackPicPaletteTable[trainerPicId].data, OBJ_PLTT_ID(paletteNum), PLTT_SIZE_4BPP);
++#ifdef PLATFORM_3DS
++    CtrCoopBattle_LoadPalette(paletteNum);
++#endif
+     gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = paletteNum;
+ 
+     taskId = CreateTask(Task_StartSendOutAnim, 5);
+--- a/src/battle_controller_safari.c
++++ b/src/battle_controller_safari.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_battle.h"
++#endif
+ #include "battle.h"
+ #include "battle_anim.h"
+ #include "battle_controllers.h"
+@@ -356,12 +359,19 @@
+ 
+ static void SafariHandleDrawTrainerPic(void)
+ {
+-    DecompressTrainerBackPic(gSaveBlock2Ptr->playerGender, gActiveBattler);
+-    SetMultiuseSpriteTemplateToTrainerBack(gSaveBlock2Ptr->playerGender, GetBattlerPosition(gActiveBattler));
++    u16 trainerPicId = gSaveBlock2Ptr->playerGender;
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BackPicId(trainerPicId);
++#endif
++    DecompressTrainerBackPic(trainerPicId, gActiveBattler);
++    SetMultiuseSpriteTemplateToTrainerBack(trainerPicId, GetBattlerPosition(gActiveBattler));
++#ifdef PLATFORM_3DS
++    CtrCoopBattle_Apply(gActiveBattler, &gMultiuseSpriteTemplate);
++#endif
+     gBattlerSpriteIds[gActiveBattler] = CreateSprite(
+       &gMultiuseSpriteTemplate,
+       80,
+-      (8 - gTrainerBackPicCoords[gSaveBlock2Ptr->playerGender].size) * 4 + 80 + BATTLE_SIDE_SHIFT(B_SIDE_PLAYER),
++      (8 - gTrainerBackPicCoords[trainerPicId].size) * 4 + 80 + BATTLE_SIDE_SHIFT(B_SIDE_PLAYER),
+       30);
+     gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = gActiveBattler;
+     gSprites[gBattlerSpriteIds[gActiveBattler]].x2 = DISPLAY_WIDTH;

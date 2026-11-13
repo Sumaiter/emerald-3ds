@@ -18,6 +18,7 @@
 #include "gba/io_reg.h"
 #include "port_platform.h"
 #include "3ds_log.h"
+#include "3ds_coop_bike.h"
 
 #include "3ds_video.h"
 #include "voxel_building.h"
@@ -71,6 +72,7 @@ typedef struct
      * ground (VisibleRows). Measured once per picture table (StandingFootPad). */
     int footPad;
     const struct SpriteFrameImage *footPadImages;
+    const void *footPadImageData;
     /* Measured on the standing pose itself; else, until that picture is in
      * memory, on the frame the object first showed (StandingFootPad). */
     bool footPadExact;
@@ -482,7 +484,7 @@ static void PictureSize(const struct Sprite *sprite, const struct ObjectEvent *o
     GetSpriteDimensions(sprite->oam.shape, sprite->oam.size, w, h);
     if (obj == NULL || sprite->subspriteTables == NULL)
         return;
-    info = GetObjectEventGraphicsInfo(obj->graphicsId);
+    info = CtrCoopBike_ObjectGraphicsInfo(obj, GetObjectEventGraphicsInfo(obj->graphicsId));
     if ((info->width > *w || info->height > *h)
      && VoxelSlots_Fits((unsigned)info->width, (unsigned)info->height, sprite->oam.bpp != 0,
                         VOXEL_SPRITE_SLOT_DIM, VOXEL_SPRITE_MAX_BYTES))
@@ -1529,9 +1531,13 @@ unsigned VoxelEntities_Emit(VoxelBuilder *builder, uint16_t *atlas, const VoxelC
         if (!sSlots[i].valid)
             continue;
         {
-            const struct ObjectEventGraphicsInfo *info = GetObjectEventGraphicsInfo(obj->graphicsId);
+            const struct ObjectEventGraphicsInfo *info =
+                CtrCoopBike_ObjectGraphicsInfo(obj, GetObjectEventGraphicsInfo(obj->graphicsId));
+            const void *frameData = info->images != NULL ? info->images[0].data : NULL;
 
-            bool changed = sSlots[i].footPadImages != info->images;
+            /* Custom riders share a stable frame table; changing the chosen
+             * person can replace its pixel pointers without moving the table. */
+            bool changed = sSlots[i].footPadImages != info->images || sSlots[i].footPadImageData != frameData;
 
             if (changed || !sSlots[i].footPadExact)
             {
@@ -1539,6 +1545,7 @@ unsigned VoxelEntities_Emit(VoxelBuilder *builder, uint16_t *atlas, const VoxelC
                 int pad = info->images != NULL ? StandingFootPad(info, &sSlots[i], &exact) : 0;
 
                 sSlots[i].footPadImages = info->images;
+                sSlots[i].footPadImageData = frameData;
                 /* A provisional pad is taken once, never from each frame of a
                  * walk: that would undo its bob. */
                 if (changed || exact)

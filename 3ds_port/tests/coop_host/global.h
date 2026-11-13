@@ -93,7 +93,8 @@ struct ItemSlot
 struct SaveBlock2
 {
     uint8_t playerName[8];
-    uint8_t padding[3876];
+    uint32_t encryptionKey;
+    uint8_t padding[3872];
 };
 
 struct SaveBlock1

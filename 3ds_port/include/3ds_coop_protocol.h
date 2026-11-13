@@ -34,6 +34,15 @@
 #define CTR_COOP_PARTY_CHUNK_PACKET 31
 #define CTR_COOP_PARTY_RESULT_PACKET 32
 #define CTR_COOP_PARTY_RESULT_SIZE 3
+#define CTR_COOP_BATTLE_RESERVE_PACKET 33
+#define CTR_COOP_BATTLE_RESERVE_RESULT_PACKET 34
+#define CTR_COOP_BATTLE_RELEASE_PACKET 35
+#define CTR_COOP_BATTLE_BEGIN_PACKET 36
+#define CTR_COOP_BATTLE_CHUNK_PACKET 37
+#define CTR_COOP_BATTLE_REQUEST_PACKET 38
+#define CTR_COOP_BATTLE_READY_PACKET 39
+#define CTR_COOP_BATTLE_RESERVE_SIZE 4
+#define CTR_COOP_BATTLE_RESERVE_RESULT_SIZE 4
 #define CTR_COOP_PC_CONTROL_SIZE 2
 #define CTR_COOP_PC_RESULT_SIZE 3
 #define CTR_COOP_FLAG_SIZE 5
@@ -41,7 +50,7 @@
 #define CTR_COOP_AUTH_PACKET_SIZE 6
 #define CTR_COOP_AUTH_RESULT_SIZE 3
 #define CTR_COOP_IDENTITY_SIZE 10
-#define CTR_COOP_SPAWN_SIZE 13
+#define CTR_COOP_SPAWN_SIZE 15
 #define CTR_COOP_SAVE_BEGIN_SIZE 10
 #define CTR_COOP_SAVE_REQUEST_SIZE 6
 #define CTR_COOP_SAVE_CHUNK_HEADER 8
@@ -49,9 +58,9 @@
 #define CTR_COOP_SAVE_CHUNK_MAX (CTR_COOP_SAVE_CHUNK_HEADER + CTR_COOP_SAVE_CHUNK_DATA_MAX)
 #define CTR_COOP_SAVE_READY_SIZE 2
 #define CTR_COOP_PLAYER_NAME_SIZE 8
-#define CTR_COOP_PROTOCOL_VERSION 9
+#define CTR_COOP_PROTOCOL_VERSION 11
 #define CTR_COOP_GRAPHICS_ID_MAX 238
-#define CTR_COOP_PACKET_SIZE 13
+#define CTR_COOP_PACKET_SIZE 15
 #define CTR_COOP_HEARTBEAT_FRAMES 60
 
 #define CTR_COOP_ACTION_FACE_DOWN 0x00
@@ -60,6 +69,19 @@
 #define CTR_COOP_ACTION_FACE_RIGHT 0x03
 #define CTR_COOP_ACTION_WALK_NORMAL_DOWN 0x08
 #define CTR_COOP_ACTION_PLAYER_RUN_DOWN 0x35
+#define CTR_COOP_ACTION_JUMP_2_DOWN 0x0C
+#define CTR_COOP_ACTION_WALK_FAST_DOWN 0x15
+#define CTR_COOP_ACTION_WALK_IN_PLACE_SLOW_DOWN 0x19
+#define CTR_COOP_ACTION_RIDE_WATER_CURRENT_DOWN 0x29
+#define CTR_COOP_ACTION_WALK_FASTER_DOWN 0x2D
+#define CTR_COOP_ACTION_JUMP_DOWN 0x42
+#define CTR_COOP_ACTION_JUMP_IN_PLACE_DOWN 0x46
+#define CTR_COOP_ACTION_JUMP_TURN_DOWN_UP 0x4A
+#define CTR_COOP_ACTION_ACRO_FIRST 0x64
+#define CTR_COOP_ACTION_ACRO_LAST 0x8B
+#define CTR_COOP_BIKE_NONE 0
+#define CTR_COOP_BIKE_MACH 1
+#define CTR_COOP_BIKE_ACRO 2
 
 typedef struct
 {
@@ -71,6 +93,8 @@ typedef struct
     uint8_t facing;
     uint8_t movementActionId;
     uint8_t graphicsId;
+    uint8_t bikeMode;
+    uint8_t movementSequence;
 } CtrCoopSnapshot;
 
 typedef struct
@@ -121,6 +145,17 @@ bool CtrCoopProtocol_EncodePcSyncRequest(uint32_t offset, uint8_t *out, uint16_t
 bool CtrCoopProtocol_DecodePcSyncRequest(const uint8_t *data, uint16_t size, uint32_t *offset);
 bool CtrCoopProtocol_EncodePcSyncChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodePcSyncChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize);
+bool CtrCoopProtocol_EncodeBattleReserve(uint16_t trainerId, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleReserve(const uint8_t *data, uint16_t size, uint16_t *trainerId);
+bool CtrCoopProtocol_EncodeBattleReserveResult(uint16_t trainerId, bool accepted, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleReserveResult(const uint8_t *data, uint16_t size, uint16_t *trainerId, bool *accepted);
+bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum);
+bool CtrCoopProtocol_EncodeBattleRequest(uint32_t offset, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleRequest(const uint8_t *data, uint16_t size, uint32_t *offset);
+bool CtrCoopProtocol_EncodeBattleChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
     uint8_t *out, uint16_t outCapacity, uint16_t *outSize);
 uint32_t CtrCoopProtocol_Checksum(const uint8_t *data, uint32_t size);
 bool CtrCoopProtocol_EncodePartyBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize);

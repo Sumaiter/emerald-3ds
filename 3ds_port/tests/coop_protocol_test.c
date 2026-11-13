@@ -8,7 +8,7 @@ static int sFailures;
 
 static CtrCoopSnapshot Base(void)
 {
-    CtrCoopSnapshot snapshot = {2, 7, 0x1234, -7, 9, 1, CTR_COOP_ACTION_FACE_DOWN, 100};
+    CtrCoopSnapshot snapshot = {2, 7, 0x1234, -7, 9, 1, CTR_COOP_ACTION_FACE_DOWN, 100, 0, 0};
     return snapshot;
 }
 
@@ -56,6 +56,88 @@ static void TestInvalidPackets(void)
     packet[12] = CTR_COOP_GRAPHICS_ID_MAX + 1;
     CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), &decoded), "invalid graphicsId rejected");
     CHECK(!CtrCoopProtocol_Decode(packet, sizeof(packet), NULL), "null decode rejected");
+}
+
+static void TestBikeSnapshots(void)
+{
+    static const uint8_t groups[] = {0x0C, 0x15, 0x19, 0x1D, 0x21, 0x25, 0x29, 0x2D, 0x42, 0x46};
+    CtrCoopSnapshot last = Base(), current, decoded;
+    uint8_t packet[CTR_COOP_PACKET_SIZE + 1];
+
+    for (unsigned mode = CTR_COOP_BIKE_MACH; mode <= CTR_COOP_BIKE_ACRO; ++mode)
+        for (unsigned group = 0; group < sizeof(groups); ++group)
+            for (unsigned dir = 1; dir <= 4; ++dir)
+            {
+                current = Base();
+                current.bikeMode = mode;
+                current.movementSequence = 255;
+                current.facing = dir;
+                current.movementActionId = groups[group] + dir - 1;
+                packet[CTR_COOP_PACKET_SIZE] = 0xA5;
+                CHECK(CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "bike action %x encodes", current.movementActionId);
+                CHECK(CtrCoopProtocol_Decode(packet, CTR_COOP_PACKET_SIZE, &decoded), "bike action decodes");
+                CHECK(!CtrCoopProtocol_ShouldSend(&current, &decoded, 0), "bike mode, base identity and sequence roundtrip");
+                CHECK(packet[13] == mode && packet[14] == 255 && packet[15] == 0xA5, "bike fields use their own bounded wire bytes");
+            }
+    for (unsigned action = 0x64; action <= 0x8B; ++action)
+    {
+        current = Base();
+        current.bikeMode = CTR_COOP_BIKE_ACRO;
+        current.movementActionId = action;
+        current.facing = (action - 0x64) % 4 + 1;
+        CHECK(CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "acro action %x encodes", action);
+        CHECK(CtrCoopProtocol_Decode(packet, CTR_COOP_PACKET_SIZE, &decoded), "acro action decodes");
+        current.bikeMode = CTR_COOP_BIKE_NONE;
+        CHECK(!CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "acro action rejected on foot");
+        current.bikeMode = CTR_COOP_BIKE_MACH;
+        CHECK(!CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "acro action rejected on Mach bike");
+    }
+    current = Base();
+    current.bikeMode = CTR_COOP_BIKE_ACRO;
+    current.movementActionId = 0x4A;
+    CHECK(CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "turn-jump initial facing accepted");
+    current.facing = 2;
+    CHECK(CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "turn-jump final facing accepted");
+    current.facing = 3;
+    CHECK(!CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "turn-jump wrong axis rejected");
+
+    current = last;
+    current.bikeMode = CTR_COOP_BIKE_MACH;
+    CHECK(CtrCoopProtocol_ShouldSend(&last, &current, 0), "mounting sends without any position change");
+    last = current;
+    current.bikeMode = CTR_COOP_BIKE_NONE;
+    CHECK(CtrCoopProtocol_ShouldSend(&last, &current, 0), "dismounting sends immediately");
+    current = last;
+    current.movementSequence++;
+    CHECK(CtrCoopProtocol_ShouldSend(&last, &current, 0), "repeated same-position action has a new sequence");
+    last.movementSequence = 255;
+    current.movementSequence = 0;
+    CHECK(CtrCoopProtocol_ShouldSend(&last, &current, 0), "movement sequence wrap still sends");
+    current.bikeMode = 3;
+    CHECK(!CtrCoopProtocol_Encode(&current, packet, CTR_COOP_PACKET_SIZE), "invalid bike mode cannot encode");
+    CtrCoopProtocol_Encode(&last, packet, CTR_COOP_PACKET_SIZE);
+    packet[13] = 3;
+    CHECK(!CtrCoopProtocol_Decode(packet, CTR_COOP_PACKET_SIZE, &decoded), "invalid wire bike mode rejected");
+    packet[13] = last.bikeMode;
+    packet[1] = CTR_COOP_PROTOCOL_VERSION - 1;
+    CHECK(!CtrCoopProtocol_Decode(packet, CTR_COOP_PACKET_SIZE, &decoded), "previous protocol cannot be misread");
+    CHECK(!CtrCoopProtocol_Decode(packet, 13, &decoded), "old short snapshot rejected");
+
+    current = Base();
+    current.bikeMode = CTR_COOP_BIKE_ACRO;
+    current.movementActionId = 0x70;
+    CHECK(CtrCoopProtocol_PlanMovement(&current, current.x, current.y, false, false, false) == CTR_COOP_APPLY_START,
+          "stationary Acro hop actually starts an animation");
+    CHECK(CtrCoopProtocol_PlanMovement(&current, current.x, current.y, true, false, false) == CTR_COOP_APPLY_START,
+          "a newly visible rider starts its stationary wheelie pose without moving a tile");
+    CHECK(CtrCoopProtocol_PlanMovement(&current, current.x, current.y, false, true, false) == CTR_COOP_APPLY_NOTHING,
+          "same hop heartbeat cannot replay the animation");
+    current.movementActionId = 0x78;
+    current.y += 2;
+    CHECK(CtrCoopProtocol_PlanMovement(&current, current.x, current.y - 2, false, false, false) == CTR_COOP_APPLY_START,
+          "two-tile wheelie ledge jump travels its full distance");
+    CHECK(CtrCoopProtocol_PlanMovement(&current, current.x, current.y - 1, false, false, false) == CTR_COOP_APPLY_SNAP,
+          "late two-tile jump correction cannot overshoot");
 }
 
 static void TestMapIdentity(void)
@@ -322,6 +404,39 @@ static void TestPCControl(void)
     CHECK(!CtrCoopProtocol_EncodePcResult(true, packet, sizeof(packet) - 1), "short PC output rejected");
 }
 
+static void TestBattleProtocol(void)
+{
+    uint8_t reserve[CTR_COOP_BATTLE_RESERVE_SIZE];
+    uint8_t result[CTR_COOP_BATTLE_RESERVE_RESULT_SIZE];
+    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
+    uint8_t chunk[CTR_COOP_SAVE_CHUNK_HEADER + 3];
+    uint8_t payload[] = {1, 2, 3};
+    uint8_t decodedPayload[3];
+    uint16_t trainerId, decodedSize;
+    uint32_t totalSize, checksum, offset;
+    bool accepted;
+
+    CHECK(CtrCoopProtocol_EncodeBattleReserve(321, reserve, sizeof(reserve)), "battle reservation encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleReserve(reserve, sizeof(reserve), &trainerId) && trainerId == 321, "battle reservation roundtrip");
+    CHECK(CtrCoopProtocol_EncodeBattleReserve(0, reserve, sizeof(reserve))
+       && CtrCoopProtocol_DecodeBattleReserve(reserve,sizeof(reserve),&trainerId) && trainerId == 0,
+       "zero identifies an independent wild battle");
+    CHECK(!CtrCoopProtocol_EncodeBattleReserve(0x8000,reserve,sizeof(reserve)), "trainer id cannot overlap result acceptance bit");
+    CHECK(CtrCoopProtocol_EncodeBattleReserveResult(321, true, result, sizeof(result)), "battle grant encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && trainerId == 321 && accepted, "battle grant roundtrip");
+    result[3] &= 0x7F;
+    CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && !accepted, "battle rejection decodes");
+    CHECK(CtrCoopProtocol_EncodeBattleBegin(616, 0x12345678, begin, sizeof(begin)), "battle begin encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleBegin(begin, sizeof(begin), &totalSize, &checksum) && totalSize == 616 && checksum == 0x12345678, "battle begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "battle begin is not PC sync");
+    CHECK(CtrCoopProtocol_EncodeBattleRequest(128, request, sizeof(request)), "battle request encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleRequest(request, sizeof(request), &offset) && offset == 128, "battle request roundtrip");
+    CHECK(CtrCoopProtocol_EncodeBattleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "battle chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "battle chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "battle payload roundtrip");
+}
+
 static void TestStoryUpdates(void)
 {
     uint8_t flag[CTR_COOP_FLAG_SIZE];
@@ -378,6 +493,7 @@ int main(void)
 {
     TestRoundtrip();
     TestInvalidPackets();
+    TestBikeSnapshots();
     TestMapIdentity();
     TestSendSchedule();
     TestMovementPlan();
@@ -388,6 +504,7 @@ int main(void)
     TestNpcSync();
     TestPcSyncTransfer();
     TestPCControl();
+    TestBattleProtocol();
     TestStoryUpdates();
     TestPartyPackets();
     if (sFailures != 0)

@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "Host und Gast starten": {
+      "command": "powershell.exe -NoProfile -File tools/start-coop-test.ps1 & exit"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 #include <string.h>
 #include "3ds_coop_protocol.h"
 
-static uint8_t ActionDirection(uint8_t action)
+static uint8_t ActionDirection(uint8_t action, uint8_t bikeMode)
 {
     if (action <= CTR_COOP_ACTION_FACE_RIGHT)
         return action + 1;
@@ -10,18 +10,62 @@ static uint8_t ActionDirection(uint8_t action)
         return action - CTR_COOP_ACTION_WALK_NORMAL_DOWN + 1;
     if (action >= CTR_COOP_ACTION_PLAYER_RUN_DOWN && action <= CTR_COOP_ACTION_PLAYER_RUN_DOWN + 3)
         return action - CTR_COOP_ACTION_PLAYER_RUN_DOWN + 1;
+    if (bikeMode != CTR_COOP_BIKE_NONE)
+    {
+        static const uint8_t groups[] = {
+            CTR_COOP_ACTION_JUMP_2_DOWN, CTR_COOP_ACTION_WALK_FAST_DOWN,
+            CTR_COOP_ACTION_RIDE_WATER_CURRENT_DOWN, CTR_COOP_ACTION_WALK_FASTER_DOWN,
+            CTR_COOP_ACTION_JUMP_DOWN,
+        };
+        for (unsigned i = 0; i < sizeof(groups); ++i)
+            if (action >= groups[i] && action <= groups[i] + 3)
+                return action - groups[i] + 1;
+        if (action >= CTR_COOP_ACTION_WALK_IN_PLACE_SLOW_DOWN && action < CTR_COOP_ACTION_RIDE_WATER_CURRENT_DOWN)
+            return (action - CTR_COOP_ACTION_WALK_IN_PLACE_SLOW_DOWN) % 4 + 1;
+        if (action >= CTR_COOP_ACTION_JUMP_IN_PLACE_DOWN && action < CTR_COOP_ACTION_JUMP_IN_PLACE_DOWN + 4)
+            return (action - CTR_COOP_ACTION_JUMP_IN_PLACE_DOWN) % 4 + 1;
+        if (bikeMode == CTR_COOP_BIKE_ACRO && action >= CTR_COOP_ACTION_ACRO_FIRST && action <= CTR_COOP_ACTION_ACRO_LAST)
+            return (action - CTR_COOP_ACTION_ACRO_FIRST) % 4 + 1;
+    }
     return 0;
+}
+
+static bool IsInPlace(uint8_t action)
+{
+    return action <= CTR_COOP_ACTION_FACE_RIGHT
+        || (action >= 0x19 && action <= 0x28)  /* walk/turn in place */
+        || (action >= 0x46 && action <= 0x4D)  /* jump/turn in place */
+        || (action >= 0x64 && action <= 0x73)  /* standing wheelie/pop/end/hop */
+        || (action >= 0x7C && action <= 0x7F); /* wheelie against a wall */
+}
+
+static bool FacingMatches(uint8_t action, uint8_t bikeMode, uint8_t facing)
+{
+    if (bikeMode == CTR_COOP_BIKE_ACRO && action >= 0x4A && action <= 0x4D)
+    {
+        /* A turn-jump changes its facing halfway through the action. Both
+         * ends of that axis are valid; it never moves to another tile. */
+        return action < 0x4C ? facing <= 2 : facing >= 3;
+    }
+    return ActionDirection(action, bikeMode) == facing;
 }
 
 static bool IsMoving(uint8_t action)
 {
-    return action >= CTR_COOP_ACTION_WALK_NORMAL_DOWN;
+    return !IsInPlace(action);
+}
+
+static bool IsTwoTileJump(uint8_t action)
+{
+    return (action >= 0x0C && action <= 0x0F) || (action >= 0x78 && action <= 0x7B);
 }
 
 static bool EncodeSnapshot(uint8_t type, const CtrCoopSnapshot *snapshot, uint8_t *out, uint16_t outSize)
 {
     if (snapshot == NULL || out == NULL || outSize != CTR_COOP_PACKET_SIZE
-     || ActionDirection(snapshot->movementActionId) != snapshot->facing || snapshot->graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
+     || snapshot->facing < 1 || snapshot->facing > 4
+     || snapshot->bikeMode > CTR_COOP_BIKE_ACRO
+     || !FacingMatches(snapshot->movementActionId, snapshot->bikeMode, snapshot->facing) || snapshot->graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
         return false;
     out[0] = type;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
@@ -36,6 +80,8 @@ static bool EncodeSnapshot(uint8_t type, const CtrCoopSnapshot *snapshot, uint8_
     out[10] = snapshot->facing;
     out[11] = snapshot->movementActionId;
     out[12] = snapshot->graphicsId;
+    out[13] = snapshot->bikeMode;
+    out[14] = snapshot->movementSequence;
     return true;
 }
 
@@ -54,7 +100,11 @@ static bool DecodeSnapshot(uint8_t expectedType, const uint8_t *data, uint16_t s
     snapshot.facing = data[10];
     snapshot.movementActionId = data[11];
     snapshot.graphicsId = data[12];
-    if (ActionDirection(snapshot.movementActionId) != snapshot.facing || snapshot.graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
+    snapshot.bikeMode = data[13];
+    snapshot.movementSequence = data[14];
+    if (snapshot.facing < 1 || snapshot.facing > 4
+     || snapshot.bikeMode > CTR_COOP_BIKE_ACRO
+     || !FacingMatches(snapshot.movementActionId, snapshot.bikeMode, snapshot.facing) || snapshot.graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
         return false;
     *out = snapshot;
     return true;
@@ -78,6 +128,47 @@ bool CtrCoopProtocol_EncodeSpawn(const CtrCoopSnapshot *snapshot, uint8_t *out, 
 bool CtrCoopProtocol_DecodeSpawn(const uint8_t *data, uint16_t size, CtrCoopSnapshot *out)
 {
     return DecodeSnapshot(CTR_COOP_SPAWN_PACKET, data, size, out);
+}
+
+bool CtrCoopProtocol_EncodeNpc(const CtrCoopNpcSnapshot *snapshot, uint8_t *out, uint16_t outSize)
+{
+    if (snapshot == NULL || out == NULL || outSize != CTR_COOP_NPC_PACKET_SIZE
+     || snapshot->localId == 0 || snapshot->facing < 1 || snapshot->facing > 4
+     || snapshot->graphicsId > CTR_COOP_GRAPHICS_ID_MAX)
+        return false;
+    out[0] = CTR_COOP_NPC_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = snapshot->localId;
+    out[3] = snapshot->mapGroup;
+    out[4] = snapshot->mapNum;
+    out[5] = (uint16_t)snapshot->x & 0xFF;
+    out[6] = (uint16_t)snapshot->x >> 8;
+    out[7] = (uint16_t)snapshot->y & 0xFF;
+    out[8] = (uint16_t)snapshot->y >> 8;
+    out[9] = snapshot->facing;
+    out[10] = snapshot->graphicsId;
+    out[11] = 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeNpc(const uint8_t *data, uint16_t size, CtrCoopNpcSnapshot *out)
+{
+    CtrCoopNpcSnapshot snapshot = {0};
+
+    if (data == NULL || out == NULL || size != CTR_COOP_NPC_PACKET_SIZE
+     || data[0] != CTR_COOP_NPC_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || data[2] == 0 || data[9] < 1 || data[9] > 4
+     || data[10] > CTR_COOP_GRAPHICS_ID_MAX || data[11] != 0)
+        return false;
+    snapshot.localId = data[2];
+    snapshot.mapGroup = data[3];
+    snapshot.mapNum = data[4];
+    snapshot.x = (int16_t)(data[5] | ((uint16_t)data[6] << 8));
+    snapshot.y = (int16_t)(data[7] | ((uint16_t)data[8] << 8));
+    snapshot.facing = data[9];
+    snapshot.graphicsId = data[10];
+    *out = snapshot;
+    return true;
 }
 
 bool CtrCoopProtocol_EncodeIdentity(const uint8_t *name, uint8_t *out, uint16_t outSize)
@@ -135,6 +226,41 @@ bool CtrCoopProtocol_DecodeAuthResult(const uint8_t *data, uint16_t size, bool *
         return false;
     *accepted = data[2] != 0;
     return true;
+}
+
+bool CtrCoopProtocol_EncodeJoinInfo(bool starterRequired, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_JOIN_INFO_SIZE)
+        return false;
+    out[0] = CTR_COOP_JOIN_INFO_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = starterRequired ? CTR_COOP_JOIN_STARTER : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeJoinInfo(const uint8_t *data, uint16_t size, bool *starterRequired)
+{
+    if (data == NULL || starterRequired == NULL || size != CTR_COOP_JOIN_INFO_SIZE
+     || data[0] != CTR_COOP_JOIN_INFO_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || (data[2] & ~CTR_COOP_JOIN_STARTER) != 0)
+        return false;
+    *starterRequired = (data[2] & CTR_COOP_JOIN_STARTER) != 0;
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeNameLimit(uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_NAME_LIMIT_SIZE)
+        return false;
+    out[0] = CTR_COOP_NAME_LIMIT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeNameLimit(const uint8_t *data, uint16_t size)
+{
+    return data != NULL && size == CTR_COOP_NAME_LIMIT_SIZE
+        && data[0] == CTR_COOP_NAME_LIMIT_PACKET && data[1] == CTR_COOP_PROTOCOL_VERSION;
 }
 
 bool CtrCoopProtocol_EncodePcResult(bool accepted, uint8_t *out, uint16_t outSize)
@@ -347,9 +473,49 @@ bool CtrCoopProtocol_DecodePcSyncChunk(const uint8_t *data, uint16_t size, uint3
     return DecodeTransferChunk(CTR_COOP_PC_SYNC_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
 }
 
+bool CtrCoopProtocol_EncodePartyBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferBegin(CTR_COOP_PARTY_BEGIN_PACKET, totalSize, checksum, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePartyBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+{
+    return DecodeTransferBegin(CTR_COOP_PARTY_BEGIN_PACKET, data, size, totalSize, checksum);
+}
+
+bool CtrCoopProtocol_EncodePartyChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize)
+{
+    return EncodeTransferChunk(CTR_COOP_PARTY_CHUNK_PACKET, offset, data, dataSize, out, outSize);
+}
+
+bool CtrCoopProtocol_DecodePartyChunk(const uint8_t *data, uint16_t size, uint32_t expectedOffset,
+    uint8_t *out, uint16_t outCapacity, uint16_t *outSize)
+{
+    return DecodeTransferChunk(CTR_COOP_PARTY_CHUNK_PACKET, data, size, expectedOffset, out, outCapacity, outSize);
+}
+
+bool CtrCoopProtocol_EncodePartyResult(bool accepted, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_PARTY_RESULT_SIZE)
+        return false;
+    out[0] = CTR_COOP_PARTY_RESULT_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = accepted ? 1 : 0;
+    return true;
+}
+
+bool CtrCoopProtocol_DecodePartyResult(const uint8_t *data, uint16_t size, bool *accepted)
+{
+    if (data == NULL || accepted == NULL || size != CTR_COOP_PARTY_RESULT_SIZE
+     || data[0] != CTR_COOP_PARTY_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION || data[2] > 1)
+        return false;
+    *accepted = data[2] != 0;
+    return true;
+}
+
 bool CtrCoopProtocol_EncodeBattleReserve(uint16_t trainerId, uint8_t *out, uint16_t outSize)
 {
-    if (out == NULL || trainerId == 0 || outSize != CTR_COOP_BATTLE_RESERVE_SIZE)
+    if (out == NULL || trainerId > 0x7FFF || outSize != CTR_COOP_BATTLE_RESERVE_SIZE)
         return false;
     out[0] = CTR_COOP_BATTLE_RESERVE_PACKET;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
@@ -362,7 +528,7 @@ bool CtrCoopProtocol_DecodeBattleReserve(const uint8_t *data, uint16_t size, uin
 {
     if (data == NULL || trainerId == NULL || size != CTR_COOP_BATTLE_RESERVE_SIZE
      || data[0] != CTR_COOP_BATTLE_RESERVE_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
-     || (data[2] | ((uint16_t)data[3] << 8)) == 0)
+     || (data[3] & 0x80) != 0)
         return false;
     *trainerId = data[2] | ((uint16_t)data[3] << 8);
     return true;
@@ -370,7 +536,7 @@ bool CtrCoopProtocol_DecodeBattleReserve(const uint8_t *data, uint16_t size, uin
 
 bool CtrCoopProtocol_EncodeBattleReserveResult(uint16_t trainerId, bool accepted, uint8_t *out, uint16_t outSize)
 {
-    if (out == NULL || trainerId == 0 || outSize != CTR_COOP_BATTLE_RESERVE_RESULT_SIZE)
+    if (out == NULL || trainerId > 0x7FFF || outSize != CTR_COOP_BATTLE_RESERVE_RESULT_SIZE)
         return false;
     out[0] = CTR_COOP_BATTLE_RESERVE_RESULT_PACKET;
     out[1] = CTR_COOP_PROTOCOL_VERSION;
@@ -382,8 +548,7 @@ bool CtrCoopProtocol_EncodeBattleReserveResult(uint16_t trainerId, bool accepted
 bool CtrCoopProtocol_DecodeBattleReserveResult(const uint8_t *data, uint16_t size, uint16_t *trainerId, bool *accepted)
 {
     if (data == NULL || trainerId == NULL || accepted == NULL || size != CTR_COOP_BATTLE_RESERVE_RESULT_SIZE
-     || data[0] != CTR_COOP_BATTLE_RESERVE_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION
-     || (data[2] | ((uint16_t)(data[3] & 0x7F) << 8)) == 0)
+     || data[0] != CTR_COOP_BATTLE_RESERVE_RESULT_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION)
         return false;
     *trainerId = data[2] | ((uint16_t)(data[3] & 0x7F) << 8);
     *accepted = (data[3] & 0x80) != 0;
@@ -481,7 +646,8 @@ bool CtrCoopProtocol_ShouldSend(const CtrCoopSnapshot *last, const CtrCoopSnapsh
     if (last->mapGroup != current->mapGroup || last->mapNum != current->mapNum
      || last->mapLayoutId != current->mapLayoutId || last->x != current->x || last->y != current->y
      || last->facing != current->facing || last->movementActionId != current->movementActionId
-     || last->graphicsId != current->graphicsId)
+     || last->graphicsId != current->graphicsId || last->bikeMode != current->bikeMode
+     || last->movementSequence != current->movementSequence)
         return true;
     return framesSinceLast >= CTR_COOP_HEARTBEAT_FRAMES;
 }
@@ -492,19 +658,24 @@ CtrCoopApply CtrCoopProtocol_PlanMovement(const CtrCoopSnapshot *snapshot,
     int dx, dy;
     uint8_t direction;
 
-    if (snapshot == NULL || freshSpawn || alreadyApplied || movementInProgress)
+    if (snapshot == NULL || alreadyApplied || movementInProgress)
         return CTR_COOP_APPLY_NOTHING;
     dx = snapshot->x - currentX;
     dy = snapshot->y - currentY;
+    if (freshSpawn && (dx != 0 || dy != 0 || snapshot->bikeMode == CTR_COOP_BIKE_NONE
+     || !IsInPlace(snapshot->movementActionId) || snapshot->movementActionId <= CTR_COOP_ACTION_FACE_RIGHT))
+        return CTR_COOP_APPLY_NOTHING;
     if (dx == 0 && dy == 0)
-        return CTR_COOP_APPLY_FACE;
+        return snapshot->bikeMode != CTR_COOP_BIKE_NONE && IsInPlace(snapshot->movementActionId)
+            && snapshot->movementActionId > CTR_COOP_ACTION_FACE_RIGHT ? CTR_COOP_APPLY_START : CTR_COOP_APPLY_FACE;
     if (!IsMoving(snapshot->movementActionId))
         return CTR_COOP_APPLY_SNAP;
     direction = snapshot->facing;
-    if ((direction == 1 && dx == 0 && dy == 1)
-     || (direction == 2 && dx == 0 && dy == -1)
-     || (direction == 3 && dx == -1 && dy == 0)
-     || (direction == 4 && dx == 1 && dy == 0))
+    int distance = IsTwoTileJump(snapshot->movementActionId) ? 2 : 1;
+    if ((direction == 1 && dx == 0 && dy == distance)
+     || (direction == 2 && dx == 0 && dy == -distance)
+     || (direction == 3 && dx == -distance && dy == 0)
+     || (direction == 4 && dx == distance && dy == 0))
         return CTR_COOP_APPLY_START;
     return CTR_COOP_APPLY_SNAP;
 }

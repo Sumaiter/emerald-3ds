@@ -1,0 +1,1031 @@
+{
+  "version": 1,
+  "width": 64,
+  "height": 64,
+  "visible_colors": 15,
+  "native_root": "build/upstream",
+  "status": "complete",
+  "entries": [
+    {
+      "graphics_id": 4,
+      "symbol": "OBJ_EVENT_GFX_QUINTY_PLUMP",
+      "name": "QUINTY PLUMP",
+      "image": "quinty_plump.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/quinty_plump.png",
+      "reference_width": 32,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 5,
+      "symbol": "OBJ_EVENT_GFX_NINJA_BOY",
+      "name": "NINJA BOY",
+      "image": "ninja_boy.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/ninja_boy.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 6,
+      "symbol": "OBJ_EVENT_GFX_TWIN",
+      "name": "TWIN",
+      "image": "twin.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/twin.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 7,
+      "symbol": "OBJ_EVENT_GFX_BOY_1",
+      "name": "BOY 1",
+      "image": "boy_1.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/boy_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 8,
+      "symbol": "OBJ_EVENT_GFX_GIRL_1",
+      "name": "GIRL 1",
+      "image": "girl_1.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/girl_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 9,
+      "symbol": "OBJ_EVENT_GFX_BOY_2",
+      "name": "BOY 2",
+      "image": "boy_2.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/boy_2.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 10,
+      "symbol": "OBJ_EVENT_GFX_GIRL_2",
+      "name": "GIRL 2",
+      "image": "girl_2.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/girl_2.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 11,
+      "symbol": "OBJ_EVENT_GFX_LITTLE_BOY",
+      "name": "LITTLE BOY",
+      "image": "little_boy.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/little_boy.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 12,
+      "symbol": "OBJ_EVENT_GFX_LITTLE_GIRL",
+      "name": "LITTLE GIRL",
+      "image": "little_girl.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/little_girl.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 13,
+      "symbol": "OBJ_EVENT_GFX_BOY_3",
+      "name": "BOY 3",
+      "image": "boy_3.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/boy_3.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 14,
+      "symbol": "OBJ_EVENT_GFX_GIRL_3",
+      "name": "GIRL 3",
+      "image": "girl_3.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/girl_3.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 15,
+      "symbol": "OBJ_EVENT_GFX_RICH_BOY",
+      "name": "RICH BOY",
+      "image": "rich_boy.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/rich_boy.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 16,
+      "symbol": "OBJ_EVENT_GFX_WOMAN_1",
+      "name": "WOMAN 1",
+      "image": "woman_1.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/woman_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 17,
+      "symbol": "OBJ_EVENT_GFX_FAT_MAN",
+      "name": "FAT MAN",
+      "image": "fat_man.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/fat_man.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 18,
+      "symbol": "OBJ_EVENT_GFX_POKEFAN_F",
+      "name": "POKEFAN F",
+      "image": "pokefan_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/pokefan_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 19,
+      "symbol": "OBJ_EVENT_GFX_MAN_1",
+      "name": "MAN 1",
+      "image": "man_1.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/man_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 20,
+      "symbol": "OBJ_EVENT_GFX_WOMAN_2",
+      "name": "WOMAN 2",
+      "image": "woman_2.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/woman_2.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 21,
+      "symbol": "OBJ_EVENT_GFX_EXPERT_M",
+      "name": "EXPERT M",
+      "image": "expert_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/expert_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 22,
+      "symbol": "OBJ_EVENT_GFX_EXPERT_F",
+      "name": "EXPERT F",
+      "image": "expert_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/expert_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 23,
+      "symbol": "OBJ_EVENT_GFX_MAN_2",
+      "name": "MAN 2",
+      "image": "man_2.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/man_2.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 24,
+      "symbol": "OBJ_EVENT_GFX_WOMAN_3",
+      "name": "WOMAN 3",
+      "image": "woman_3.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/woman_3.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 25,
+      "symbol": "OBJ_EVENT_GFX_POKEFAN_M",
+      "name": "POKEFAN M",
+      "image": "pokefan_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/pokefan_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 26,
+      "symbol": "OBJ_EVENT_GFX_WOMAN_4",
+      "name": "WOMAN 4",
+      "image": "woman_4.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/woman_4.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 30,
+      "symbol": "OBJ_EVENT_GFX_OLD_WOMAN",
+      "name": "OLD WOMAN",
+      "image": "old_woman.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/old_woman.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 31,
+      "symbol": "OBJ_EVENT_GFX_CAMPER",
+      "name": "CAMPER",
+      "image": "camper.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/camper.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 32,
+      "symbol": "OBJ_EVENT_GFX_PICNICKER",
+      "name": "PICNICKER",
+      "image": "picnicker.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/picnicker.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 33,
+      "symbol": "OBJ_EVENT_GFX_MAN_3",
+      "name": "MAN 3",
+      "image": "man_3.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/man_3.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 34,
+      "symbol": "OBJ_EVENT_GFX_WOMAN_5",
+      "name": "WOMAN 5",
+      "image": "woman_5.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/woman_5.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 35,
+      "symbol": "OBJ_EVENT_GFX_YOUNGSTER",
+      "name": "YOUNGSTER",
+      "image": "youngster.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/youngster.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 36,
+      "symbol": "OBJ_EVENT_GFX_BUG_CATCHER",
+      "name": "BUG CATCHER",
+      "image": "bug_catcher.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/bug_catcher.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 37,
+      "symbol": "OBJ_EVENT_GFX_PSYCHIC_M",
+      "name": "PSYCHIC M",
+      "image": "psychic_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/psychic_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 38,
+      "symbol": "OBJ_EVENT_GFX_SCHOOL_KID_M",
+      "name": "SCHOOL KID M",
+      "image": "school_kid_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/school_kid_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 39,
+      "symbol": "OBJ_EVENT_GFX_MANIAC",
+      "name": "MANIAC",
+      "image": "maniac.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/maniac.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 40,
+      "symbol": "OBJ_EVENT_GFX_HEX_MANIAC",
+      "name": "HEX MANIAC",
+      "image": "hex_maniac.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/hex_maniac.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 44,
+      "symbol": "OBJ_EVENT_GFX_BLACK_BELT",
+      "name": "BLACK BELT",
+      "image": "black_belt.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/black_belt.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 45,
+      "symbol": "OBJ_EVENT_GFX_BEAUTY",
+      "name": "BEAUTY",
+      "image": "beauty.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/beauty.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 46,
+      "symbol": "OBJ_EVENT_GFX_SCIENTIST_1",
+      "name": "SCIENTIST 1",
+      "image": "scientist_1.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/scientist_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 47,
+      "symbol": "OBJ_EVENT_GFX_LASS",
+      "name": "LASS",
+      "image": "lass.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/lass.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 48,
+      "symbol": "OBJ_EVENT_GFX_GENTLEMAN",
+      "name": "GENTLEMAN",
+      "image": "gentleman.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/gentleman.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 49,
+      "symbol": "OBJ_EVENT_GFX_SAILOR",
+      "name": "SAILOR",
+      "image": "sailor.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/sailor.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 50,
+      "symbol": "OBJ_EVENT_GFX_FISHERMAN",
+      "name": "FISHERMAN",
+      "image": "fisherman.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/fisherman.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 51,
+      "symbol": "OBJ_EVENT_GFX_RUNNING_TRIATHLETE_M",
+      "name": "TRIATHLETE M",
+      "image": "running_triathlete_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/running_triathlete_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 52,
+      "symbol": "OBJ_EVENT_GFX_RUNNING_TRIATHLETE_F",
+      "name": "TRIATHLETE F",
+      "image": "running_triathlete_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/running_triathlete_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 53,
+      "symbol": "OBJ_EVENT_GFX_TUBER_F",
+      "name": "TUBER F",
+      "image": "tuber_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/tuber_f.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 54,
+      "symbol": "OBJ_EVENT_GFX_TUBER_M",
+      "name": "TUBER M",
+      "image": "tuber_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/tuber_m.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 55,
+      "symbol": "OBJ_EVENT_GFX_HIKER",
+      "name": "HIKER",
+      "image": "hiker.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/hiker.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 64,
+      "symbol": "OBJ_EVENT_GFX_PROF_BIRCH",
+      "name": "PROF. BIRCH",
+      "image": "prof_birch.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/prof_birch.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 65,
+      "symbol": "OBJ_EVENT_GFX_MAN_4",
+      "name": "MAN 4",
+      "image": "man_4.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/man_4.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 66,
+      "symbol": "OBJ_EVENT_GFX_MAN_5",
+      "name": "MAN 5",
+      "image": "man_5.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/man_5.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 67,
+      "symbol": "OBJ_EVENT_GFX_REPORTER_M",
+      "name": "REPORTER M",
+      "image": "reporter_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/reporter_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 68,
+      "symbol": "OBJ_EVENT_GFX_REPORTER_F",
+      "name": "REPORTER F",
+      "image": "reporter_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/reporter_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 69,
+      "symbol": "OBJ_EVENT_GFX_BARD",
+      "name": "BARD",
+      "image": "bard.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/mauville_old_man_1.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 70,
+      "symbol": "OBJ_EVENT_GFX_ANABEL",
+      "name": "ANABEL",
+      "image": "anabel.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/anabel.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 71,
+      "symbol": "OBJ_EVENT_GFX_TUCKER",
+      "name": "TUCKER",
+      "image": "tucker.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/tucker.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 72,
+      "symbol": "OBJ_EVENT_GFX_GRETA",
+      "name": "GRETA",
+      "image": "greta.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/greta.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 73,
+      "symbol": "OBJ_EVENT_GFX_SPENSER",
+      "name": "SPENSER",
+      "image": "spenser.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/spenser.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 74,
+      "symbol": "OBJ_EVENT_GFX_NOLAND",
+      "name": "NOLAND",
+      "image": "noland.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/noland.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 75,
+      "symbol": "OBJ_EVENT_GFX_LUCY",
+      "name": "LUCY",
+      "image": "lucy.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/lucy.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 85,
+      "symbol": "OBJ_EVENT_GFX_TEALA",
+      "name": "TEALA",
+      "image": "teala.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/teala.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 99,
+      "symbol": "OBJ_EVENT_GFX_ARTIST",
+      "name": "ARTIST",
+      "image": "artist.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/artist.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 100,
+      "symbol": "OBJ_EVENT_GFX_RIVAL_BRENDAN_NORMAL",
+      "name": "BRENDAN",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/brendan/walking.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/brendan.png",
+      "native_back_pic_id": 0,
+      "frame": 0
+    },
+    {
+      "graphics_id": 105,
+      "symbol": "OBJ_EVENT_GFX_RIVAL_MAY_NORMAL",
+      "name": "MAY",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/may/walking.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/may.png",
+      "native_back_pic_id": 1,
+      "frame": 0
+    },
+    {
+      "graphics_id": 110,
+      "symbol": "OBJ_EVENT_GFX_CAMERAMAN",
+      "name": "CAMERAMAN",
+      "image": "cameraman.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/cameraman.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 115,
+      "symbol": "OBJ_EVENT_GFX_SCIENTIST_2",
+      "name": "SCIENTIST 2",
+      "image": "scientist_2.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/scientist_2.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 116,
+      "symbol": "OBJ_EVENT_GFX_DEVON_EMPLOYEE",
+      "name": "DEVON EMPLOYEE",
+      "image": "devon_employee.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/devon_employee.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 117,
+      "symbol": "OBJ_EVENT_GFX_AQUA_MEMBER_M",
+      "name": "AQUA MEMBER M",
+      "image": "aqua_member_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_aqua/aqua_member_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 118,
+      "symbol": "OBJ_EVENT_GFX_AQUA_MEMBER_F",
+      "name": "AQUA MEMBER F",
+      "image": "aqua_member_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_aqua/aqua_member_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 119,
+      "symbol": "OBJ_EVENT_GFX_MAGMA_MEMBER_M",
+      "name": "MAGMA MEMBER M",
+      "image": "magma_member_m.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_magma/magma_member_m.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 120,
+      "symbol": "OBJ_EVENT_GFX_MAGMA_MEMBER_F",
+      "name": "MAGMA MEMBER F",
+      "image": "magma_member_f.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_magma/magma_member_f.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 129,
+      "symbol": "OBJ_EVENT_GFX_NORMAN",
+      "name": "NORMAN",
+      "image": "norman.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/gym_leaders/norman.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 133,
+      "symbol": "OBJ_EVENT_GFX_WALLACE",
+      "name": "WALLACE",
+      "image": "wallace.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/wallace.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 134,
+      "symbol": "OBJ_EVENT_GFX_STEVEN",
+      "name": "STEVEN",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/steven.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/steven.png",
+      "native_back_pic_id": 7,
+      "frame": 0
+    },
+    {
+      "graphics_id": 135,
+      "symbol": "OBJ_EVENT_GFX_WALLY",
+      "name": "WALLY",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/wally.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/wally.png",
+      "native_back_pic_id": 6,
+      "frame": 0
+    },
+    {
+      "graphics_id": 136,
+      "symbol": "OBJ_EVENT_GFX_LITTLE_BOY_3",
+      "name": "LITTLE BOY 3",
+      "image": "little_boy_3.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/rs_little_boy.png",
+      "reference_width": 16,
+      "reference_height": 16
+    },
+    {
+      "graphics_id": 195,
+      "symbol": "OBJ_EVENT_GFX_ARCHIE",
+      "name": "ARCHIE",
+      "image": "archie.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_aqua/archie.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 196,
+      "symbol": "OBJ_EVENT_GFX_MAXIE",
+      "name": "MAXIE",
+      "image": "maxie.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/team_magma/maxie.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 215,
+      "symbol": "OBJ_EVENT_GFX_MOM",
+      "name": "MOM",
+      "image": "mom.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/mom.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 218,
+      "symbol": "OBJ_EVENT_GFX_JUAN",
+      "name": "JUAN",
+      "image": "juan.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/gym_leaders/juan.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 219,
+      "symbol": "OBJ_EVENT_GFX_SCOTT",
+      "name": "SCOTT",
+      "image": "scott.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/scott.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 230,
+      "symbol": "OBJ_EVENT_GFX_RED",
+      "name": "RED",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/red.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/red.png",
+      "native_back_pic_id": 2,
+      "frame": 0
+    },
+    {
+      "graphics_id": 231,
+      "symbol": "OBJ_EVENT_GFX_LEAF",
+      "name": "LEAF",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/leaf.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/leaf.png",
+      "native_back_pic_id": 3,
+      "frame": 0
+    },
+    {
+      "graphics_id": 234,
+      "symbol": "OBJ_EVENT_GFX_BRANDON",
+      "name": "BRANDON",
+      "image": "brandon.png",
+      "source": "generated",
+      "reference_path": "graphics/object_events/pics/people/frontier_brains/brandon.png",
+      "reference_width": 16,
+      "reference_height": 32
+    },
+    {
+      "graphics_id": 235,
+      "symbol": "OBJ_EVENT_GFX_LINK_RS_BRENDAN",
+      "name": "RS BRENDAN",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/ruby_sapphire_brendan/walking.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/brendan_rs.png",
+      "native_back_pic_id": 4,
+      "frame": 0
+    },
+    {
+      "graphics_id": 236,
+      "symbol": "OBJ_EVENT_GFX_LINK_RS_MAY",
+      "name": "RS MAY",
+      "image": null,
+      "source": "native",
+      "reference_path": "graphics/object_events/pics/people/ruby_sapphire_may/walking.png",
+      "reference_width": 16,
+      "reference_height": 32,
+      "native_path": "graphics/trainers/back_pics/may_rs.png",
+      "native_back_pic_id": 5,
+      "frame": 0
+    },
+    {
+      "graphics_id": 27,
+      "symbol": "OBJ_EVENT_GFX_COOK",
+      "name": "COOK",
+      "source": "generated",
+      "image": "cook.png",
+      "identity_reference": "graphics/object_events/pics/people/cook.png",
+      "visual_review": "passed",
+      "sha256": "d371638d274e3e3d16353076192b0562e4720fb1c7c0047e04d204db190666ac"
+    },
+    {
+      "graphics_id": 29,
+      "symbol": "OBJ_EVENT_GFX_OLD_MAN",
+      "name": "OLD MAN",
+      "source": "generated",
+      "image": "old_man.png",
+      "identity_reference": "graphics/object_events/pics/people/old_man.png",
+      "visual_review": "passed",
+      "sha256": "19f2ceab81c13e7635348ae8adf9d77ffd5732db6ee1a448788c3eb652fd3870"
+    },
+    {
+      "graphics_id": 121,
+      "symbol": "OBJ_EVENT_GFX_SIDNEY",
+      "name": "SIDNEY",
+      "source": "generated",
+      "image": "sidney.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/sidney.png",
+      "visual_review": "passed",
+      "sha256": "84d94298c73af406c64e70875fc7862dd067813ee766077682182957049c9bdf"
+    },
+    {
+      "graphics_id": 122,
+      "symbol": "OBJ_EVENT_GFX_PHOEBE",
+      "name": "PHOEBE",
+      "source": "generated",
+      "image": "phoebe.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/phoebe.png",
+      "visual_review": "passed",
+      "sha256": "87e977d8ded3e3b3d477d40bda4d19ef8b1ee88a89b2cb2fc5e822a4413a5a0b"
+    },
+    {
+      "graphics_id": 123,
+      "symbol": "OBJ_EVENT_GFX_GLACIA",
+      "name": "GLACIA",
+      "source": "generated",
+      "image": "glacia.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/glacia.png",
+      "visual_review": "passed",
+      "sha256": "79c5678f6f4a91a7b0fcef1580ba8d3af641d3c03744c51220271776b61c7a89"
+    },
+    {
+      "graphics_id": 124,
+      "symbol": "OBJ_EVENT_GFX_DRAKE",
+      "name": "DRAKE",
+      "source": "generated",
+      "image": "drake.png",
+      "identity_reference": "graphics/object_events/pics/people/elite_four/drake.png",
+      "visual_review": "passed",
+      "sha256": "6808a8d0f88166fe06e01ac7f011d9bc56d87e089ad07d1f1df33eccb6072acf"
+    },
+    {
+      "graphics_id": 125,
+      "symbol": "OBJ_EVENT_GFX_ROXANNE",
+      "name": "ROXANNE",
+      "source": "generated",
+      "image": "roxanne.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/roxanne.png",
+      "visual_review": "passed",
+      "sha256": "d4639ed567c55737599cd68aeba0885daa69fd9e94154e6c557833f1c73fc05b"
+    },
+    {
+      "graphics_id": 126,
+      "symbol": "OBJ_EVENT_GFX_BRAWLY",
+      "name": "BRAWLY",
+      "source": "generated",
+      "image": "brawly.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/brawly.png",
+      "visual_review": "passed",
+      "sha256": "bfca7828faae8d1f87fad7f3ae8e03523a8e0ff0a431be6d9cfb5d5d7a18dfd0"
+    },
+    {
+      "graphics_id": 127,
+      "symbol": "OBJ_EVENT_GFX_WATTSON",
+      "name": "WATTSON",
+      "source": "generated",
+      "image": "wattson.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/wattson.png",
+      "visual_review": "passed",
+      "sha256": "0cbcf986cdc99a951c94f04bd172aadfbc51673ac878ad00937b70559cb3824d"
+    },
+    {
+      "graphics_id": 128,
+      "symbol": "OBJ_EVENT_GFX_FLANNERY",
+      "name": "FLANNERY",
+      "source": "generated",
+      "image": "flannery.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/flannery.png",
+      "visual_review": "passed",
+      "sha256": "849d40feab9980acc075b6843c32cd6576e86050f76c8c0c16e4c3eca7f5bea6"
+    },
+    {
+      "graphics_id": 130,
+      "symbol": "OBJ_EVENT_GFX_WINONA",
+      "name": "WINONA",
+      "source": "generated",
+      "image": "winona.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/winona.png",
+      "visual_review": "passed",
+      "sha256": "c58b523716b26945f2966c9851a98a8731fffd9ae7e204e9d37c0f611f897c93"
+    },
+    {
+      "graphics_id": 131,
+      "symbol": "OBJ_EVENT_GFX_LIZA",
+      "name": "LIZA",
+      "source": "generated",
+      "image": "liza.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/liza.png",
+      "visual_review": "passed",
+      "sha256": "c886a3365c8d4845069c52c6e5e014bc5ab59c5cc45e1669028b89df4a5a0f2f"
+    },
+    {
+      "graphics_id": 132,
+      "symbol": "OBJ_EVENT_GFX_TATE",
+      "name": "TATE",
+      "source": "generated",
+      "image": "tate.png",
+      "identity_reference": "graphics/object_events/pics/people/gym_leaders/tate.png",
+      "visual_review": "passed",
+      "sha256": "fc95a17112fc6ddd720ca8a1a8e2fa869ae7dc334699fe2e26ea3f5513cac473"
+    },
+    {
+      "graphics_id": 189,
+      "symbol": "OBJ_EVENT_GFX_GAMEBOY_KID",
+      "name": "GAMEBOY KID",
+      "source": "generated",
+      "image": "gameboy_kid.png",
+      "identity_reference": "graphics/object_events/pics/people/gameboy_kid.png",
+      "visual_review": "passed",
+      "sha256": "01babdcb433d285a78d2a801ae0fa96720b3fd1c7457bfaf0b5f597597dce366"
+    },
+    {
+      "graphics_id": 223,
+      "symbol": "OBJ_EVENT_GFX_MYSTERY_GIFT_MAN",
+      "name": "MYSTERY GIFT MAN",
+      "source": "generated",
+      "image": "mystery_gift_man.png",
+      "identity_reference": "graphics/object_events/pics/people/mystery_event_deliveryman.png",
+      "visual_review": "passed",
+      "sha256": "9575f0f596798876113048ca170e5f76c6d057dc8372634081918fe319e5dd77"
+    }
+  ],
+  "visual_review": "passed",
+  "frame_width": 64,
+  "frame_height": 64,
+  "columns": 1,
+  "frame_names": [
+    "battle_back"
+  ]
+}

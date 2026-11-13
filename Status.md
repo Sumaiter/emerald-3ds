@@ -1,10 +1,12 @@
 # Status: Emerald 3DS Koop-Mod
 
-Stand: 2026-11-09
+Stand: 2026-11-12
 
 ## Ziel
 
-Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spielstand und die Welt des Hosts. Der Gast benötigt keinen eigenen Spielstand. Ein Online-Modus über Internet oder WLAN-Router ist nicht Bestandteil dieses Projekts.
+Ein Host und Gäste nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spielstand und die Welt des Hosts. Ein Gast benötigt keinen eigenen Spielstand. Ein Online-Modus über Internet oder WLAN-Router ist nicht Bestandteil dieses Projekts.
+
+Festgelegte Grenzen: maximal zehn gespeicherte Gastnamen pro Host-Spielstand, ohne alte Positionen zu verdrängen. Dieser Ausbau betrifft nur die Namens-/Spawn-Speicherung. Der aktuelle Prototyp erlaubt weiterhin einen Host und einen Gast gleichzeitig. Im nächsten Ausbau sollen höchstens vier Spieler gleichzeitig zugelassen werden: Host plus drei Gäste.
 
 ## Statusregeln
 
@@ -21,12 +23,18 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 | 0 | Projekt einrichten und Ausgangsbasis prüfen | Fertig |
 | 1 | Technischen Koop-Prototyp nachweisen | Fertig |
 | 2 | Local-Wireless-Lobby und Passwort-Beitritt | Fertig |
-| 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | In Arbeit |
-| 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Offen |
+| 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | Fertig |
+| 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Fertig |
 | 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | Offen |
 | 6 | Gemeinsame Doppelkämpfe | Offen |
 | 7 | Abmeldung, Verbindungsabbrüche und sicheres Speichern | Offen |
 | 8 | Hardwaretests, Stabilisierung und spielbare Alpha | Offen |
+
+## Multiplayer-Review vom 2026-11-12
+
+Speicherschutz nach Gast-Abmeldung, Reihenfolge von Snapshot und Starterauswahl, Authentifizierung eingehender Pakete, PC-Sperrfreigabe, Erhalt der eigenen Teamreihe, Profilwiederherstellung und Validierung der Blickrichtung wurden korrigiert. Zusätzliche Verhaltenstests laufen über `make -C 3ds_port verify-coop`; Details stehen in `HANDOFF.md`.
+
+Zwei isolierte Azahar-Instanzen bestätigen Host-Snapshot, Starter auf Level 5, PC-Übernahme vor dem Spawn, Bewegung, Kartenwechsel, nicht blockierende Avatare, autoritative NPC-Positionen, unabhängige Menüs, Host-Speichern und Gast-Speicherschutz bei hartem Host-Abbruch. Ein Absturz beim Beutel-Verlassen durch NPC-Zugriffe auf Menü-Sprites sowie eine nach dem Laden verbliebene Gastfigur wurden gefunden und korrigiert. Die bisherige Vier-Namen-Tabelle wird verlustfrei auf zehn Einträge migriert; unbekannte elfte Namen werden vor der Spielstandsübertragung mit einer eigenen Meldung abgewiesen. Bereits gespeicherte Namen können auch bei voller Tabelle wieder beitreten. Sprint 3 und Sprint 4 sind abgenommen; Hardwaretests und die folgenden Sprints bleiben offen.
 
 ## Festgelegte Spielregeln
 
@@ -38,7 +46,7 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 - Nur ein Spieler darf gleichzeitig einen PC verwenden. Der andere kann währenddessen normal weiterspielen.
 - Eine neue Mehrspieler-Box enthält pro Spieler eine Reihe für dessen Gruppe von bis zu sechs Pokémon.
 - Die Boxenreihe eines eingeloggten Spielers ist gegen Entnahme und Verschieben gesperrt.
-- Beim Verlassen des Spiels wird die Gruppe des Spielers vollständig in seine Boxenreihe zurückgelegt. Erst danach wird die Reihe entsperrt und ihre Pokémon können wieder am PC entnommen werden.
+- Die aktuelle Gruppe wird laufend in die eigene Boxenreihe gespiegelt und bei Änderungen übertragen. Der Gast beendet seine Sitzung durch Ausschalten. Nach erkanntem Verbindungsende wird seine zuletzt vollständig übernommene Reihe entsperrt; ein Abmeldepaket ist dafür nicht erforderlich. Der Host speichert den gemeinsamen Stand auf der SD-Karte.
 - Der Gast kann wilde Pokémon und Trainerkämpfe selbst auslösen.
 - Einzelkämpfe bestreitet der auslösende Spieler allein mit seiner Gruppe. Der andere Spieler kann währenddessen weiterspielen.
 - Bei einem Doppelkampf kämpfen beide Spieler gemeinsam, wenn der Partner auf derselben Karte, in unmittelbarer Nähe und verfügbar ist. Andernfalls bestreitet der auslösende Spieler den Doppelkampf nach den Originalregeln allein.
@@ -143,21 +151,20 @@ Zwei Spieler nutzen über Nintendo-3DS-Local-Wireless (UDS) gemeinsam den Spiels
 
 ## Sprint 3: Gemeinsame Oberwelt und zweiten Spieler darstellen
 
-**Status: In Arbeit**
+**Status: Fertig**
 
-Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 1 bestätigt. Inzwischen werden beim Beitritt alle benötigten Speicherblöcke mit Prüfsumme vom Host übernommen. Gespeicherter Spawn, Rejoin nach Host-Speichern, Kartenwechsel, Bewegung und die vollständige Kartendarstellung wurden mit zwei Azahar-Instanzen bestätigt. Neue Namen starten fest in Wurzelheim, alte Namen an ihrem gespeicherten Spawn; eine zwischenzeitliche Spawn-Auswahl wurde verworfen. Die lokale Gast-Speicherdatei bleibt dabei bytegenau unverändert. Die Koop-Figur blockiert weder Bewegung noch NPC-Dialoge. Menüs und Kämpfe verwenden weiterhin getrennte Engine-Zustände pro Konsole. Persistente Story-Flags und Skriptvariablen werden nun laufend Host-autoritativ zwischen beiden Konsolen übernommen, auch bei direkten Schreibzugriffen. Team-, Item-, Objekt- und weitere Spielstandssynchronisation stehen noch aus; die neuen Regeln müssen noch im Laufzeittest bestätigt werden.
+Zwei isolierte Azahar-Instanzen bestätigen wiederholte Beitritte, den vollständigen Host-Snapshot, neue und gespeicherte Spawnpunkte, Bewegung, Kartenwechsel, gemeinsame und getrennte Karten sowie nicht blockierende Avatare. NPC-Position und Blickrichtung wurden direkt verglichen. Wiederholte Beutel-Auf-/Zu-Zyklen und die Bereinigung nach Verbindungsabbruch sowie nach dem Laden eines gespeicherten Avatars wurden geprüft. Der alte Kartenausschnitt wird beim Join verworfen. Die lokale Gast-SAV bleibt unverändert. Laufende Gruppen- und PC-Synchronisierung gehören zu Sprint 4, Kämpfe zu Sprint 5.
 
 ### Aufgaben
 
 - [x] Zweite Spielfigur mit eigenem Charakter und Namen sowie Basis-Bewegungsdaten integrieren.
 - [x] Bewegungsdaten mit Heartbeat, Validierung und Verlustbehandlung übertragen; dies wurde in Sprint 1 bestätigt.
-- [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot, Rejoin und vollständigem Kartenaufbau bestätigt.
+- [x] Namensbasierte Spawnpositionen zuverlässig laden und nach dem Beitritt weiter synchronisieren; einschließlich Host-Snapshot und Rejoin bestätigt.
 - [x] Kartenwechsel durch Türen und unterschiedliche Aufenthaltsorte beider Spieler synchronisieren; einschließlich Rejoin bestätigt.
 - [x] Neue Gastnamen an einem freien, festen Punkt in Wurzelheim spawnen und für alte Namen immer deren gespeicherte Position ohne Spawn-Auswahl verwenden.
-- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: keine Blockade und kein NPC-Script; Laufzeittest steht noch aus.
-- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als vollständigen Initial-Snapshot bereitstellen.
-- [x] Persistente Story-Flags und Skriptvariablen laufend Host-autoritativ übernehmen; direkte Schreibzugriffe werden mit einer Baseline und höchstens acht Änderungen pro Intervall erfasst.
-- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks trennen; Laufzeittest steht noch aus.
+- [x] Kollisionen und Interaktionen mit der zweiten Figur festlegen und umsetzen: `LOCALID_COOP_PLAYER` blockiert keine Bewegung und besitzt kein NPC-Script; vom Nutzer laufzeitgeprüft.
+- [x] Benötigte Host-Karten-, NPC- und Weltzustände für den Gast als initialen Snapshot bereitstellen; der Snapshot enthält aktive ObjectEvents und NPC-Positionen werden auch danach Host-autoritativ aktualisiert. Position und Blickrichtung sind im Laufzeitvergleich bestätigt. Team-, Item- und Storyänderungen nach dem Beitritt gehören zu Sprint 4.
+- [x] Menüs und Kampf-/Oberweltzustände pro Spieler über getrennte Engine-Callbacks getrennt halten; unabhängige Menüs wurden vom Nutzer laufzeitgeprüft.
 
 ### Akzeptanzkriterien
 
@@ -168,44 +175,62 @@ Die grundlegende Bewegungs- und Disconnect-Übertragung wurde bereits in Sprint 
 
 ## Sprint 4: Spielerprofil, Mehrspieler-Box und PC-Sperre
 
-**Status: In Arbeit**
+**Status: Fertig**
+
+Abgenommen auf Branch `sprint-4` mit zwei isolierten Azahar-Instanzen und neun automatisierten Testsuiten. Fünf gültige Test-Pokémon wurden über Entnahme, Ablage, ausgeschalteten Gast, freigegebene Gast-Reihe, Host-Speichern, vollständigen Neustart und Wiederbeitritt anhand ihrer eindeutigen Kennungen verfolgt. Jedes blieb genau einmal im gemeinsamen Bestand vorhanden. Die aus der Gast-Reihe entnommenen Pokémon erschienen beim Wiederbeitritt nicht erneut. Hardwaretests gehören weiterhin zu Sprint 8.
 
 ### Aufgaben
 
-- [x] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern; die vorhandene Spawn-Tabelle und die Gast-Reihe werden verwendet.
-- [x] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen: Box 14 wird als KOOP-Box reserviert, Reihe 1 gehört dem Host und Reihe 2 dem Gast; vorhandene Pokémon werden vorher in normale Boxen verschoben.
-- [x] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist: Der Gast muss mindestens ein Pokémon wählen und die Welt öffnet erst nach Host-Bestätigung; Laufzeittest steht noch aus.
-- [x] Globale PC-Sperre für jeweils genau einen Spieler umsetzen: Host-Vergabe, verzögerte Gastöffnung und Freigabe bei Ausstieg, Stopp, F6 oder Disconnect; Laufzeittest steht noch aus.
-- [x] PC-Verschiebungen als vollständige, unteilbare Host-Vorgänge ausführen: 34.392 Byte Speicher und Gruppe werden mit Prüfsumme übertragen und erst vollständig übernommen; Laufzeittest steht noch aus.
-- [x] Boxenreihen eingeloggter Spieler gegen Entnahme, Verschieben, Tausch, Freilassen und Mehrfachverschieben sperren; Laufzeittest steht noch aus.
-- [ ] Beim Ausloggen die gesamte Gruppe in die zugehörige Reihe zurücklegen und danach entsperren; die Reihe wird bei PC-Übernahmen aktualisiert, aber noch nicht bei jedem Verbindungsende mit aktuellen Kampfänderungen synchronisiert.
-- [x] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln: Die Übernahme erfolgt erst nach vollständigem Empfang und korrekter Prüfsumme; der Abbruchtest steht noch aus.
-- [x] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren: keine Größenänderung, KOOP-Initialisierung und Versionsmarker sind in `HANDOFF.md` beschrieben.
+- [x] Zweites Spielerprofil mit Charakter, Name und zugeordneter Boxenreihe im Host-Spielstand speichern; Spawn-Tabelle und Gast-Reihe werden verwendet.
+- [x] Mehrspieler-Box mit einer Reihe und bis zu sechs Pokémon pro Spieler einbauen: Box 14 als KOOP-Box, Reihe 1 für den Host und Reihe 2 für den Gast; Bestand wird vorher migriert.
+- [x] Neue Gäste zwischen Geckarbor, Flemmli und Hydropi wählen lassen und den Starter direkt in die Gast-Reihe legen; die Auswahl ist vor dem Startteam-PC verbindlich und darf nicht dupliziert werden. Hoch/Runter und die Bestätigung von Flemmli wurden im Emulator abgenommen; anschließend öffnete der Startteam-PC.
+- [x] Startteam-Auswahl nach erfolgreichem Beitritt öffnen, sobald der PC frei ist; mindestens ein Pokémon und vollständige Host-Bestätigung vor dem Spawn; mit zwei Instanzen bestätigt.
+- [x] Globale PC-Sperre für jeweils genau einen Spieler umsetzen. Sie bleibt beim Wechsel zwischen Box und PC-Auswahlmenü bestehen; direkte Menüausstiege, gegenseitige Zugriffsversuche und Disconnect sind laufzeitgeprüft. Ein Beitritt wartet auf das Ende eines offenen Host-PC-Besuchs.
+- [x] PC-Verschiebungen als vollständige, unteilbare Vorgänge mit Prüfsumme ausführen. Gast-Entnahme und Host-Ablage wurden auf beiden Seiten geprüft. Ein hart beendeter Gast-PC-Besuch erhält den vorher bestätigten Host-Bestand. Native Tests prüfen zusätzlich Teilübertragungen und falsche Prüfsummen.
+- [x] Boxenreihen eingeloggter Spieler gegen Entnahme, Verschieben, Tausch, Freilassen und Mehrfachverschieben sperren. Die Eingabe wird vor dem Start einer Cursor-Operation abgewehrt; normale und automatische Auswahl wurden mit beiden aktiven Reihen geprüft. Nach Gast-Abbruch ist dessen Reihe wieder verwendbar; die eigene Host-Spiegelung bleibt gesperrt.
+- [x] Die aktuelle Gruppe laufend in der eigenen Reihe spiegeln; geänderte Daten vollständig mit Prüfsumme übertragen und bestätigen. Beim Ausschalten des Gasts bleibt die zuletzt übernommene Gruppe beim Host und wird nach dem Disconnect entsperrt. EP, AP und getragenes Item wurden mit zwei Instanzen sowie nach Host-Speichern und Neuladen geprüft. Unterbrochene Übertragungen erhalten die bisherige Reihe.
+- [x] Abbrüche während der Startteam-Auswahl ohne teilweise übernommene Änderungen behandeln; Übernahme erst nach vollständigem Empfang und korrekter Prüfsumme.
+- [x] Speicherformat beziehungsweise Erweiterung und Kompatibilität mit vorhandenen Spielständen dokumentieren.
 
 ### Akzeptanzkriterien
 
-- [ ] Zwei Spieler können nicht gleichzeitig denselben PC verwenden.
-- [ ] Kein PC- oder Anmeldevorgang kann Pokémon duplizieren oder verlieren.
-- [ ] Pokémon eines eingeloggten Spielers können nicht von einem anderen Spieler entnommen werden.
-- [ ] Nach dem Ausloggen befindet sich die vollständige Gruppe in der richtigen Boxenreihe.
-- [ ] Nach einem Neustart ist der gemeinsame Spielstand konsistent.
+- [x] Zwei Spieler können nicht gleichzeitig denselben PC verwenden; gegenseitige Versuche sind im Emulator und gleichzeitige Protokollanfragen nativ geprüft.
+- [x] Die geprüften PC- und Anmeldevorgänge duplizieren oder verlieren keine Pokémon; der Bestand bleibt über bestätigte Vorgänge, Abbrüche und Wiederbeitritt erhalten.
+- [x] Pokémon eines eingeloggten Spielers können nicht von einem anderen Spieler entnommen werden; beide aktiven Reihen wurden geprüft.
+- [x] Nach dem Ausschalten des Gasts bleibt die zuletzt vollständig synchronisierte Gruppe in der richtigen Boxenreihe; im Emulator geprüft.
+- [x] Nach einem vollständigen Neustart und Wiederbeitritt ist der gemeinsame Spielstand konsistent. Lücken in der Gast-Reihe werden beim Laden zu einer gültigen Gruppe zusammengeschoben.
 
 ## Sprint 5: Unabhängige Einzelkämpfe und gemeinsame Trainerwelt
 
-**Status: In Arbeit**
+**Status: Integriert aus origin/sprint-5; automatische Tests bestanden, Emulator-/Hardware-Abnahme offen.**
 
 ### Aufgaben
 
-- [x] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen; wilde Kämpfe starten lokal, Trainerkämpfe nach Host-Freigabe.
-- [x] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen; Host- und Gast-Gruppe bleiben getrennt.
-- [x] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben; Kampf- und Welt-Callbacks bleiben getrennt.
-- [x] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren; die Freigabe erfolgt erst nach Story-Synchronisation und gesetztem Trainer-Flag.
-- [x] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen; Flags und Variablen verwenden die bestehende Story-Synchronisation.
-- [x] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen; Fang-, Item- und Geldänderungen werden als Deltas übertragen und Boxkollisionen auf freie Plätze umgeleitet.
-- [x] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln; Niederlagen werden erst nach Whiteout einschließlich Heilung und Geldabzug übernommen.
-- [x] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners durch Reservierung und verzögerte Freigabe verhindern.
+- [x] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen.
+- [x] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen.
+- [x] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben.
+- [ ] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren.
+- [x] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen.
+- [x] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen.
+- [x] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln.
+- [x] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners verhindern.
 
-Alle Sprint-5-Implementierungen sind kompiliert und auf Protokollebene getestet; die vollständige Abnahme mit zwei unabhängigen Kämpfen, Fang, Niederlage und Trainerreservierung in Azahar steht noch aus.
+
+Integrierte Quelle: `1be2515` (Implementierung `dbb9ff0` plus Sprint-5-Tests).
+Der neuere main-Stand und alle lokalen Grafik-, Gastnamen-, Beitritts- und
+PC-Meldungskorrekturen bleiben erhalten. Protokollversion 11 verwendet freie
+Kampf-Paketnummern 33..39. Ergebnisse haben Sequenznummern, werden atomar und
+ohne doppelte Belohnungen angewendet und warten bei aktiven lokalen Kaempfen
+oder PC-Besuchen. Auch wilde Gastkaempfe stimmen den Start mit dem Host ab;
+der PC bleibt waehrend aktiver Kaempfe und offener Ergebnisuebertragungen
+gesperrt. Zwei unabhaengige Kaempfe bleiben moeglich.
+
+Automatisch geprueft: Reservierung/Wiederholung, getrennte Spielerreihen,
+verschluesselte Geld-/Itemmengen nach Save-Rekey, wiederholte/alte Ergebnisse,
+Kollisionen mehrerer Faenge, volle Boxen ohne Teiluebernahme, Inventarfehler,
+Transferfortsetzung sowie Kampf-/PC-Rennen. Statische einmalige Wildgegner
+haben im uebernommenen Branch noch keine eigene Gegnerreservierung; dieser
+Teil der Aufgabe bleibt offen. Die Abnahme unten ist ein manueller Nutzertest.
 
 ### Akzeptanzkriterien
 
@@ -216,19 +241,17 @@ Alle Sprint-5-Implementierungen sind kompiliert und auf Protokollebene getestet;
 
 ## Sprint 6: Gemeinsame Doppelkämpfe
 
-**Status: In Arbeit**
+**Status: Offen**
 
 ### Aufgaben
 
-- [x] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen: dieselbe Karte, höchstens drei Felder Abstand und kein anderer Kampf, PC oder Handshake.
-- [x] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern: der Start nutzt einen geprüften 1.232-Byte-Setup-Handshake, danach laufen die originalen Controller-Nachrichten über den Koop-Direktkanal.
-- [x] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben: Host steuert die linke und Gast die rechte Position, Gegner bleiben KI-gesteuert.
-- [x] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen; der Auslöser überträgt Belohnungen nur einmal.
-- [x] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen.
-- [x] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende über die vorhandene Link-Controller-Steuerung synchronisieren; Niederlagen werden nach Whiteout übernommen.
-- [x] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen; lokal identische Geld- und Item-Deltas werden beim Partner nicht doppelt angerechnet.
-
-Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet. Die vollständige Abnahme mit gemeinsamen Zügen, Wechseln, Fängen, Whiteout, Host- und Gast-Auslösung sowie dem Fallback ohne Partner steht noch aus.
+- [ ] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen.
+- [ ] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern.
+- [ ] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben.
+- [ ] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen.
+- [ ] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen.
+- [ ] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende korrekt synchronisieren.
+- [ ] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen.
 
 ### Akzeptanzkriterien
 
@@ -243,7 +266,7 @@ Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet.
 
 ### Aufgaben
 
-- [ ] Ordentliche Abmeldung mit vollständiger Rückgabe der Gruppe durchführen.
+- [x] Ausschalten des Gasts ohne Abmeldepaket unterstützen: laufende Gruppenübertragung und Erhalt der zuletzt vollständig übernommenen Reihe; mit zwei Emulatoren geprüft.
 - [ ] Unerwartete Verbindungsabbrüche erkennen und nach einer definierten Zeitüberschreitung bereinigen.
 - [ ] Verhalten bei Abbrüchen während Einzel- und Doppelkämpfen festlegen und umsetzen.
 - [ ] Beim Schließen der Host-Welt alle Spieler und Gruppen sicher zurück in die Mehrspieler-Box überführen.
@@ -286,7 +309,9 @@ Alle Sprint-6-Implementierungen sind kompiliert und auf Protokollebene getestet.
 - Dürfen Gäste story-kritische Ereignisse auslösen oder nur normale Trainer und wilde Begegnungen?
 - Wie werden Flucht, Fangversuche und Kampfabbrüche in gemeinsamen Doppelkämpfen behandelt?
 - Soll bei einem Verbindungsabbruch im Doppelkampf eine KI übernehmen oder der Kampf sicher abgebrochen werden?
+- Soll ein wiederkehrender Gast jedes Mal ein Startteam wählen oder automatisch seine letzte Boxenreihe übernehmen?
+- Welche Interaktionen zwischen den beiden Spielfiguren sind möglich, beispielsweise Ansprechen, Blockieren oder direkter Tausch?
 
 ## Aktueller Gesamtstand
 
-Sprint 0, Sprint 1 und Sprint 2 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Sprint 3 ist auf `main` für den Nutzertest vorbereitet: Host-Spielstand, Spawn, Rejoin, Kartenwechsel und Bewegung sind bestätigt; Durchlässigkeit, Menütrennung und Story-Synchronisation sind implementiert, aber noch nicht abgenommen. Auf `sprint-4` sind zusätzlich die KOOP-Box in Box 14, Spieler-Reihen, Startteam-Auswahl, atomare PC-Übertragung, globale PC-Sperre und Reihensperren implementiert. Der Gast verwendet seine eigene gespeicherte Team-Reihe im gemeinsamen Host-Spielstand und verändert seine lokale SAV nicht. Auf `sprint-5` sind wilde Einzelkämpfe und Trainerkämpfe auf beiden Konsolen unabhängig möglich. Trainer-IDs werden reserviert und erst nach Flag-Übernahme freigegeben; Gruppen, EP, Evolutionen, Fänge, Items, Geld und Whiteout-Folgen werden über einen separaten Battle-Kanal übertragen. Fangkollisionen werden auf freie Boxplätze umgeleitet. Auf `sprint-6` starten Host und Gast gemeinsame Doppelkämpfe nach einer Karten-, Nähe- und Verfügbarkeitsprüfung. Ein bestätigter Setup-Handshake überträgt Gegner, Gruppen und RNG-Start; danach steuern Host und Gast ihre jeweilige Position über den originalen Direkt-Controller. Belohnungen werden nicht doppelt angerechnet und Whiteout wird übernommen. Alle neuen Abläufe sind gebaut und automatisiert auf Protokoll- und Speicherregeln getestet; die vollständigen Emulator- und Hardwareabnahmen stehen noch aus. Nicht kampfbedingte Teamänderungen außerhalb bestätigter PC-Vorgänge und das garantierte Zurücklegen bei einem Abbruch mitten in einer Übertragung sind noch offen. `HANDOFF.md` enthält die Branch-Trennung und Testschritte, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0 bis Sprint 4 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Startteam, PC-Sperre über den gesamten PC-Besuch, atomare Übernahme, Reihensperren und laufende Gruppensynchronisierung sind abgenommen. Der Bestand bleibt in den geprüften Abläufen auch nach hartem Gast-Abbruch, Entnahme aus der freigegebenen Gast-Reihe, Host-Speichern, vollständigem Neustart und Wiederbeitritt erhalten. Alle neun automatisierten Testsuiten und der Release-Build bestehen. Sprint 5 ist aus origin/sprint-5 integriert und automatisch geprueft; die interaktive Abnahme und die Reservierung einmaliger Wildgegner bleiben offen. Hardwaretests bleiben offen. `HANDOFF.md` enthält Details, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.

@@ -9,6 +9,8 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef int16_t s16;
+typedef int8_t s8;
+typedef uint8_t bool8;
 
 #define TRUE 1
 #define FALSE 0
@@ -33,6 +35,12 @@ typedef int16_t s16;
 #define MAP_NUM(map) ((map) & 0xFF)
 #define LAYOUT_LITTLEROOT_TOWN 10
 #define NUM_FLAG_BYTES 256
+#define FLAGS_COUNT (NUM_FLAG_BYTES * 8)
+#define MON_DATA_SPECIES 2
+#define SPECIES_TREECKO 277
+#define SPECIES_TORCHIC 280
+#define SPECIES_MUDKIP 283
+#define OT_ID_PLAYER_ID 0
 #define VARS_COUNT 256
 #define VARS_START 0x4000
 #define SPECIAL_VARS_START 0x4100
@@ -85,7 +93,8 @@ struct ItemSlot
 struct SaveBlock2
 {
     uint8_t playerName[8];
-    uint8_t padding[3876];
+    uint32_t encryptionKey;
+    uint8_t padding[3872];
 };
 
 struct SaveBlock1
@@ -118,6 +127,8 @@ struct SaveBlock1
             uint8_t flags[NUM_FLAG_BYTES];
             uint16_t vars[VARS_COUNT];
             uint8_t unused_3598[256];
+            uint8_t mapView[512];
+            uint8_t objectEvents[OBJECT_EVENTS_COUNT][64];
         };
     };
 };
@@ -147,6 +158,11 @@ struct Coords16
 struct ObjectEvent
 {
     uint8_t active;
+    uint8_t isPlayer;
+    uint8_t frozen;
+    uint8_t facingDirection;
+    uint8_t singleMovementActive;
+    uint8_t heldMovementActive;
     uint8_t localId;
     uint8_t mapGroup;
     uint8_t mapNum;
@@ -181,6 +197,7 @@ typedef void (*MainCallback)(void);
 struct Main
 {
     MainCallback savedCallback;
+    MainCallback callback2;
 };
 
 struct LinkPlayer
@@ -239,6 +256,16 @@ void ObjectEventSetHeldMovement(struct ObjectEvent *objectEvent, uint8_t movemen
 void MoveObjectEventToMapCoords(struct ObjectEvent *objectEvent, int16_t x, int16_t y);
 void ShowPokemonStorageSystemPC(void);
 void PlaySE(uint16_t song);
+void CB2_Overworld(void);
+void CB2_InitStarterSelection(void);
+bool8 CB2_StarterSelectionActive(void);
+void SaveObjectEvents(void);
+void LoadObjEventTemplatesFromHeader(void);
+void RemoveObjectEventByLocalIdAndMap(u8 localId, u8 mapNum, u8 mapGroup);
+void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphics);
+u8 TrySpawnObjectEvent(u8 localId, u8 mapNum, u8 mapGroup);
+void ScriptContext_Enable(void);
+void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, bool8 hasFixedPersonality, u32 personality, u8 otIdType, u32 fixedOtId);
 uint16_t Random(void);
 void CB2_InitBattle(void);
 void CB2_InitEndLinkBattle(void);

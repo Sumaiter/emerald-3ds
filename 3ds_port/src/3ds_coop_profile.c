@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include "3ds_coop_profile.h"
 #include "3ds_data.h"
@@ -81,29 +82,29 @@ void CtrCoopProfile_Reload(void)
     CtrCoopProfile_Load();
 }
 
+static bool ReadProfile(const char *name, struct DiskProfile *disk)
+{
+    FILE *file = CtrFs_OpenData(name, "rb");
+    bool valid = false;
+
+    if (file == NULL)
+        return false;
+    if (fread(disk, 1, sizeof(*disk), file) == sizeof(*disk))
+        valid = disk->magic == PROFILE_MAGIC && disk->version == PROFILE_VERSION
+             && disk->checksum == Checksum(&disk->profile, sizeof(disk->profile));
+    fclose(file);
+    return valid;
+}
+
 void CtrCoopProfile_Load(void)
 {
     struct DiskProfile disk;
-    FILE *file;
-    bool valid = false;
 
     if (sLoaded)
         return;
     sLoaded = true;
     Defaults();
-    file = CtrFs_OpenData(PROFILE_FILE, "rb");
-    if (file == NULL)
-        file = CtrFs_OpenData(PROFILE_TEMP, "rb");
-    if (file == NULL)
-        return;
-    if (fread(&disk, 1, sizeof(disk), file) == sizeof(disk))
-    {
-        disk.profile.guestName[CTR_COOP_GUEST_NAME_LENGTH] = 0xFF;
-        valid = disk.magic == PROFILE_MAGIC && disk.version == PROFILE_VERSION
-             && disk.checksum == Checksum(&disk.profile, sizeof(disk.profile));
-    }
-    fclose(file);
-    if (valid)
+    if (ReadProfile(PROFILE_FILE, &disk) || ReadProfile(PROFILE_TEMP, &disk))
         sProfile = disk.profile;
     Validate();
 }
@@ -130,13 +131,11 @@ bool CtrCoopProfile_Save(void)
         remove(CTR_DATA_DIR PROFILE_TEMP);
         return false;
     }
-    remove(CTR_DATA_DIR PROFILE_FILE);
-    if (rename(CTR_DATA_DIR PROFILE_TEMP, CTR_DATA_DIR PROFILE_FILE) != 0)
-    {
-        remove(CTR_DATA_DIR PROFILE_TEMP);
+    if (remove(CTR_DATA_DIR PROFILE_FILE) != 0 && errno != ENOENT)
         return false;
-    }
-    return true;
+    /* Keep the verified temporary file if replacement fails, so Load can
+     * recover it when the old destination was already removed. */
+    return rename(CTR_DATA_DIR PROFILE_TEMP, CTR_DATA_DIR PROFILE_FILE) == 0;
 }
 
 const struct CtrCoopProfile *CtrCoopProfile_Get(void)

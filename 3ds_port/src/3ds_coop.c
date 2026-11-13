@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include "global.h"
 #include "3ds_coop.h"
 #include "3ds_coop_protocol.h"
@@ -1123,7 +1122,8 @@ static bool DoublePeerAvailable(void)
      || sCoop.pcOpen || sCoop.doubleState != DOUBLE_STATE_IDLE || !LocalSnapshot(&local))
         return false;
     return CtrCoopProtocol_SameMap(&local, &sCoop.remote)
-        && abs(local.x - sCoop.remote.x) <= 3 && abs(local.y - sCoop.remote.y) <= 3;
+        && local.x >= sCoop.remote.x - 3 && local.x <= sCoop.remote.x + 3
+        && local.y >= sCoop.remote.y - 3 && local.y <= sCoop.remote.y + 3;
 }
 
 static void WriteDouble32(uint8_t *data, uint32_t offset, uint32_t value)

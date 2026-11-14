@@ -2,6 +2,13 @@
 
 ## Unreleased (co-op fork)
 
+- RANDOM BOOT SEED, a new line on OPTIONS' second screen (`boot_seed=` in
+  settings.txt), OFF by default: boot and soft reset keep Emerald's zero RNG
+  seed, so zero-seed RNG manipulation works as on the GBA. ON seeds them from
+  the console's timing instead. A new game always reseeds from the console's
+  timing before the trainer ID is drawn, whatever this option says. Recorded
+  scenarios replay as before.
+
 - Visible wild Pokemon keep their IV rolls adjacent to their original
   personality, including shiny rolls (upstream PR #266). Existing catches
   are unchanged.

@@ -1,0 +1,137 @@
+diff --git a/src/pokemon.c b/src/pokemon.c
+--- a/src/pokemon.c
++++ b/src/pokemon.c
+@@ -2,6 +2,7 @@
+ #include "international_string_util.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
++#include "3ds_coop.h"
+ #endif
+ #include "malloc.h"
+ #include "apprentice.h"
+@@ -2994,6 +2995,9 @@
+     value = MAIL_NONE;
+     SetMonData(dest, MON_DATA_MAIL, &value);
+     CalculateMonStats(dest);
++#ifdef PLATFORM_3DS
++    CtrCoop_RestoreBoxVitals(src, dest);
++#endif
+ }
+ 
+ u8 GetLevelFromMonExp(struct Pokemon *mon)
+diff --git a/src/field_control_avatar.c b/src/field_control_avatar.c
+--- a/src/field_control_avatar.c
++++ b/src/field_control_avatar.c
+@@ -177,6 +177,10 @@
+ 
+     GetInFrontOfPlayerPosition(&position);
+     metatileBehavior = MapGridGetMetatileBehaviorAt(position.x, position.y);
++#ifdef PLATFORM_3DS
++    if (input->pressedAButton && CtrCoop_TryWatchAt(position.x, position.y))
++        return FALSE; /* DoCB1_Overworld observes the new spectator, no lock. */
++#endif
+     if (input->pressedAButton && TryStartInteractionScript(&position, metatileBehavior, playerDirection) == TRUE)
+         return TRUE;
+ 
+diff --git a/src/overworld.c b/src/overworld.c
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -2,6 +2,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #include "3ds_daynight.h"
++#include "3ds_coop.h"
+ #endif
+ #include "overworld.h"
+ #include "battle_pyramid.h"
+@@ -534,6 +535,9 @@
+         {
+             objectEventTemplate->x = x;
+             objectEventTemplate->y = y;
++#ifdef PLATFORM_3DS
++            CtrCoop_EngineStoryTemplateChanged(localId, 1);
++#endif
+             return;
+         }
+     }
+@@ -550,6 +554,9 @@
+         if (objectEventTemplate->localId == localId)
+         {
+             objectEventTemplate->movementType = movementType;
++#ifdef PLATFORM_3DS
++            CtrCoop_EngineStoryTemplateChanged(localId, 2);
++#endif
+             return;
+         }
+     }
+@@ -1575,13 +1582,26 @@
+ static void DoCB1_Overworld(u16 newKeys, u16 heldKeys)
+ {
+     struct FieldInput inputStruct;
++    int handled;
++
++#ifdef PLATFORM_3DS
++    /* Watching changes presentation only. Do not acquire a script/control
++     * lock, step, or trigger trainers while the spectator is standing here. */
++    if (CtrCoop_IsWatching())
++        return;
++#endif
+ 
+     UpdatePlayerAvatarTransitionState();
+     FieldClearPlayerInput(&inputStruct);
+     FieldGetPlayerInput(&inputStruct, newKeys, heldKeys);
+     if (!ArePlayerFieldControlsLocked())
+     {
+-        if (ProcessPlayerFieldInput(&inputStruct) == 1)
++        handled = ProcessPlayerFieldInput(&inputStruct);
++#ifdef PLATFORM_3DS
++        if (CtrCoop_IsWatching())
++            return;
++#endif
++        if (handled == 1)
+         {
+             LockPlayerFieldControls();
+             HideMapNamePopUpWindow();
+@@ -1592,6 +1612,22 @@
+         }
+     }
+ }
++
++#ifdef PLATFORM_3DS
++bool CtrCoop_EngineAutoSave(void)
++{
++    u8 status;
++    if (gMain.callback2 != CB2_Overworld || gMain.inBattle || gPaletteFade.active
++     || ArePlayerFieldControlsLocked() || ScriptContext_IsEnabled()
++     || CtrCoop_IsWatching())
++        return false;
++    SaveMapView();
++    status = TrySavingData(gDifferentSaveFile ? SAVE_OVERWRITE_DIFFERENT_FILE : SAVE_NORMAL);
++    if (status == SAVE_STATUS_OK)
++        gDifferentSaveFile = FALSE;
++    return status == SAVE_STATUS_OK;
++}
++#endif
+ 
+ #ifdef PLATFORM_3DS
+ void VisibleWild_Update(void); // wild_encounter.c
+diff --git a/src/local_session.c b/src/local_session.c
+--- a/src/local_session.c
++++ b/src/local_session.c
+@@ -15,6 +15,7 @@
+ #include "constants/map_groups.h"
+ #include "constants/local_link.h"
+ #include "3ds_local.h"
++#include "3ds_coop.h"
+ #include "local_link.h"
+ 
+ #define WAIT_FRAMES (60 * 10) // looking takes 2-3 seconds; give up after this
+@@ -37,6 +38,8 @@
+ {
+     if (LocalLink_GetSession() == LOCAL_SESSION_IN && LocalLink_GetSessionKind() == CounterKind())
+         return TRUE;
++    if (!CtrCoop_PrepareNativeLink())
++        return FALSE;
+     LocalLink_StartSession(CounterKind());
+     return FALSE;
+ }

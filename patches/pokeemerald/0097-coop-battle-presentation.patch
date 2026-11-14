@@ -1,0 +1,29 @@
+--- a/src/fieldmap.c
++++ b/src/fieldmap.c
+@@ -593,6 +593,26 @@
+ // of a crossing. The 2x2 is phased on that map's own origin, as
+ // GetBorderBlockAt phases it when that map is the current one (or on the map
+ // that shares its block, above).
++#if defined(PLATFORM_3DS) && defined(CTR_BATTLE_PRESENTATION)
++unsigned CtrBattlePresent_CaptureBorders(CtrPresentBorder out[CTR_PRESENT_MAPS])
++{
++    unsigned i;
++    UpdateCameraMaps();
++    for (i = 0; i < sCameraMapCount && i < CTR_PRESENT_MAPS; ++i)
++    {
++        const struct CameraMap *map = &sCameraMaps[i];
++        out[i].layout = map->header == &gMapHeader ? gSaveBlock1Ptr->mapLayoutId : map->header->mapLayoutId;
++        out[i].id = map->id;
++        out[i].x = map->x;
++        out[i].y = map->y;
++        out[i].phaseX = map->phaseX;
++        out[i].phaseY = map->phaseY;
++        out[i].drawable = map->border;
++    }
++    return i;
++}
++#endif
++
+ const u16 *MapGridGetCameraBorderAt(int x, int y, u8 *index)
+ {
+     const struct CameraMap *best = NULL;

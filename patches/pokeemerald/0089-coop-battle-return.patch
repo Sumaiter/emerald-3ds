@@ -1,0 +1,175 @@
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -5346,7 +5346,11 @@
+ 
+     m4aSongNumStop(SE_LOW_HEALTH);
+ #ifdef PLATFORM_3DS
+-    if (gBattleOutcome != B_OUTCOME_LOST && gBattleOutcome != B_OUTCOME_DREW)
++    /* These callbacks restore held items or defer the temporary party's
++     * result until the field script has loaded the complete party again. */
++    if (gBattleOutcome != B_OUTCOME_LOST && gBattleOutcome != B_OUTCOME_DREW
++     && !(gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_SECRET_BASE
++                           | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_INGAME_PARTNER)))
+         CtrCoop_BattleEnd();
+ #endif
+     SetMainCallback2(gMain.savedCallback);
+diff --git a/src/battle_setup.c b/src/battle_setup.c
+--- a/src/battle_setup.c
++++ b/src/battle_setup.c
+@@ -626,6 +626,12 @@
+     }
+     else
+     {
++#ifdef PLATFORM_3DS
++        if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
++            CtrCoop_BattleEndAfterPartyRestore();
++        else
++            CtrCoop_BattleEnd();
++#endif
+         SetMainCallback2(CB2_ReturnToField);
+         gFieldCallback = FieldCB_ReturnToFieldNoScriptCheckMusic;
+     }
+@@ -639,12 +645,23 @@
+     if (IsPlayerDefeated(gBattleOutcome) == TRUE)
+     {
+         if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE)
++        {
++#ifdef PLATFORM_3DS
++            CtrCoop_BattleEndAfterPartyRestore();
++#endif
+             SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
++        }
+         else
+             SetMainCallback2(CB2_WhiteOut);
+     }
+     else
+     {
++#ifdef PLATFORM_3DS
++        if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
++            CtrCoop_BattleEndAfterPartyRestore();
++        else
++            CtrCoop_BattleEnd();
++#endif
+         SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+     }
+ }
+@@ -966,6 +983,9 @@
+ static void CB2_EndFirstBattle(void)
+ {
+     Overworld_ClearSavedMusic();
++#ifdef PLATFORM_3DS
++    CtrCoop_BattleEnd();
++#endif
+     SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+ }
+ 
+@@ -1362,17 +1382,34 @@
+ {
+     if (gTrainerBattleOpponent_A == TRAINER_SECRET_BASE)
+     {
++#ifdef PLATFORM_3DS
++        CtrCoop_BattleEnd();
++#endif
+         SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+     }
+     else if (IsPlayerDefeated(gBattleOutcome) == TRUE)
+     {
+         if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE || InTrainerHillChallenge())
++        {
++#ifdef PLATFORM_3DS
++            if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
++                CtrCoop_BattleEndAfterPartyRestore();
++            else
++                CtrCoop_BattleEnd();
++#endif
+             SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
++        }
+         else
+             SetMainCallback2(CB2_WhiteOut);
+     }
+     else
+     {
++#ifdef PLATFORM_3DS
++        if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
++            CtrCoop_BattleEndAfterPartyRestore();
++        else
++            CtrCoop_BattleEnd();
++#endif
+         SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+         if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE && !InTrainerHillChallenge())
+         {
+@@ -1386,6 +1423,9 @@
+ {
+     if (gTrainerBattleOpponent_A == TRAINER_SECRET_BASE)
+     {
++#ifdef PLATFORM_3DS
++        CtrCoop_BattleEnd();
++#endif
+         SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+     }
+     else if (IsPlayerDefeated(gBattleOutcome) == TRUE)
+diff --git a/src/battle_tower.c b/src/battle_tower.c
+--- a/src/battle_tower.c
++++ b/src/battle_tower.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "battle_tower.h"
+ #include "apprentice.h"
+ #include "event_data.h"
+@@ -2036,6 +2039,14 @@
+         break;
+     }
+ 
++    /* Secret-base held items above must be restored before freezing even a
++     * won battle. Frontier/partner scripts still own a temporary party. */
++#ifdef PLATFORM_3DS
++    if (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_INGAME_PARTNER))
++        CtrCoop_BattleEndAfterPartyRestore();
++    else
++        CtrCoop_BattleEnd();
++#endif
+     SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+ }
+ 
+diff --git a/src/load_save.c b/src/load_save.c
+--- a/src/load_save.c
++++ b/src/load_save.c
+@@ -208,6 +208,11 @@
+ 
+     for (i = 0; i < PARTY_SIZE; i++)
+         gPlayerParty[i] = gSaveBlock1Ptr->playerParty[i];
++#ifdef PLATFORM_3DS
++    /* SaveGameFrontier explicitly suppresses its temporary load. Permanent
++     * loads become candidates validated after the native caller returns. */
++    CtrCoop_BattlePartyRestored();
++#endif
+ }
+ 
+ void SaveObjectEvents(void)
+diff --git a/src/frontier_util.c b/src/frontier_util.c
+--- a/src/frontier_util.c
++++ b/src/frontier_util.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "frontier_util.h"
+ #include "event_data.h"
+ #include "battle_setup.h"
+@@ -2478,6 +2481,11 @@
+         monsParty[i] = gPlayerParty[i];
+ 
+     i = gPlayerPartyCount;
++#ifdef PLATFORM_3DS
++    /* This full-party load is undone below, so it cannot finish a deferred
++     * co-op battle even when all three selected Pokemon match the full team. */
++    CtrCoop_IgnoreNextPartyRestore();
++#endif
+     LoadPlayerParty();
+     SetContinueGameWarpStatusToDynamicWarp();
+     TrySavingData(SAVE_LINK);

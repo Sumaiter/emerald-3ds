@@ -25,7 +25,7 @@ typedef uint8_t bool8;
 #define EOS 0xFF
 #define MAP_OFFSET 7
 #define OBJECT_EVENTS_COUNT 16
-#define LOCALID_COOP_PLAYER 0xFE
+#define LOCALID_COOP_PLAYER 126
 #define NUM_OBJ_EVENT_GFX 239
 #define OBJ_KIND_NORMAL 0
 #define MOVEMENT_TYPE_FACE_DOWN 0
@@ -37,6 +37,9 @@ typedef uint8_t bool8;
 #define NUM_FLAG_BYTES 256
 #define FLAGS_COUNT (NUM_FLAG_BYTES * 8)
 #define MON_DATA_SPECIES 2
+#define MON_DATA_PERSONALITY 0
+#define MON_DATA_OT_ID 1
+#define MON_DATA_SPECIES_OR_EGG 65
 #define SPECIES_TREECKO 277
 #define SPECIES_TORCHIC 280
 #define SPECIES_MUDKIP 283
@@ -46,6 +49,7 @@ typedef uint8_t bool8;
 #define SPECIAL_VARS_START 0x4100
 #define SPECIAL_FLAGS_START 0x800
 #define TRAINER_FLAGS_START 0x100
+#define TRAINER_FLAGS_END (TRAINER_FLAGS_START + 863)
 #define MON_DATA_SANITY_HAS_SPECIES 1
 #define PC_ITEMS_COUNT 50
 #define BAG_ITEMS_COUNT 30
@@ -56,12 +60,29 @@ typedef uint8_t bool8;
 #define ITEM_NONE 0
 #define MAX_COINS 9999
 #define BATTLE_TYPE_DOUBLE 0x0001
-#define BATTLE_TYPE_TRAINER 0x0002
-#define BATTLE_TYPE_LINK 0x0004
-#define BATTLE_TYPE_MULTI 0x0008
-#define BATTLE_TYPE_IS_MASTER 0x0010
+#define BATTLE_TYPE_TRAINER (1 << 3)
+#define BATTLE_TYPE_LINK (1 << 1)
+#define BATTLE_TYPE_MULTI (1 << 6)
+#define BATTLE_TYPE_IS_MASTER (1 << 2)
 #define BATTLE_TYPE_LINK_IN_BATTLE 0x0020
+#define BATTLE_TYPE_ROAMER (1 << 10)
+#define BATTLE_TYPE_BATTLE_TOWER (1 << 8)
+#define BATTLE_TYPE_WALLY_TUTORIAL (1 << 9)
+#define BATTLE_TYPE_EREADER_TRAINER (1 << 11)
+#define BATTLE_TYPE_DOME (1 << 16)
+#define BATTLE_TYPE_PALACE (1 << 17)
+#define BATTLE_TYPE_ARENA (1 << 18)
+#define BATTLE_TYPE_FACTORY (1 << 19)
+#define BATTLE_TYPE_PIKE (1 << 20)
+#define BATTLE_TYPE_PYRAMID (1 << 21)
+#define BATTLE_TYPE_INGAME_PARTNER (1 << 22)
+#define BATTLE_TYPE_RECORDED (1 << 24)
+#define BATTLE_TYPE_TRAINER_HILL (1 << 26)
+#define BATTLE_TYPE_SECRET_BASE (1 << 27)
+#define BATTLE_TYPE_FRONTIER (BATTLE_TYPE_BATTLE_TOWER | BATTLE_TYPE_DOME | BATTLE_TYPE_PALACE | BATTLE_TYPE_ARENA | BATTLE_TYPE_FACTORY | BATTLE_TYPE_PIKE | BATTLE_TYPE_PYRAMID)
 #define B_OUTCOME_WON 1
+#define B_OUTCOME_LOST 2
+#define B_OUTCOME_DREW 3
 #define B_OUTCOME_RAN 4
 #define VERSION_EMERALD 1
 #define SE_SUCCESS 1
@@ -81,7 +102,16 @@ struct BoxPokemon
 struct Pokemon
 {
     struct BoxPokemon box;
-    uint8_t data[20];
+    union
+    {
+        uint8_t data[20];
+        struct
+        {
+            uint32_t status;
+            uint8_t level, mail;
+            uint16_t hp, maxHP, attack, defense, speed, spAttack, spDefense;
+        };
+    };
 };
 
 struct ItemSlot
@@ -126,7 +156,7 @@ struct SaveBlock1
             struct ItemSlot bagPocket_Berries[BAG_BERRIES_COUNT];
             uint8_t flags[NUM_FLAG_BYTES];
             uint16_t vars[VARS_COUNT];
-            uint8_t unused_3598[256];
+            uint8_t unused_3598[0x180];
             uint8_t mapView[512];
             uint8_t objectEvents[OBJECT_EVENTS_COUNT][64];
         };
@@ -198,6 +228,7 @@ struct Main
 {
     MainCallback savedCallback;
     MainCallback callback2;
+    bool inBattle;
 };
 
 struct LinkPlayer
@@ -228,6 +259,7 @@ extern uint8_t gBattleOutcome;
 
 void ZeroMonData(struct Pokemon *mon);
 uint32_t GetBoxMonData(const struct BoxPokemon *mon, int attribute);
+uint32_t GetMonData(const struct Pokemon *mon, int attribute);
 void BoxMonToMon(const struct BoxPokemon *boxMon, struct Pokemon *mon);
 uint8_t CalculatePlayerPartyCount(void);
 uint32_t GetBoxMonDataAt(uint8_t box, uint8_t position, int attribute);
@@ -265,6 +297,8 @@ void RemoveObjectEventByLocalIdAndMap(u8 localId, u8 mapNum, u8 mapGroup);
 void ObjectEventSetGraphicsId(struct ObjectEvent *object, u8 graphics);
 u8 TrySpawnObjectEvent(u8 localId, u8 mapNum, u8 mapGroup);
 void ScriptContext_Enable(void);
+bool8 ArePlayerFieldControlsLocked(void);
+bool8 ScriptContext_IsEnabled(void);
 void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, bool8 hasFixedPersonality, u32 personality, u8 otIdType, u32 fixedOtId);
 uint16_t Random(void);
 void CB2_InitBattle(void);

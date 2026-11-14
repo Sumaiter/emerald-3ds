@@ -1341,6 +1341,45 @@ void LocalLink_Send(uint16_t dest, const void *data, uint32_t len)
     Wake();
 }
 
+bool LocalLink_TrySend(uint16_t dest, const void *data, uint32_t len)
+{
+    bool queued = false;
+
+    if (!sL.ready || data == NULL || len == 0 || len > sizeof(((struct LocalEvent *)0)->data))
+        return false;
+    LightLock_Lock(&sL.lock);
+    if (sL.state == LOCAL_SESSION_IN && dest != 0 && dest < NODE_SLOTS
+     && dest != sL.myId && sL.nodes[dest].present && sL.nodes[dest].outCount < OUT_QUEUE)
+    {
+        QueueMessage(dest, MSG_DATA, data, len);
+        queued = true;
+    }
+    LightLock_Unlock(&sL.lock);
+    if (queued)
+        Wake();
+    return queued;
+}
+
+bool LocalLink_TrySendLowPriority(uint16_t dest, const void *data, uint32_t len)
+{
+    bool queued = false;
+
+    if (!sL.ready || data == NULL || len == 0 || len > sizeof(((struct LocalEvent *)0)->data))
+        return false;
+    LightLock_Lock(&sL.lock);
+    if (sL.state == LOCAL_SESSION_IN && dest != 0 && dest < NODE_SLOTS
+     && dest != sL.myId && sL.nodes[dest].present
+     && sL.nodes[dest].outCount < OUT_QUEUE - 32)
+    {
+        QueueMessage(dest, MSG_DATA, data, len);
+        queued = true;
+    }
+    LightLock_Unlock(&sL.lock);
+    if (queued)
+        Wake();
+    return queued;
+}
+
 uint8_t LocalLink_PollEvent(struct LocalEvent *ev)
 {
     uint8_t got = 0;

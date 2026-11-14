@@ -48,6 +48,27 @@ extern const struct Tileset gTileset_GenericBuilding;
 
 static VoxelMapInstance sInstances[MAX_VOXEL_MAP_INSTANCES];
 static unsigned sInstanceCount;
+#ifdef CTR_BATTLE_PRESENTATION
+/* Field placement/lift history survives a spectator session unchanged. */
+static VoxelMapInstance sPresentInstances[MAX_VOXEL_MAP_INSTANCES];
+static unsigned sPresentInstanceCount;
+static VoxelMapInstance *PresentInstances(void)
+{ return CtrBattlePresent_Current()?sPresentInstances:sInstances; }
+static unsigned *PresentInstanceCount(void)
+{ return CtrBattlePresent_Current()?&sPresentInstanceCount:&sInstanceCount; }
+static const struct BackupMapLayout *PresentGrid(void)
+{
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    static struct BackupMapLayout grid;
+    if(!p) return &gBackupMapLayout;
+    grid.width=p->world.gridWidth;grid.height=p->world.gridHeight;
+    grid.map=(u16 *)p->world.grid;
+    return &grid;
+}
+#define sInstances (PresentInstances())
+#define sInstanceCount (*PresentInstanceCount())
+#define gBackupMapLayout (*PresentGrid())
+#endif
 
 /*
  * Memo for the current batch. Small and linear on purpose: there are at most a
@@ -242,6 +263,9 @@ failed:
 
 bool VoxelWorld_IsMapAvailable(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return false;
+#endif
     if (gMapHeader.mapLayout == NULL)
         return false;
     if (gSaveBlock1Ptr == NULL)
@@ -253,6 +277,9 @@ bool VoxelWorld_IsMapAvailable(void)
 
 bool VoxelWorld_IsBattleMapAvailable(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return CtrBattlePresent_Current()->world.ready;
+#endif
     /* A battle leaves the map it was started from loaded, live grid and all:
      * the field picks up where it stopped when the battle is over. */
     return gMain.inBattle && gMapHeader.mapLayout != NULL && gSaveBlock1Ptr != NULL
@@ -376,6 +403,16 @@ static bool ConnectionOrigin(const struct MapConnection *conn, const struct MapH
 
 static VoxelMapInstance sPlaced[VOXEL_PLACED_MAX];
 static unsigned sPlacedCount;
+#ifdef CTR_BATTLE_PRESENTATION
+static VoxelMapInstance sPresentPlaced[VOXEL_PLACED_MAX];
+static unsigned sPresentPlacedCount;
+static VoxelMapInstance *PresentPlaced(void)
+{ return CtrBattlePresent_Current()?sPresentPlaced:sPlaced; }
+static unsigned *PresentPlacedCount(void)
+{ return CtrBattlePresent_Current()?&sPresentPlacedCount:&sPlacedCount; }
+#define sPlaced (PresentPlaced())
+#define sPlacedCount (*PresentPlacedCount())
+#endif
 
 /* Tiles between two rectangles, the larger of the two axes; 0 touching. */
 static int RectGap(const VoxelMapInstance *a, int x, int y, int width, int height)
@@ -553,6 +590,23 @@ static int CurrentLift(int mapGroup, int mapNum)
 
 void VoxelWorld_BuildInstances(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *present=CtrBattlePresent_Current();
+    if(present) {
+        const CtrPresentWorld *w=&present->world;
+        VoxelBuildings_SetVariantFits(VariantFits);
+        VoxelBuildings_SetDrawings(VoxelWorld_LayoutDrawing);
+        sInstanceCount=sPlacedCount=0;
+        for(unsigned i=0;i<w->mapCount;++i) {
+            const CtrPresentMap *m=&w->maps[i];
+            const struct MapHeader *header=Port_GetMapHeaderByGroupAndId(m->id>>8,m->id&255);
+            FillInstance(&sInstances[i],header,m->layout,m->id>>8,m->id&255,m->x,m->y);
+            sInstances[i].lift=m->lift;sInstances[i].live=i==0;
+            sPlaced[i]=sInstances[i];++sInstanceCount;++sPlacedCount;
+        }
+        return;
+    }
+#endif
     unsigned near;
     int lift = CurrentLift(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum);
 
@@ -900,6 +954,13 @@ VoxelVisualShape VoxelWorld_ClassifyTile(int worldX, int worldY)
 
 void VoxelWorld_GetMapDimensions(int *width, int *height)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) {
+        if(width) *width=sInstanceCount?sInstances[0].width:0;
+        if(height) *height=sInstanceCount?sInstances[0].height:0;
+        return;
+    }
+#endif
     if (gMapHeader.mapLayout != NULL)
     {
         if (width != NULL) *width = gMapHeader.mapLayout->width;
@@ -914,6 +975,14 @@ void VoxelWorld_GetMapDimensions(int *width, int *height)
 
 void VoxelWorld_GetPlayerWorldCoords(float *worldX, float *worldZ)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) {
+        if(worldX) *worldX=p->world.camera[3];
+        if(worldZ) *worldZ=p->world.camera[5];
+        return;
+    }
+#endif
     const struct ObjectEvent *player = &gObjectEvents[gPlayerAvatar.objectEventId];
     float x = (float)(player->currentCoords.x - MAP_OFFSET);
     float z = (float)(player->currentCoords.y - MAP_OFFSET);
@@ -929,6 +998,11 @@ void VoxelWorld_GetPlayerWorldCoords(float *worldX, float *worldZ)
 
 VoxelWeatherClass VoxelWorld_Weather(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.weather;
+#endif
+
 #ifdef PLATFORM_3DS
     switch (GetCurrentWeather())
     {
@@ -960,6 +1034,11 @@ VoxelWeatherClass VoxelWorld_Weather(void)
 
 float VoxelWorld_WeatherAmount(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.weatherAmount;
+#endif
+
 #ifdef PLATFORM_3DS
     float amount;
 
@@ -992,6 +1071,11 @@ float VoxelWorld_WeatherAmount(void)
 /* The bolt's colour map is 19, the storm's own 3 (Thunderstorm_Main). */
 float VoxelWorld_Lightning(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.lightning;
+#endif
+
 #ifdef PLATFORM_3DS
     if (GetCurrentWeather() != WEATHER_RAIN_THUNDERSTORM || gWeatherPtr->colorMapIndex <= 3)
         return 0.0f;
@@ -1007,6 +1091,11 @@ float VoxelWorld_Lightning(void)
  */
 float VoxelWorld_FogDensity(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.fog;
+#endif
+
 #ifdef PLATFORM_3DS
     float density;
 
@@ -1021,16 +1110,28 @@ float VoxelWorld_FogDensity(void)
 
 bool VoxelWorld_Underground(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.underground;
+#endif
     return gMapHeader.mapType == MAP_TYPE_UNDERGROUND;
 }
 
 bool VoxelWorld_MapIsConnected(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.connected;
+#endif
     return gMapHeader.connections != NULL && gMapHeader.connections->count > 0;
 }
 
 unsigned VoxelWorld_ClosedEdges(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) return p->world.closedEdges;
+#endif
     return GetMapClosedEdges();
 }
 
@@ -1093,6 +1194,14 @@ static void FadeFit(const u16 *shown, const u16 *unfaded, unsigned count,
 
 bool VoxelWorld_ScreenFade(float *amount, float rgb[3])
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) {
+        *amount=p->world.fade;memcpy(rgb,p->world.fadeRgb,sizeof(p->world.fadeRgb));
+        return *amount>0;
+    }
+#endif
+
     *amount = 0.0f;
     rgb[0] = rgb[1] = rgb[2] = 0.0f;
 #ifdef PLATFORM_3DS
@@ -1129,6 +1238,14 @@ bool VoxelWorld_ScreenFade(float *amount, float rgb[3])
 
 void VoxelWorld_GetLocation(int *mapGroup, int *mapNum)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) {
+        if(mapGroup) *mapGroup=p->world.mapGroup;
+        if(mapNum) *mapNum=p->world.mapNum;
+        return;
+    }
+#endif
     if (mapGroup != NULL) *mapGroup = gSaveBlock1Ptr != NULL ? gSaveBlock1Ptr->location.mapGroup : -1;
     if (mapNum != NULL) *mapNum = gSaveBlock1Ptr != NULL ? gSaveBlock1Ptr->location.mapNum : -1;
 }
@@ -1318,6 +1435,9 @@ const uint16_t *VoxelWorld_LayoutDrawing(int layoutId, int *width, int *height)
  */
 uint32_t VoxelWorld_LiveDigest(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return CtrBattlePresent_Current()->world.mapHash;
+#endif
     const u16 *map = gBackupMapLayout.map;
     uint32_t hash = 2166136261u;
     unsigned area, i;
@@ -1410,6 +1530,33 @@ uint32_t VoxelWorld_BlockHash(int x0, int y0, int x1, int y1)
  */
 int VoxelWorld_BorderMetatile(int worldX, int worldY)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *present=CtrBattlePresent_Current();
+    if(present) {
+        int fill=EdgeFillAt(worldX,worldY);
+        if(fill>=0) return fill;
+        const CtrPresentWorld *w=&present->world;
+        const CtrPresentBorder *best=NULL;
+        uint32_t bestDistance=0;
+        for(unsigned i=0;i<w->borderCount;++i) {
+            const CtrPresentBorder *b=&w->borders[i];
+            const struct MapLayout *layout=Port_GetMapLayoutById(b->layout);
+            if(!b->drawable || !layout) continue;
+            int dx=worldX<b->x?b->x-worldX:worldX>=b->x+layout->width?worldX-(b->x+layout->width-1):0;
+            int dy=worldY<b->y?b->y-worldY:worldY>=b->y+layout->height?worldY-(b->y+layout->height-1):0;
+            uint32_t distance=(uint32_t)(dx*dx+dy*dy);
+            if(!best || distance<bestDistance || (distance==bestDistance && b->id<best->id))
+                { best=b;bestDistance=distance; }
+        }
+        if(!best && w->borderCount) best=&w->borders[0];
+        if(!best) return -1;
+        const struct MapLayout *layout=Port_GetMapLayoutById(best->layout);
+        const uint16_t *tiles=layout?Port_ResolveAssetPointer(layout->border):NULL;
+        unsigned index=((worldX+MAP_OFFSET-best->phaseX+1)&1)
+                      +((worldY+MAP_OFFSET-best->phaseY+1)&1)*2;
+        return tiles?(tiles[index]&MAPGRID_METATILE_ID_MASK):-1;
+    }
+#endif
     const uint16_t *border;
     const void *source, *resolved;
     u8 index;
@@ -1486,6 +1633,9 @@ static unsigned AddMapPayloads(const void **payloads, unsigned count, unsigned m
 static unsigned AddObjectPayloads(const void **payloads, unsigned count, unsigned max,
                                   const struct MapHeader *header)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return count; /* battle scenery has no field NPCs */
+#endif
     const struct MapEvents *events = header != NULL ? header->events : NULL;
 
     if (events == NULL || events->objectEvents == NULL)
@@ -1546,6 +1696,9 @@ uint32_t VoxelWorld_PayloadSignature(void)
         const struct MapEvents *events = header != NULL ? header->events : NULL;
         hash = (hash ^ (uint32_t)(uintptr_t)sInstances[i].layout) * 16777619u;
         hash = (hash ^ (uint32_t)(uintptr_t)header) * 16777619u;
+#ifdef CTR_BATTLE_PRESENTATION
+        if(CtrBattlePresent_Current()) continue;
+#endif
         if (events == NULL || events->objectEvents == NULL)
             continue;
         for (unsigned j = 0; j < events->objectEventCount; ++j)
@@ -1558,3 +1711,56 @@ uint32_t VoxelWorld_PayloadSignature(void)
     }
     return hash;
 }
+
+#ifdef CTR_BATTLE_PRESENTATION
+void VoxelWorld_PresentCapture(CtrPresentWorld *out)
+{
+    if(!gSaveBlock1Ptr) return;
+    out->mapGroup=gSaveBlock1Ptr->location.mapGroup;out->mapNum=gSaveBlock1Ptr->location.mapNum;
+    out->layout=gSaveBlock1Ptr->mapLayoutId;
+    out->weather=VoxelWorld_Weather();out->weatherAmount=VoxelWorld_WeatherAmount();
+    out->lightning=VoxelWorld_Lightning();out->fog=VoxelWorld_FogDensity();
+    VoxelWorld_ScreenFade(&out->fade,out->fadeRgb);
+    if(!out->ready) return;
+    unsigned width=gBackupMapLayout.width,height=gBackupMapLayout.height;
+    if(!gBackupMapLayout.map || !width || !height || width>1024 || height>1024
+       || width*height>CTR_PRESENT_MAP_CELLS || !sInstanceCount || sInstanceCount>CTR_PRESENT_MAPS) {
+        out->ready=0;return;
+    }
+    out->gridWidth=width;out->gridHeight=height;
+    memcpy(out->grid,gBackupMapLayout.map,width*height*sizeof(out->grid[0]));
+    out->mapCount=sInstanceCount;
+    for(unsigned i=0;i<sInstanceCount;++i) {
+        const VoxelMapInstance *m=&sInstances[i];
+        out->maps[i]=(CtrPresentMap){m->layoutId,(m->mapGroup<<8)|m->mapNum,
+                                    m->originX,m->originY,m->lift,0};
+    }
+    out->borderCount=CtrBattlePresent_CaptureBorders(out->borders);
+    out->closedEdges=VoxelWorld_ClosedEdges();out->underground=VoxelWorld_Underground();
+    out->connected=VoxelWorld_MapIsConnected();
+    /* Stable content key, never a CPU pointer. Static grid bytes vanish in
+     * subsequent XOR deltas; changed tiles still invalidate local meshes. */
+    out->mapHash=CtrBattlePresent_Checksum((const uint8_t *)&out->gridWidth,
+                         sizeof(*out)-offsetof(CtrPresentWorld,gridWidth));
+}
+bool VoxelWorld_PresentMatches(const CtrPresentWorld *w)
+{
+    /* Validate every index before calling the engine's unchecked resolvers.
+     * No relationship with the viewer's current map/save is required. */
+    if(!CtrBattlePresent_WorldValid(w)) return false;
+    for(unsigned i=0;i<w->mapCount;++i) {
+        const CtrPresentMap *m=&w->maps[i];
+        const struct MapHeader *h=Port_GetMapHeaderByGroupAndId(m->id>>8,m->id&255);
+        const struct MapLayout *l=Port_GetMapLayoutById(m->layout);
+        if(!h || !l || !l->primaryTileset || !l->secondaryTileset || !l->map
+           || l->width<=0 || l->height<=0 || l->width>1024 || l->height>1024) return false;
+        if(!i && ((unsigned)l->width+MAP_OFFSET_W!=w->gridWidth
+               || (unsigned)l->height+MAP_OFFSET_H!=w->gridHeight)) return false;
+    }
+    for(unsigned i=0;i<w->borderCount;++i) {
+        const struct MapLayout *l=Port_GetMapLayoutById(w->borders[i].layout);
+        if(!l || !l->border) return false;
+    }
+    return true;
+}
+#endif

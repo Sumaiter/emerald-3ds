@@ -4,6 +4,12 @@
 #include "3ds_coop_profile.h"
 #include "3ds_coop_storage.h"
 #include "3ds_coop_bike.h"
+#include "3ds_coop_spectator.h"
+#include "3ds_coop_inventory.h"
+#include "3ds_coop_inventory_bridge.h"
+#include "3ds_coop_money.h"
+#include "3ds_coop_npc_motion.h"
+#include "3ds_platform.h"
 #include "3ds_local.h"
 #include "3ds_log.h"
 #include "characters.h"
@@ -33,6 +39,12 @@
 #include "script.h"
 #include "sound.h"
 #include "constants/songs.h"
+
+struct EncounterKey
+{
+    uint8_t mapGroup, mapNum, localId;
+    uint32_t script;
+};
 
 static struct
 {
@@ -91,6 +103,11 @@ static struct
     bool battleHaveApplied;
     bool battleWaitingTrainer;
     bool battleTrainerWasDefeated;
+    bool battleUsesTrainerFlag;
+    bool battleStorageBlocked;
+    bool battleStorageFromPC;
+    bool peerBattleFinished;
+    uint16_t battleReceiveSequence;
     uint32_t saveOffset;
     uint32_t saveChecksum;
     bool spawnValid;
@@ -122,6 +139,11 @@ static struct
     bool pcScriptWaiting;
     bool pcResumeScript;
     bool peerIdentified;
+    struct EncounterKey eventPrepared[2], eventKeys[2], peerEventKeys[2];
+    uint8_t eventPreparedCount, eventCount, peerEventCount, eventState;
+    bool eventStarting, eventEnding, eventNotice, battleEvent;
+    uint16_t eventRetry, eventWait;
+    uint32_t eventSerial, eventToken, peerEventToken;
 } sCoop = {.objectEventId = OBJECT_EVENTS_COUNT};
 
 #define CTR_COOP_SAVE_SIZE (sizeof(struct SaveBlock2) + sizeof(struct SaveBlock1) + sizeof(struct PokemonStorage))
@@ -152,6 +174,23 @@ static uint8_t sBattleReceiveData[CTR_COOP_BATTLE_DATA_MAX] ALIGNED(4);
 static struct SaveBlock1 sBattleSaveBaseline;
 static struct PokemonStorage sBattleStorageBaseline;
 
+#define EVENT_IDLE 0
+#define EVENT_PENDING 1
+#define EVENT_HELD 2
+#define EVENT_DENIED 3
+#define EVENT_RELEASING 4
+static void TickEncounter(void);
+static void TickDisconnectSave(void);
+static bool sDisconnectSavePending;
+static uint16_t sDisconnectSaveRetry;
+static bool sLiveBattleEndPending;
+static bool sResumeSharedWorld;
+static bool sInventoryPumping;
+static void UpdateInventorySession(void);
+static void HandleEncounter(const uint8_t *data, uint16_t len);
+static bool OwnsEncounterNpc(uint8_t group, uint8_t num, uint8_t localId);
+static bool StoryNpcAvailable(uint8_t group, uint8_t num, uint8_t localId);
+
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
     return !CtrCoopProtocol_ShouldSend(a, b, 0);
@@ -159,14 +198,39 @@ static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 
 static void ClearRemote(void)
 {
+    /* A shared guest world cannot continue offline. Leave the entire engine
+     * stack, including a synchronous inventory/wallet effect, before cleanup. */
+    if (sCoop.guest && (sCoop.guestWorldLoaded || sCoop.authenticated))
+        CtrGame_ReturnToMenu();
     /* A departing guest must not end the host's local PC operation while
      * a Pokemon may still be held by the cursor. */
     bool hostPcOpen = !sCoop.guest && sCoop.pcOpen && sCoop.pcOwner == PC_OWNER_HOST;
+    bool retainResult = sCoop.battleReceiveState == BATTLE_SYNC_READY;
+    sResumeSharedWorld = false;
+    CtrCoopInventoryBridge_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
+    CtrCoopMoney_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
+    CtrCoopNpcMotion_Reset();
+    CtrCoop_ResetStory();
+    CtrCoopSpectator_Reset();
+    if (!sCoop.guest && sCoop.peerAuthenticated && sCoop.peerSaveReady)
+    {
+        sDisconnectSavePending = true;
+        sDisconnectSaveRetry = 0;
+    }
+    if (!sCoop.battleActive)
+        CtrCoop_ResetBattleReturn();
     CtrCoopBike_ClearRemote();
     if (sCoop.pcScriptWaiting || sCoop.pcNotice)
         sCoop.pcResumeScript = true;
     sCoop.pcNotice = false;
     sCoop.pcScriptWaiting = false;
+    /* Never continue an ungranted guest script after transport loss. A host
+     * may finish its already granted local event while a guest reconnects. */
+    if (sCoop.eventState != EVENT_HELD)
+        sCoop.eventState = sCoop.eventStarting ? EVENT_DENIED : EVENT_IDLE;
+    sCoop.peerEventCount = 0;
+    sCoop.peerEventToken = 0;
+    sCoop.eventNotice = false;
     if (sCoop.joinWarpPending)
         CtrLog_Write(CTR_LOG_GAME, "coop: join warp interrupted");
     sCoop.peerId = 0;
@@ -204,10 +268,18 @@ static void ClearRemote(void)
     sCoop.peerBattleActive = false;
     sCoop.battleRetry = 0;
     sCoop.battleSendState = BATTLE_SYNC_IDLE;
-    sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
+    /* A complete result already belongs to the host's RAM state. A local
+     * battle may have deferred its application until after the guest left. */
+    if (!retainResult)
+        sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
     sCoop.battleSendSequence = 0;
     sCoop.battleHaveApplied = false;
     sCoop.battleWaitingTrainer = false;
+    sCoop.battleUsesTrainerFlag = false;
+    sCoop.battleStorageBlocked = false;
+    if (!retainResult)
+        sCoop.battleStorageFromPC = false;
+    sCoop.peerBattleFinished = false;
     sCoop.saveOffset = 0;
     sCoop.saveChecksum = 0;
     sCoop.spawnValid = false;
@@ -261,7 +333,20 @@ struct CoopSaveExtension
     struct SpawnTable spawn;
     uint16_t storageMagic;
     uint16_t storageVersion;
+    /* BoxPokemon has no HP/status fields. Preserve them in the host SAV,
+     * bound to the exact boxed payload, rather than healing on conversion. */
+    uint32_t vitalsMagic;
+    struct
+    {
+        uint32_t boxedChecksum;
+        uint32_t status;
+        uint16_t hp;
+        uint8_t mail;
+        uint8_t valid;
+    } guestVitals[PARTY_SIZE];
 };
+
+#define COOP_VITALS_MAGIC 0x31565043u
 
 struct LegacyCoopSaveExtension
 {
@@ -333,6 +418,52 @@ static void StorePartyRow(uint8_t row, const struct Pokemon *party)
         return;
     for (uint8_t i = 0; i < PARTY_SIZE; i++)
         gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i] = party[i].box;
+    if (row == CTR_COOP_STORAGE_GUEST_ROW)
+    {
+        struct CoopSaveExtension *extension = SaveExtension();
+        if (extension != NULL)
+        {
+            extension->vitalsMagic = COOP_VITALS_MAGIC;
+            for (uint8_t i = 0; i < PARTY_SIZE; ++i)
+            {
+                struct BoxPokemon boxed = party[i].box;
+                extension->guestVitals[i].boxedChecksum = CtrCoopProtocol_Checksum(
+                    (const uint8_t *)&party[i].box, sizeof(party[i].box));
+                extension->guestVitals[i].status = party[i].status;
+                extension->guestVitals[i].hp = party[i].hp;
+                extension->guestVitals[i].mail = party[i].mail;
+                extension->guestVitals[i].valid =
+                    GetBoxMonData(&boxed, MON_DATA_SANITY_HAS_SPECIES) != 0;
+            }
+        }
+    }
+}
+
+void CtrCoop_RestoreBoxVitals(const struct BoxPokemon *source, struct Pokemon *dest)
+{
+    const struct CoopSaveExtension *extension;
+    uintptr_t first, address;
+    uint8_t index;
+
+    if (source == NULL || dest == NULL || !CoopStorageReady())
+        return;
+    first = (uintptr_t)&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID]
+        [CTR_COOP_STORAGE_GUEST_ROW * CTR_COOP_STORAGE_ROW_SIZE];
+    address = (uintptr_t)source;
+    if (address < first || address - first >= sizeof(struct BoxPokemon) * PARTY_SIZE
+     || (address - first) % sizeof(struct BoxPokemon) != 0)
+        return;
+    index = (address - first) / sizeof(struct BoxPokemon);
+    extension = (const void *)gSaveBlock1Ptr->unused_3598;
+    if (extension->vitalsMagic != COOP_VITALS_MAGIC || !extension->guestVitals[index].valid
+     || extension->guestVitals[index].boxedChecksum != CtrCoopProtocol_Checksum(
+            (const uint8_t *)source, sizeof(*source)))
+        return;
+    dest->status = extension->guestVitals[index].status;
+    dest->hp = extension->guestVitals[index].hp;
+    if (dest->maxHP != 0 && dest->hp > dest->maxHP)
+        dest->hp = dest->maxHP;
+    dest->mail = extension->guestVitals[index].mail;
 }
 
 static void LoadPartyRow(uint8_t row, struct Pokemon *party)
@@ -345,7 +476,11 @@ static void LoadPartyRow(uint8_t row, struct Pokemon *party)
     for (uint8_t i = 0; i < PARTY_SIZE; i++)
     {
         if (GetBoxMonData(&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i], MON_DATA_SANITY_HAS_SPECIES))
-            BoxMonToMon(&gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i], &party[count++]);
+        {
+            const struct BoxPokemon *source = &gPokemonStoragePtr->boxes[CTR_COOP_STORAGE_BOX_ID][start + i];
+            BoxMonToMon(source, &party[count]);
+            CtrCoop_RestoreBoxVitals(source, &party[count++]);
+        }
     }
     gPlayerPartyCount = CalculatePlayerPartyCount();
 }
@@ -543,6 +678,10 @@ static void PrepareHostSave(uint16_t to)
 
     if (gSaveBlock2Ptr == NULL || gSaveBlock1Ptr == NULL || gPokemonStoragePtr == NULL || !PrepareCoopStorage())
         return;
+    if (sCoop.battleReceiveState!=BATTLE_SYNC_IDLE
+     || CtrCoopNpcMotion_Settling()
+     || (CtrCoopInventoryBridge_Active() && !CtrCoopInventoryBridge_KnownPeer()))
+        return;
     SaveObjectEvents();
     StorePartyRow(CTR_COOP_STORAGE_HOST_ROW, gPlayerParty);
     SendJoinInfo(to);
@@ -605,6 +744,8 @@ static void ApplyHostSave(void)
     LoadPlayerBag();
     LoadPartyRow(CTR_COOP_STORAGE_GUEST_ROW, gPlayerParty);
     ResetStoryBaseline();
+    CtrCoopInventoryBridge_AfterSaveCopy();
+    CtrCoopMoney_AfterSaveCopy();
 }
 
 static void HandleSaveBegin(uint16_t from, const uint8_t *data, uint16_t len)
@@ -694,7 +835,7 @@ bool CtrCoop_EnterHostWorld(void)
     CtrCoopSnapshot old;
     bool reloadObjects;
 
-    if (!sCoop.spawnValid || (sCoop.guest && (!sCoop.saveReady || !sCoop.joinInfoReceived
+    if (!CtrCoopInventoryBridge_Ready() || !CtrCoopMoney_Ready() || !sCoop.spawnValid || (sCoop.guest && (!sCoop.saveReady || !sCoop.joinInfoReceived
      || (sCoop.starterRequired && !sCoop.starterChosen))))
         return FALSE;
     sCoop.spawnValid = FALSE;
@@ -816,6 +957,7 @@ static bool NpcFromObject(uint8_t index, CtrCoopNpcSnapshot *out)
     const struct ObjectEvent *object = &gObjectEvents[index];
 
     if (!object->active || object->isPlayer || object->localId == LOCALID_COOP_PLAYER
+     || CtrCoopNpcMotion_Controls(object->mapGroup, object->mapNum, object->localId)
      || object->mapGroup != gSaveBlock1Ptr->location.mapGroup
      || object->mapNum != gSaveBlock1Ptr->location.mapNum
      || object->facingDirection < 1 || object->facingDirection > 4
@@ -885,6 +1027,9 @@ static void ApplyHostNpc(const CtrCoopNpcSnapshot *snapshot)
     /* Menus and battles reuse gSprites while field object IDs remain live.
      * The host's round-robin snapshots refresh NPCs after the field returns. */
     if (gMain.callback2 != CB2_Overworld || snapshot->localId == LOCALID_COOP_PLAYER
+     || !StoryNpcAvailable(snapshot->mapGroup, snapshot->mapNum, snapshot->localId)
+     || OwnsEncounterNpc(snapshot->mapGroup, snapshot->mapNum, snapshot->localId)
+     || CtrCoopNpcMotion_Controls(snapshot->mapGroup, snapshot->mapNum, snapshot->localId)
      || snapshot->mapGroup != gSaveBlock1Ptr->location.mapGroup
      || snapshot->mapNum != gSaveBlock1Ptr->location.mapNum)
         return;
@@ -989,6 +1134,7 @@ static void UpdateRemoteObject(const CtrCoopSnapshot *local)
     case CTR_COOP_APPLY_SNAP:
         MoveObjectEventToMapCoords(objectEvent, sCoop.remote.x, sCoop.remote.y);
         ObjectEventTurn(objectEvent, sCoop.remote.facing);
+        CtrCoop_EngineRemoteStepEffects(sCoop.objectEventId);
         break;
     case CTR_COOP_APPLY_FACE:
         ObjectEventTurn(objectEvent, sCoop.remote.facing);
@@ -1083,7 +1229,14 @@ static void SyncParty(void)
     uint8_t own = sCoop.guest ? PC_OWNER_GUEST : PC_OWNER_HOST;
     uint32_t checksum;
 
-    if (sCoop.battleActive || !CoopStorageReady() || (sCoop.guest && !PartyPeerReady()))
+    if (!CoopStorageReady() || (sCoop.guest && !PartyPeerReady()))
+        return;
+    /* Normal combat updates HP/PP/status as it happens. Temporary facility,
+     * tutorial and partner teams must never replace the canonical full team. */
+    if ((sCoop.battleActive || gMain.inBattle)
+     && (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_INGAME_PARTNER
+          | BATTLE_TYPE_SECRET_BASE | BATTLE_TYPE_EREADER_TRAINER
+          | BATTLE_TYPE_WALLY_TUTORIAL | BATTLE_TYPE_RECORDED | BATTLE_TYPE_LINK)))
         return;
     SaveExtension();
     /* A mon held by the PC cursor is an unfinished transaction. Keep its
@@ -1183,17 +1336,95 @@ static void HandlePartyChunk(uint16_t from, const uint8_t *data, uint16_t len)
 
 static void SendBattleResult(void);
 static void SendBattleBegin(void);
-static void SendFlagUpdate(uint16_t to, uint16_t id, bool value);
+static bool SendFlagUpdate(uint16_t to, uint16_t id, bool value);
 static void FinishBattleReceive(uint16_t from);
+
+/* A facility challenge may keep a reduced/rental party for several battles.
+ * Do not serialize it or overwrite the native full-party backup on return. */
+static bool sBattleReturnPending;
+static bool sBattlePartyRestoreSeen;
+static bool sBattleReturnNeedsWhiteOut;
+static bool sBattleIgnoreNextPartyRestore;
+
+void CtrCoop_ResetBattleReturn(void)
+{
+    sBattleReturnPending = false;
+    sBattlePartyRestoreSeen = false;
+    sBattleReturnNeedsWhiteOut = false;
+    sBattleIgnoreNextPartyRestore = false;
+}
+
+void CtrCoop_BattleEndAfterPartyRestore(void)
+{
+    if (!sCoop.battleActive)
+        return;
+    sBattleReturnPending = true;
+    sBattlePartyRestoreSeen = false;
+    /* Steven's field script loads the full party, then requests WhiteOut.
+     * Its result must still include the subsequent healing/money penalty. */
+    sBattleReturnNeedsWhiteOut = (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER)
+        && !(gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
+        && (gBattleOutcome == B_OUTCOME_LOST || gBattleOutcome == B_OUTCOME_DREW);
+}
+
+void CtrCoop_BattlePartyRestored(void)
+{
+    if (sBattleIgnoreNextPartyRestore)
+    {
+        sBattleIgnoreNextPartyRestore = false;
+        return;
+    }
+    if (sBattleReturnPending)
+        sBattlePartyRestoreSeen = true;
+}
+
+void CtrCoop_IgnoreNextPartyRestore(void)
+{
+    sBattleIgnoreNextPartyRestore = true;
+}
+
+void CtrCoop_TryFinishBattleReturn(void)
+{
+    if (!sBattleReturnPending || !sBattlePartyRestoreSeen || sBattleReturnNeedsWhiteOut
+     || !sCoop.battleActive || gMain.inBattle || gMain.callback2 != CB2_Overworld
+     || gSaveBlock1Ptr == NULL || gPlayerPartyCount > PARTY_SIZE
+     || gPlayerPartyCount != gSaveBlock1Ptr->playerPartyCount)
+        return;
+    /* Validate the complete party after the native caller unwinds. Permit
+     * legitimate HP/item changes made after a permanent full restore. */
+    for (uint8_t i = 0; i < gPlayerPartyCount; i++)
+    {
+        if (GetMonData(&gPlayerParty[i], MON_DATA_PERSONALITY)
+                != GetMonData(&gSaveBlock1Ptr->playerParty[i], MON_DATA_PERSONALITY)
+         || GetMonData(&gPlayerParty[i], MON_DATA_OT_ID)
+                != GetMonData(&gSaveBlock1Ptr->playerParty[i], MON_DATA_OT_ID)
+         || GetMonData(&gPlayerParty[i], MON_DATA_SPECIES_OR_EGG)
+                != GetMonData(&gSaveBlock1Ptr->playerParty[i], MON_DATA_SPECIES_OR_EGG))
+            return;
+    }
+    CtrCoop_ResetBattleReturn();
+    CtrCoop_BattleEnd();
+}
+
+static bool UsesOrdinaryTrainerFlag(uint16_t trainerId)
+{
+    return trainerId != 0 && trainerId <= TRAINER_FLAGS_END - TRAINER_FLAGS_START
+        && (gBattleTypeFlags & BATTLE_TYPE_TRAINER)
+        && !(gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_TRAINER_HILL
+            | BATTLE_TYPE_SECRET_BASE | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_RECORDED));
+}
 
 static bool BeginLocalBattle(void)
 {
     if (gSaveBlock1Ptr == NULL || gPokemonStoragePtr == NULL)
         return false;
+    CtrCoop_ResetBattleReturn();
+    sLiveBattleEndPending=false;
     memcpy(&sBattleSaveBaseline, gSaveBlock1Ptr, sizeof(sBattleSaveBaseline));
     memcpy(&sBattleStorageBaseline, gPokemonStoragePtr, sizeof(sBattleStorageBaseline));
     sCoop.battleBaselineKey = gSaveBlock2Ptr->encryptionKey;
     sCoop.battleActive = true;
+    sCoop.battleUsesTrainerFlag = UsesOrdinaryTrainerFlag(sCoop.battleTrainerId);
     sCoop.battleWaitingTrainer = false;
     sCoop.battleRetry = 0;
     CtrLog_Write(CTR_LOG_GAME, "coop: battle start for %s, trainer %u", sCoop.guest ? "guest" : "host", sCoop.battleTrainerId);
@@ -1206,8 +1437,40 @@ bool CtrCoop_BattleStart(void)
     struct LocalPeer peers[1];
     uint16_t trainerId;
 
-    if (sCoop.battleActive || !sCoop.wanted || (gBattleTypeFlags & BATTLE_TYPE_LINK))
+    /* CB2_InitBattle may be waiting between field and battle callbacks.
+     * Progress the previous result/lease here too, or neither loop can
+     * drain its acknowledgement and this entry waits forever. */
+    CtrCoop_BattleTick();
+    if (sCoop.battleActive || !sCoop.wanted
+     || (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED | BATTLE_TYPE_WALLY_TUTORIAL)))
         return true;
+    /* The roaming legendary has one world identity even on different maps.
+     * Ordinary random wild encounters deliberately have no shared identity. */
+    if (gBattleTypeFlags & BATTLE_TYPE_ROAMER)
+    {
+        int permission;
+        if (!sCoop.battleEvent)
+        {
+            TickEncounter();
+            if (sCoop.eventState != EVENT_IDLE)
+                return false;
+            sCoop.eventPrepared[0] = (struct EncounterKey){255, 255, 0, 1};
+            sCoop.eventPreparedCount = 1;
+            CtrCoop_ScriptBegin((const void *)1);
+            sCoop.battleEvent = true;
+        }
+        permission = CtrCoop_ScriptPoll();
+        if (permission < 0)
+        {
+            CtrCoop_ScriptEnd();
+            sCoop.battleEvent = false;
+            gBattleOutcome = B_OUTCOME_RAN;
+            SetMainCallback2(gMain.savedCallback);
+            return false;
+        }
+        if (permission == 0)
+            return false;
+    }
     if (sCoop.battleSendState != BATTLE_SYNC_IDLE || sCoop.battleReleasePending
      || sCoop.battleReceiveState != BATTLE_SYNC_IDLE || sCoop.pcOwner != PC_OWNER_NONE
      || sCoop.syncState != PC_SYNC_IDLE)
@@ -1215,7 +1478,7 @@ bool CtrCoop_BattleStart(void)
     /* Zero reserves an independent wild battle without locking a trainer.
      * The host arbitrates this against PC claims before either side mutates storage. */
     trainerId = (gBattleTypeFlags & BATTLE_TYPE_TRAINER) ? gTrainerBattleOpponent_A : 0;
-    if (trainerId != 0 && sCoop.battleWaitingTrainer && sCoop.battleTrainerId == trainerId
+    if (UsesOrdinaryTrainerFlag(trainerId) && sCoop.battleWaitingTrainer && sCoop.battleTrainerId == trainerId
      && !sCoop.battleTrainerWasDefeated && FlagGet(TRAINER_FLAGS_START + trainerId))
     {
         /* The other player finished this trainer while our transition was
@@ -1229,7 +1492,7 @@ bool CtrCoop_BattleStart(void)
         return false;
     }
     if (!sCoop.battleWaitingTrainer || sCoop.battleTrainerId != trainerId)
-        sCoop.battleTrainerWasDefeated = trainerId != 0 && FlagGet(TRAINER_FLAGS_START + trainerId);
+        sCoop.battleTrainerWasDefeated = UsesOrdinaryTrainerFlag(trainerId) && FlagGet(TRAINER_FLAGS_START + trainerId);
     sCoop.battleWaitingTrainer = true;
     sCoop.battleTrainerId = trainerId;
     if (!sCoop.guest)
@@ -1263,6 +1526,13 @@ void CtrCoop_BattleEnd(void)
 {
     if (!sCoop.battleActive)
         return;
+    if (!CtrCoopInventoryBridge_FinishBattle() || !CtrCoopMoney_FinishBattle())
+    {
+        sLiveBattleEndPending=true;
+        return;
+    }
+    sLiveBattleEndPending=false;
+    CtrCoop_ResetBattleReturn();
     SendBattleResult();
     sCoop.battleActive = false;
     sCoop.battleReservePending = false;
@@ -1271,6 +1541,11 @@ void CtrCoop_BattleEnd(void)
     if (!sCoop.battleReleasePending)
         sCoop.battleTrainerId = 0;
     sCoop.battleRetry = 0;
+    if (sCoop.battleEvent)
+    {
+        sCoop.battleEvent = false;
+        CtrCoop_ScriptEnd();
+    }
 }
 
 static void ReleaseTrainerReservation(void)
@@ -1282,7 +1557,7 @@ static void ReleaseTrainerReservation(void)
 
     if (!sCoop.battleReleasePending || sCoop.battleSendState != BATTLE_SYNC_IDLE)
         return;
-    if (sCoop.battleTrainerId != 0 && gBattleOutcome == B_OUTCOME_WON)
+    if (sCoop.battleUsesTrainerFlag && gBattleOutcome == B_OUTCOME_WON)
     {
         trainerFlag = TRAINER_FLAGS_START + sCoop.battleTrainerId;
         if (!FlagGet(trainerFlag))
@@ -1294,8 +1569,9 @@ static void ReleaseTrainerReservation(void)
             {
                 if (LocalLink_GetPeers(peers, 1) == 0)
                     return;
+                if (!SendFlagUpdate(peers[0].id, trainerFlag, true))
+                    return;
                 sCoop.storyFlagsBaseline[trainerFlag / 8] |= mask;
-                SendFlagUpdate(peers[0].id, trainerFlag, true);
             }
         }
     }
@@ -1315,6 +1591,9 @@ static void ReleaseTrainerReservation(void)
 
 void CtrCoop_BattleTick(void)
 {
+    CtrCoop_TryFinishBattleReturn();
+    if (sLiveBattleEndPending && !gMain.inBattle)
+        CtrCoop_BattleEnd();
     if (sCoop.battleReceiveState == BATTLE_SYNC_READY && !sCoop.battleActive
      && sCoop.pcOwner == PC_OWNER_NONE && !sCoop.pcPending
      && sCoop.syncState == PC_SYNC_IDLE && !sCoop.partyReceiving)
@@ -1333,6 +1612,10 @@ void CtrCoop_BattleTick(void)
         sCoop.battleRetry = 0;
         SendBattleBegin();
     }
+    /* A new encounter can already have replaced the overworld callback
+     * when the previous result is acknowledged. Do not require another
+     * overworld frame to release its reservation. */
+    ReleaseTrainerReservation();
 }
 
 static void WriteBattle16(uint32_t offset, uint16_t value)
@@ -1394,11 +1677,12 @@ static void AddBattleItemArrayDeltas(const struct ItemSlot *before, const struct
 static void SendBattleBegin(void)
 {
     struct LocalPeer peers[1];
-    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE];
 
     if (sCoop.battleSendState != BATTLE_SYNC_SENDING || LocalLink_GetPeers(peers, 1) == 0)
         return;
-    if (CtrCoopProtocol_EncodeBattleBegin(sCoop.battleSendSize, sCoop.battleSendChecksum, packet, sizeof(packet)))
+    if (CtrCoopProtocol_EncodeBattleBegin(sCoop.battleSendSize, sCoop.battleSendChecksum,
+            sCoop.battleSendSequence, packet, sizeof(packet)))
         LocalLink_Send(peers[0].id, packet, sizeof(packet));
 }
 
@@ -1442,15 +1726,23 @@ static void SendBattleResult(void)
             storageCount++;
         }
     }
+    if (!CtrCoopInventoryBridge_Active())
+    {
     AddBattleItemArrayDeltas(sBattleSaveBaseline.pcItems, gSaveBlock1Ptr->pcItems, PC_ITEMS_COUNT, false, &offset, &itemCount);
     AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_Items, gSaveBlock1Ptr->bagPocket_Items, BAG_ITEMS_COUNT, true, &offset, &itemCount);
     AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_KeyItems, gSaveBlock1Ptr->bagPocket_KeyItems, BAG_KEYITEMS_COUNT, true, &offset, &itemCount);
     AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_PokeBalls, gSaveBlock1Ptr->bagPocket_PokeBalls, BAG_POKEBALLS_COUNT, true, &offset, &itemCount);
     AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_TMHM, gSaveBlock1Ptr->bagPocket_TMHM, BAG_TMHM_COUNT, true, &offset, &itemCount);
     AddBattleItemArrayDeltas(sBattleSaveBaseline.bagPocket_Berries, gSaveBlock1Ptr->bagPocket_Berries, BAG_BERRIES_COUNT, true, &offset, &itemCount);
+    }
     moneyDelta = (int32_t)GetMoney(&gSaveBlock1Ptr->money) - (int32_t)(sBattleSaveBaseline.money ^ sCoop.battleBaselineKey);
     coinsDelta = (int16_t)((int32_t)(gSaveBlock1Ptr->coins ^ (uint16_t)gSaveBlock2Ptr->encryptionKey)
         - (sBattleSaveBaseline.coins ^ (uint16_t)sCoop.battleBaselineKey));
+    if (CtrCoopMoney_Active())
+    {
+        moneyDelta=0;
+        coinsDelta=0;
+    }
     WriteBattle32(0, 0x31425443);
     WriteBattle32(4, (uint32_t)moneyDelta);
     WriteBattle16(8, (uint16_t)coinsDelta);
@@ -1489,24 +1781,56 @@ static void SendBattleChunk(uint16_t to, uint32_t offset)
         LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
 }
 
+static void SendBattleReady(uint16_t to, uint16_t sequence, uint32_t checksum)
+{
+    uint8_t packet[CTR_COOP_BATTLE_READY_SIZE];
+    if (CtrCoopProtocol_EncodeBattleReady(sequence, checksum, packet, sizeof(packet)))
+        LocalLink_Send(to, packet, sizeof(packet));
+}
+
 static void HandleBattleBegin(uint16_t from, const uint8_t *data, uint16_t len)
 {
     uint32_t totalSize, checksum;
+    uint16_t sequence;
 
-    if (!CtrCoopProtocol_DecodeBattleBegin(data, len, &totalSize, &checksum)
+    if (!CtrCoopProtocol_DecodeBattleBegin(data, len, &totalSize, &checksum, &sequence)
      || totalSize < BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE
      || totalSize > CTR_COOP_BATTLE_DATA_MAX)
         return;
+    /* Application retries can already be queued when the previous result
+     * completes. Acknowledge that identity without reopening its buffer. */
+    if (sCoop.battleHaveApplied)
+    {
+        if (sequence == sCoop.battleAppliedSequence)
+        {
+            if (checksum == sCoop.battleAppliedChecksum)
+                SendBattleReady(from, sequence, checksum);
+            return;
+        }
+        if ((uint16_t)(sequence - sCoop.battleAppliedSequence) >= 0x8000)
+            return;
+    }
     if (sCoop.battleReceiveState == BATTLE_SYNC_RECEIVING
+     && sequence == sCoop.battleReceiveSequence
      && totalSize == sCoop.battleReceiveSize && checksum == sCoop.battleReceiveChecksum)
     {
         SendBattleRequest(from, sCoop.battleReceiveOffset);
         return;
     }
     if (sCoop.battleReceiveState != BATTLE_SYNC_IDLE)
+    {
+        CtrCoop_BattleTick();
         return;
+    }
+    /* Inventory application can reject a complete result and request it
+     * again. Its newer PC snapshot still supersedes storage on that retry. */
+    if (sequence != sCoop.battleReceiveSequence || checksum != sCoop.battleReceiveChecksum
+     || totalSize != sCoop.battleReceiveSize)
+        sCoop.battleStorageFromPC = false;
     sCoop.battleReceiveSize = totalSize;
     sCoop.battleReceiveChecksum = checksum;
+    sCoop.battleReceiveSequence = sequence;
+    sCoop.battleStorageBlocked = false;
     sCoop.battleReceiveOffset = 0;
     sCoop.battleReceiveState = BATTLE_SYNC_RECEIVING;
     SendBattleRequest(from, 0);
@@ -1523,6 +1847,7 @@ static bool ApplyBattleResult(void)
     uint8_t remoteRow = sCoop.guest ? CTR_COOP_STORAGE_HOST_ROW : CTR_COOP_STORAGE_GUEST_ROW;
     const struct Pokemon *remoteParty = (const struct Pokemon *)(sBattleReceiveData + BATTLE_HEADER_SIZE);
 
+    sCoop.battleStorageBlocked = false;
     if (ReadBattle32(sBattleReceiveData, 0) != 0x31425443)
         return false;
     storageCount = ReadBattle16(sBattleReceiveData, 10);
@@ -1531,6 +1856,10 @@ static bool ApplyBattleResult(void)
         return false;
     expectedSize = offset + storageCount * BATTLE_STORAGE_RECORD_SIZE + itemCount * BATTLE_ITEM_RECORD_SIZE;
     if (expectedSize != sCoop.battleReceiveSize)
+        return false;
+    if (itemCount && CtrCoopInventoryBridge_Active())
+        return false; /* Live transactions cannot also be replayed as end deltas. */
+    if (CtrCoopMoney_Active() && (ReadBattle32(sBattleReceiveData,4) || ReadBattle16(sBattleReceiveData,8)))
         return false;
     for (uint16_t slot = 0; slot < TOTAL_BOXES_COUNT * IN_BOX_COUNT; slot++)
     {
@@ -1557,6 +1886,8 @@ static bool ApplyBattleResult(void)
         destinations[i] = UINT16_MAX;
         if (!GetBoxMonData(&incoming, MON_DATA_SANITY_HAS_SPECIES))
             continue;
+        if (sCoop.battleStorageFromPC)
+            continue;
         if (!occupied[slot] || memcmp(&incoming, &gPokemonStoragePtr->boxes[box][position], sizeof(incoming)) == 0)
         {
             destinations[i] = slot;
@@ -1571,11 +1902,14 @@ static bool ApplyBattleResult(void)
 
         memcpy(&incoming, sBattleReceiveData + record + 2, sizeof(incoming));
 
-        if (destinations[i] != UINT16_MAX || !GetBoxMonData(&incoming, MON_DATA_SANITY_HAS_SPECIES))
+        if (sCoop.battleStorageFromPC || destinations[i] != UINT16_MAX || !GetBoxMonData(&incoming, MON_DATA_SANITY_HAS_SPECIES))
             continue;
         for (slot = 0; slot < TOTAL_BOXES_COUNT * IN_BOX_COUNT && occupied[slot]; slot++) {}
         if (slot == TOTAL_BOXES_COUNT * IN_BOX_COUNT)
+        {
+            sCoop.battleStorageBlocked = true;
             return false;
+        }
         destinations[i] = slot;
         occupied[slot] = true;
     }
@@ -1619,7 +1953,8 @@ static bool ApplyBattleResult(void)
         if (slot != UINT16_MAX)
             SetBoxMonAt(slot / IN_BOX_COUNT, slot % IN_BOX_COUNT, &incoming);
     }
-    StorePartyRow(remoteRow, remoteParty);
+    if (!sCoop.battleStorageFromPC)
+        StorePartyRow(remoteRow, remoteParty);
     return true;
 }
 
@@ -1644,7 +1979,8 @@ static void HandleBattleChunk(uint16_t from, const uint8_t *data, uint16_t len)
         SendBattleRequest(from, sCoop.battleReceiveOffset);
         return;
     }
-    if (CtrCoopProtocol_Checksum(sBattleReceiveData, sCoop.battleReceiveSize) != sCoop.battleReceiveChecksum)
+    if (CtrCoopProtocol_Checksum(sBattleReceiveData, sCoop.battleReceiveSize) != sCoop.battleReceiveChecksum
+     || ReadBattle16(sBattleReceiveData, 14) != sCoop.battleReceiveSequence)
     {
         CtrLog_Write(CTR_LOG_ERROR, "coop: battle result checksum mismatch, retrying");
         sCoop.battleReceiveOffset = 0;
@@ -1660,22 +1996,32 @@ static void FinishBattleReceive(uint16_t from)
     uint16_t sequence = ReadBattle16(sBattleReceiveData, 14);
     bool duplicate = sCoop.battleHaveApplied && sequence == sCoop.battleAppliedSequence;
 
-    sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
     if (duplicate && sCoop.battleReceiveChecksum != sCoop.battleAppliedChecksum)
+    {
+        sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
         return;
+    }
     if (sCoop.battleHaveApplied && !duplicate
      && (uint16_t)(sequence - sCoop.battleAppliedSequence) >= 0x8000)
+    {
+        sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
         return;
+    }
     if (duplicate || ApplyBattleResult())
     {
-        uint8_t ready[CTR_COOP_SAVE_READY_SIZE] = {CTR_COOP_BATTLE_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
-
+        sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
+        sCoop.battleStorageBlocked = false;
+        sCoop.peerBattleFinished = true;
         sCoop.battleHaveApplied = true;
         sCoop.battleAppliedSequence = sequence;
         sCoop.battleAppliedChecksum = sCoop.battleReceiveChecksum;
-        LocalLink_Send(from, ready, sizeof(ready));
+        SendBattleReady(from, sequence, sCoop.battleAppliedChecksum);
         CtrLog_Write(CTR_LOG_GAME, "coop: battle result %s", duplicate ? "already applied" : "applied");
     }
+    else if (sCoop.battleStorageBlocked)
+        sCoop.peerBattleFinished = true;
+    else
+        sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
 }
 
 static void SendPcSyncRequest(uint16_t to, uint32_t offset)
@@ -1695,6 +2041,12 @@ void CtrCoop_CommitPC(void)
 
     if (sCoop.syncState != PC_SYNC_IDLE)
         return;
+    /* The storage UI has closed. Merge a waiting catch before freezing the
+     * PC snapshot, so both peers receive the same recovered box contents.
+     * The PC lease remains held throughout this merge and its transfer. */
+    if (sCoop.pcOwner == (sCoop.guest ? PC_OWNER_GUEST : PC_OWNER_HOST)
+     && !sCoop.battleActive && sCoop.battleReceiveState == BATTLE_SYNC_READY)
+        FinishBattleReceive(sCoop.peerId);
     if (CoopStorageReady())
         StorePartyRow(row, gPlayerParty);
     /* Commit the local host operation even if its guest left the PC visit.
@@ -1753,6 +2105,13 @@ static void ApplyPcSync(uint16_t from)
     uint8_t remoteRow = sCoop.guest ? CTR_COOP_STORAGE_HOST_ROW : CTR_COOP_STORAGE_GUEST_ROW;
     const struct Pokemon *remoteParty = (const struct Pokemon *)(sSaveData + sizeof(struct PokemonStorage));
 
+    /* The PC owner froze its battle before claiming storage. Its BEGIN is
+     * ordered before the claim/snapshot, so any pending result from that
+     * owner is older than this complete storage and party snapshot. Keep
+     * applying its separate money/item deltas, but never replay the old
+     * catch/party over a later move, withdrawal, edit or intentional release. */
+    if (sCoop.battleReceiveState != BATTLE_SYNC_IDLE)
+        sCoop.battleStorageFromPC = true;
     memcpy(gPokemonStoragePtr, sSaveData, sizeof(*gPokemonStoragePtr));
     StorePartyRow(remoteRow, remoteParty);
     /* The other player's snapshot can predate changes to our live party. */
@@ -1844,6 +2203,12 @@ void CtrCoop_DismissPCNotice(void)
     sCoop.pcResumeScript = true;
 }
 
+static bool BattlePcRecovery(void)
+{
+    return !sCoop.battleActive && sCoop.battleReceiveState == BATTLE_SYNC_READY
+        && sCoop.battleStorageBlocked;
+}
+
 bool CtrCoop_RequestPC(void)
 {
     struct LocalPeer peers[1];
@@ -1859,8 +2224,9 @@ bool CtrCoop_RequestPC(void)
         return true;
     }
     if (sCoop.syncState != PC_SYNC_IDLE || sCoop.partySending || sCoop.partyReceiving
-     || sCoop.battleActive || sCoop.peerBattleActive
-     || sCoop.battleSendState != BATTLE_SYNC_IDLE || sCoop.battleReceiveState != BATTLE_SYNC_IDLE)
+     || sCoop.battleActive || (!BattlePcRecovery()
+         && (sCoop.peerBattleActive || sCoop.battleSendState != BATTLE_SYNC_IDLE
+             || sCoop.battleReceiveState != BATTLE_SYNC_IDLE)))
         return DenyPC(PC_OWNER_NONE);
     if (sCoop.pcOwner == own)
     {
@@ -1878,7 +2244,15 @@ bool CtrCoop_RequestPC(void)
         {
             return DenyPC(sCoop.pcOwner == PC_OWNER_HOST ? PC_OWNER_HOST : PC_OWNER_NONE);
         }
-        LocalLink_Send(peers[0].id, packet, sizeof(packet));
+        if (BattlePcRecovery())
+        {
+            uint8_t recovery[CTR_COOP_PC_RECOVER_SIZE];
+            CtrCoopProtocol_EncodePcRecover(sCoop.battleReceiveSequence,
+                sCoop.battleReceiveChecksum, recovery, sizeof(recovery));
+            LocalLink_Send(peers[0].id, recovery, sizeof(recovery));
+        }
+        else
+            LocalLink_Send(peers[0].id, packet, sizeof(packet));
         sCoop.pcPending = true;
         sCoop.pcScriptWaiting = gMain.callback2 == CB2_Overworld;
         return false;
@@ -1971,6 +2345,20 @@ bool CtrCoop_IsEnabled(void)
     return sCoop.wanted;
 }
 
+bool CtrCoop_PrepareNativeLink(void)
+{
+    /* A shared guest world cannot enter another transport or become a local
+     * save. Test BOTH journals before resetting either; no pumping between
+     * the checks and resets can introduce a new operation. */
+    if (CtrCoop_GuestSaveBlocked()
+     || !CtrCoopInventoryBridge_CanPrepareNativeLink()
+     || !CtrCoopMoney_CanPrepareNativeLink()) return false;
+    if (!CtrCoopInventoryBridge_PrepareNativeLink()
+     || !CtrCoopMoney_PrepareNativeLink()) return false;
+    if (sCoop.wanted) CtrCoop_Stop();
+    return true;
+}
+
 void CtrCoop_Search(void)
 {
     if (!sCoop.wanted)
@@ -1991,6 +2379,12 @@ void CtrCoop_JoinPrepared(void)
 
 void CtrCoop_JoinGame(uint32_t token, const uint8_t *password)
 {
+    if (!CtrCoopInventoryBridge_HasPending() && !CtrCoopMoney_HasPending())
+    {
+        CtrCoopInventoryBridge_Reset();
+        CtrCoopMoney_Reset();
+    }
+    sCoop.joinToken=token;
     sCoop.wanted = true;
     sCoop.guest = true;
     sCoop.authenticated = false;
@@ -2008,6 +2402,13 @@ void CtrCoop_JoinGame(uint32_t token, const uint8_t *password)
 
 void CtrCoop_Stop(void)
 {
+    if (sCoop.guest && (sCoop.guestWorldLoaded || sCoop.authenticated))
+        CtrGame_ReturnToMenu();
+    if (!sCoop.guest && sCoop.peerAuthenticated && sCoop.peerSaveReady)
+    {
+        sDisconnectSavePending=true;
+        sDisconnectSaveRetry=0;
+    }
     CtrCoop_ReleasePC();
     sCoop.wanted = false;
     sCoop.authenticated = false;
@@ -2068,6 +2469,8 @@ void CtrCoop_MenuFrame(void)
     {
         if (!sCoop.saveReady || !sCoop.joinInfoReceived)
             return;
+        if (!CtrCoopInventoryBridge_Ready() || !CtrCoopMoney_Ready())
+            return;
         if (sCoop.starterRequired && !sCoop.starterChosen)
         {
             if (!CB2_StarterSelectionActive())
@@ -2094,27 +2497,32 @@ void CtrCoop_MenuFrame(void)
     }
 }
 
-static void SendFlagUpdate(uint16_t to, uint16_t id, bool value)
+static bool SendFlagUpdate(uint16_t to, uint16_t id, bool value)
 {
     uint8_t packet[CTR_COOP_FLAG_SIZE];
 
-    if (CtrCoopProtocol_EncodeFlag(id, value, packet, sizeof(packet)))
-        LocalLink_Send(to, packet, sizeof(packet));
+    return CtrCoopProtocol_EncodeFlag(id, value, packet, sizeof(packet))
+        && LocalLink_TrySend(to, packet, sizeof(packet));
 }
 
-static void SendVarUpdate(uint16_t to, uint16_t id, uint16_t value)
+static bool SendVarUpdate(uint16_t to, uint16_t id, uint16_t value)
 {
     uint8_t packet[CTR_COOP_VAR_SIZE];
 
-    if (CtrCoopProtocol_EncodeVar(id, value, packet, sizeof(packet)))
-        LocalLink_Send(to, packet, sizeof(packet));
+    return CtrCoopProtocol_EncodeVar(id, value, packet, sizeof(packet))
+        && LocalLink_TrySend(to, packet, sizeof(packet));
 }
+
+#include "3ds_coop_story.inc"
 
 static void SyncStoryState(void)
 {
     struct LocalPeer peers[1];
     uint8_t sent = 0;
 
+    if (sCoop.guest ? (!sCoop.authenticated || !sCoop.saveReady)
+                    : (!sCoop.peerAuthenticated || !sCoop.peerSaveReady))
+        return;
     if (!sCoop.storyInitialized)
     {
         ResetStoryBaseline();
@@ -2126,40 +2534,52 @@ static void SyncStoryState(void)
     if (gSaveBlock1Ptr == NULL || LocalLink_GetSession() != LOCAL_SESSION_IN
      || LocalLink_GetPeers(peers, 1) == 0)
         return;
-    for (uint16_t id = 1; id < FLAGS_COUNT && sent < 8; id++)
+    for (uint16_t id = STORY_FIRST_FLAG; id < FLAGS_COUNT && sent < 8; id++)
     {
         uint8_t mask = 1 << (id & 7);
         bool value = FlagGet(id);
 
         if (((sCoop.storyFlagsBaseline[id / 8] & mask) != 0) == value)
             continue;
+        CtrCoop_StoryFlagChanged(id);
+        if (!SendFlagUpdate(peers[0].id, id, value))
+            return;
         if (value)
             sCoop.storyFlagsBaseline[id / 8] |= mask;
         else
             sCoop.storyFlagsBaseline[id / 8] &= ~mask;
-        SendFlagUpdate(peers[0].id, id, value);
         sent++;
     }
-    for (uint16_t id = VARS_START; id < VARS_START + VARS_COUNT && sent < 8; id++)
+    for (uint16_t id = STORY_FIRST_VAR; id < VARS_START + VARS_COUNT && sent < 8; id++)
     {
         uint16_t index = id - VARS_START;
         uint16_t value = gSaveBlock1Ptr->vars[index];
 
         if (sCoop.storyVarsBaseline[index] == value)
             continue;
+        CtrCoop_StoryVarChanged(id);
+        if (!SendVarUpdate(peers[0].id, id, value))
+            return;
         sCoop.storyVarsBaseline[index] = value;
-        SendVarUpdate(peers[0].id, id, value);
         sent++;
     }
+    SyncStoryObjects(peers[0].id, &sent);
 }
 
 static void ApplyRemoteFlag(uint16_t id, bool value)
 {
     uint8_t mask;
 
-    if (id == 0 || id >= FLAGS_COUNT || !sCoop.storyInitialized)
+    if (id < STORY_FIRST_FLAG || id >= FLAGS_COUNT || !sCoop.storyInitialized)
         return;
     mask = 1 << (id & 7);
+    if (sCoop.guest && StoryLocalIntent()
+     && (((sStoryFlagsTouched[id / 8] & mask) != 0)
+       || ((gSaveBlock1Ptr->flags[id / 8] ^ sCoop.storyFlagsBaseline[id / 8]) & mask))
+     && (((gSaveBlock1Ptr->flags[id / 8] & mask) != 0) != value))
+        return;
+    if (((gSaveBlock1Ptr->flags[id / 8] & mask) != 0) != value)
+        ++sStoryEpoch;
     if (value)
     {
         gSaveBlock1Ptr->flags[id / 8] |= mask;
@@ -2176,11 +2596,512 @@ static void ApplyRemoteVar(uint16_t id, uint16_t value)
 {
     uint16_t index;
 
-    if (id < VARS_START || id >= VARS_START + VARS_COUNT || !sCoop.storyInitialized)
+    if (id < STORY_FIRST_VAR || id >= VARS_START + VARS_COUNT || !sCoop.storyInitialized)
         return;
     index = id - VARS_START;
+    if (sCoop.guest && StoryLocalIntent()
+     && ((sStoryVarsTouched[index / 8] & (1 << (index & 7)))
+       || gSaveBlock1Ptr->vars[index] != sCoop.storyVarsBaseline[index])
+     && gSaveBlock1Ptr->vars[index] != value)
+        return;
+    if (gSaveBlock1Ptr->vars[index] != value)
+        ++sStoryEpoch;
     gSaveBlock1Ptr->vars[index] = value;
     sCoop.storyVarsBaseline[index] = value;
+}
+
+static bool SameEncounter(const struct EncounterKey *a, const struct EncounterKey *b)
+{
+    return a->mapGroup == b->mapGroup && a->mapNum == b->mapNum
+        && a->localId == b->localId && a->script == b->script;
+}
+
+static bool EncounterConflict(const struct EncounterKey *a, uint8_t na,
+                              const struct EncounterKey *b, uint8_t nb)
+{
+    for (unsigned i = 0; i < na; ++i)
+        for (unsigned j = 0; j < nb; ++j)
+            /* A map-triggered scene may reach an NPC through a different
+             * script than A-button interaction. Its whole map is reserved;
+             * object conversations only reserve the actual NPC(s). */
+            if (a[i].mapGroup == b[j].mapGroup && a[i].mapNum == b[j].mapNum
+             && (a[i].localId == 0 || b[j].localId == 0 || a[i].localId == b[j].localId))
+                return true;
+    return false;
+}
+
+/* Script-controlled actors can outlive an individual applymovement command
+ * (dialogue, a second movement, or removal). Keep them for this whole lease,
+ * independently of the immutable keys used by the host arbitration protocol. */
+static struct EncounterKey sEncounterActors[OBJECT_EVENTS_COUNT];
+static uint8_t sEncounterActorCount;
+static bool sEncounterActorsOverflow;
+
+void CtrCoop_ScriptActor(uint8_t group, uint8_t num, uint8_t localId)
+{
+    struct EncounterKey key = {group, num, localId, 0};
+    if (sCoop.eventState != EVENT_HELD || !localId
+     || localId == LOCALID_COOP_PLAYER || localId == 255)
+        return;
+    if (EncounterConflict(&key, 1, sEncounterActors, sEncounterActorCount))
+        return;
+    if (sEncounterActorCount < OBJECT_EVENTS_COUNT)
+        sEncounterActors[sEncounterActorCount++] = key;
+    else
+        /* A long scene may touch more actors than fit on screen at once.
+         * Pause snapshots conservatively until it ends, never evict a live
+         * actor and overwrite its later movement. */
+        sEncounterActorsOverflow = true;
+    CtrCoopNpcMotion_Track(group, num, localId);
+}
+
+static bool OwnsEncounterNpc(uint8_t group, uint8_t num, uint8_t localId)
+{
+    struct EncounterKey key = {group, num, localId, 0};
+    /* CheckTrainer has already captured the approach distance and pose before
+     * the first poll. Preserve that pose while the new lease is prepared or
+     * awaiting a grant, including time spent releasing an older event. */
+    if (sCoop.eventStarting && sCoop.eventState != EVENT_DENIED
+     && EncounterConflict(&key, 1, sCoop.eventPrepared, sCoop.eventPreparedCount))
+        return true;
+    if (sCoop.eventState == EVENT_PENDING && !sCoop.eventEnding
+     && EncounterConflict(&key, 1, sCoop.eventKeys, sCoop.eventCount))
+        return true;
+    return sCoop.eventState == EVENT_HELD
+        && (sEncounterActorsOverflow
+         || EncounterConflict(&key, 1, sCoop.eventKeys, sCoop.eventCount)
+         || EncounterConflict(&key, 1, sEncounterActors, sEncounterActorCount));
+}
+
+bool CtrCoop_StoryOwnsNpc(uint8_t group, uint8_t num, uint8_t localId)
+{
+    return OwnsEncounterNpc(group, num, localId) || CtrCoopNpcMotion_Controls(group, num, localId);
+}
+
+#include "3ds_coop_npc_motion.inc"
+
+bool CtrCoop_StoryNpcVisible(uint8_t group, uint8_t num, uint8_t localId)
+{
+    return StoryNpcAvailable(group, num, localId);
+}
+
+static void SendEncounter(uint8_t type, uint32_t token, const struct EncounterKey *keys,
+                          uint8_t count, bool accepted)
+{
+    uint8_t packet[CTR_COOP_EVENT_PACKET_SIZE] = {type, CTR_COOP_PROTOCOL_VERSION};
+    if (!sCoop.peerId || count == 0 || count > 2)
+        return;
+    for (unsigned b = 0; b < 4; ++b)
+        packet[2 + b] = token >> (8 * b);
+    packet[6] = count;
+    for (unsigned i = 0; i < count; ++i)
+    {
+        uint8_t *p = packet + 7 + i * 7;
+        p[0] = keys[i].mapGroup;
+        p[1] = keys[i].mapNum;
+        p[2] = keys[i].localId;
+        for (unsigned b = 0; b < 4; ++b)
+            p[3 + b] = keys[i].script >> (8 * b);
+    }
+    packet[21] = accepted;
+    LocalLink_Send(sCoop.peerId, packet, sizeof(packet));
+}
+
+/* Host arbitration precedes every bytecode command, including lock/msgbox
+ * and the starter-dependent trainer selection in rival conversations. */
+static void HandleEncounter(const uint8_t *data, uint16_t len)
+{
+    struct EncounterKey keys[2] = {{0}};
+    uint32_t token = 0;
+    uint8_t count;
+    bool same, accepted;
+    if (len != CTR_COOP_EVENT_PACKET_SIZE || data[1] != CTR_COOP_PROTOCOL_VERSION
+     || data[6] == 0 || data[6] > 2 || data[21] > 1)
+        return;
+    count = data[6];
+    for (unsigned b = 0; b < 4; ++b)
+        token |= (uint32_t)data[2 + b] << (8 * b);
+    if (token == 0)
+        return;
+    for (unsigned i = 0; i < count; ++i)
+    {
+        const uint8_t *p = data + 7 + i * 7;
+        keys[i].mapGroup = p[0]; keys[i].mapNum = p[1]; keys[i].localId = p[2];
+        for (unsigned b = 0; b < 4; ++b)
+            keys[i].script |= (uint32_t)p[3 + b] << (8 * b);
+        if ((keys[i].localId == 0) == (keys[i].script == 0))
+            return;
+    }
+    if (count == 2 && SameEncounter(&keys[0], &keys[1]))
+        return;
+    if (!sCoop.guest && data[0] == CTR_COOP_EVENT_REQUEST_PACKET)
+    {
+        same = token == sCoop.peerEventToken && count == sCoop.peerEventCount;
+        for (unsigned i = 0; same && i < count; ++i)
+            same = SameEncounter(&keys[i], &sCoop.peerEventKeys[i]);
+        accepted = same;
+        if ((int32_t)(token - sCoop.peerEventToken) > 0 && sCoop.peerEventCount == 0)
+        {
+            sCoop.peerEventToken = token;
+            accepted = sCoop.peerSaveReady
+                && !(sCoop.eventState == EVENT_HELD
+                  && EncounterConflict(keys, count, sCoop.eventKeys, sCoop.eventCount));
+            if (accepted)
+            {
+                memcpy(sCoop.peerEventKeys, keys, sizeof(keys));
+                sCoop.peerEventCount = count;
+            }
+        }
+        SendEncounter(CTR_COOP_EVENT_RESULT_PACKET, token, keys, count, accepted);
+        CtrLog_Write(CTR_LOG_GAME, "coop: event %lu for guest %s", (unsigned long)token, accepted ? "granted" : "rejected");
+    }
+    else if (!sCoop.guest && data[0] == CTR_COOP_EVENT_RELEASE_PACKET)
+    {
+        same = token == sCoop.peerEventToken && count == sCoop.peerEventCount;
+        for (unsigned i = 0; same && i < count; ++i)
+            same = SameEncounter(&keys[i], &sCoop.peerEventKeys[i]);
+        if (same)
+            sCoop.peerEventCount = 0;
+        /* A cancel may overtake an unacknowledged request. Tombstone its
+         * token so a delayed/repeated request cannot resurrect the lease. */
+        if (sCoop.peerEventCount == 0 && (int32_t)(token - sCoop.peerEventToken) > 0)
+            sCoop.peerEventToken = token;
+        SendEncounter(CTR_COOP_EVENT_ACK_PACKET, token, keys, count,
+                      sCoop.peerEventCount == 0 || token != sCoop.peerEventToken);
+    }
+    else if (sCoop.guest && token == sCoop.eventToken && count == sCoop.eventCount)
+    {
+        for (unsigned i = 0; i < count; ++i)
+            if (!SameEncounter(&keys[i], &sCoop.eventKeys[i]))
+                return;
+        if (data[0] == CTR_COOP_EVENT_RESULT_PACKET && sCoop.eventState == EVENT_PENDING && !sCoop.eventEnding)
+            sCoop.eventState = data[21] ? EVENT_HELD : EVENT_DENIED;
+        else if (data[0] == CTR_COOP_EVENT_ACK_PACKET && data[21] && sCoop.eventState == EVENT_RELEASING)
+        {
+            sCoop.eventState = EVENT_IDLE;
+            sCoop.eventEnding = false;
+            sCoop.eventCount = 0;
+        }
+    }
+}
+
+void CtrCoop_ScriptObject(uint8_t mapGroup, uint8_t mapNum, uint8_t localId)
+{
+    struct EncounterKey key = {mapGroup, mapNum, localId, 0};
+    if (!localId || localId == LOCALID_COOP_PLAYER || localId == 255)
+        return;
+    if (sCoop.eventPreparedCount < 2
+     && !EncounterConflict(&key, 1, sCoop.eventPrepared, sCoop.eventPreparedCount))
+        sCoop.eventPrepared[sCoop.eventPreparedCount++] = key;
+}
+
+void CtrCoop_ScriptBegin(const void *script)
+{
+    if (!sCoop.wanted || gSaveBlock1Ptr == NULL)
+    {
+        sCoop.eventPreparedCount = 0;
+        return;
+    }
+    if (!sCoop.storyInitialized)
+        ResetStoryBaseline();
+    if (sCoop.eventPreparedCount == 0)
+    {
+        struct EncounterKey key = {gSaveBlock1Ptr->location.mapGroup,
+            gSaveBlock1Ptr->location.mapNum, 0, (uint32_t)(uintptr_t)script};
+        sCoop.eventPrepared[sCoop.eventPreparedCount++] = key;
+    }
+    sCoop.eventStarting = true;
+    sCoop.eventWait = 0;
+    sStoryPreparedEpoch = sStoryEpoch;
+}
+
+static bool StoryChangesPending(void)
+{
+    if (!sCoop.storyInitialized || gSaveBlock1Ptr == NULL)
+        return false;
+    for (uint16_t id = STORY_FIRST_FLAG; id < FLAGS_COUNT; ++id)
+        if (((sCoop.storyFlagsBaseline[id / 8] >> (id & 7)) & 1) != FlagGet(id))
+            return true;
+    for (uint16_t id = STORY_FIRST_VAR; id < VARS_START + VARS_COUNT; ++id)
+        if (sCoop.storyVarsBaseline[id - VARS_START] != gSaveBlock1Ptr->vars[id - VARS_START])
+            return true;
+    return false;
+}
+
+static void TickEncounter(void)
+{
+    if (sCoop.eventEnding)
+    {
+        /* Keep ownership through post-battle dialogue and until story and
+         * rewards have been sent, rather than exposing the stale encounter. */
+        if (sCoop.battleActive || sCoop.battleSendState != BATTLE_SYNC_IDLE || sCoop.battleReleasePending)
+            return;
+        if ((StoryChangesPending() || StoryObjectsPending() || CtrCoopNpcMotion_Pending()) && sCoop.peerId)
+        {
+            sCoop.storyFrame = 14;
+            SyncStoryState();
+            return;
+        }
+        if (!sCoop.guest || !sCoop.authenticated || !sCoop.peerId)
+        {
+            sCoop.eventState = EVENT_IDLE;
+            sCoop.eventEnding = false;
+            sCoop.eventCount = 0;
+        }
+        else
+            sCoop.eventState = EVENT_RELEASING;
+    }
+    if (sCoop.eventState == EVENT_PENDING || sCoop.eventState == EVENT_RELEASING)
+    {
+        if (sCoop.eventRetry == 0)
+        {
+            SendEncounter(sCoop.eventState == EVENT_PENDING ? CTR_COOP_EVENT_REQUEST_PACKET : CTR_COOP_EVENT_RELEASE_PACKET,
+                          sCoop.eventToken, sCoop.eventKeys, sCoop.eventCount, false);
+            sCoop.eventRetry = 60;
+        }
+        else
+            --sCoop.eventRetry;
+    }
+}
+
+int CtrCoop_ScriptPoll(void)
+{
+    TickEncounter();
+    if (!sCoop.eventStarting)
+        return 1;
+    /* The caller selected this NPC/map-table context before waiting. A remote
+     * completed story may have hidden it or changed that table's condition. */
+    if (sStoryPreparedEpoch != sStoryEpoch)
+        return -1;
+    for (unsigned i = 0; i < sCoop.eventPreparedCount; ++i)
+        if (sCoop.eventPrepared[i].localId
+         && !StoryNpcAvailable(sCoop.eventPrepared[i].mapGroup, sCoop.eventPrepared[i].mapNum,
+                               sCoop.eventPrepared[i].localId))
+            return -1;
+    if (sCoop.eventEnding)
+        return 0;
+    if (sCoop.eventState == EVENT_IDLE)
+    {
+        for (unsigned i = 0; i < sCoop.eventPreparedCount; ++i)
+            if (MotionSettlingAt(sCoop.eventPrepared[i].mapGroup, sCoop.eventPrepared[i].mapNum,
+                                 sCoop.eventPrepared[i].localId)) return 0;
+        if (!sCoop.wanted || (sCoop.guest && (!sCoop.authenticated || !sCoop.saveReady)))
+            sCoop.eventState = EVENT_DENIED;
+        else
+        {
+            memcpy(sCoop.eventKeys, sCoop.eventPrepared, sizeof(sCoop.eventKeys));
+            sCoop.eventCount = sCoop.eventPreparedCount;
+            sEncounterActorCount = 0;
+            sEncounterActorsOverflow = false;
+            memset(sStoryFlagsTouched, 0, sizeof(sStoryFlagsTouched));
+            memset(sStoryVarsTouched, 0, sizeof(sStoryVarsTouched));
+            if (++sCoop.eventSerial == 0)
+                ++sCoop.eventSerial;
+            sCoop.eventToken = sCoop.eventSerial;
+            sCoop.eventRetry = 0;
+            sCoop.eventState = sCoop.guest ? EVENT_PENDING
+                : EncounterConflict(sCoop.eventKeys, sCoop.eventCount, sCoop.peerEventKeys, sCoop.peerEventCount)
+                  ? EVENT_DENIED : EVENT_HELD;
+            TickEncounter();
+        }
+    }
+    if (sCoop.eventState == EVENT_HELD)
+    {
+        sCoop.eventStarting = false;
+        sCoop.eventPreparedCount = 0;
+        return 1;
+    }
+    if (sCoop.eventState == EVENT_DENIED || ++sCoop.eventWait >= 600)
+    {
+        /* Use the existing bottom-screen modal, with event-specific wording.
+         * Never resume the denied script when the notice is dismissed. */
+        DenyPC(sCoop.guest ? PC_OWNER_HOST : PC_OWNER_GUEST);
+        sCoop.pcNotice = false;
+        sCoop.pcResumeScript = false;
+        sCoop.eventNotice = true;
+        return -1;
+    }
+    return 0;
+}
+
+void CtrCoop_ScriptEnd(void)
+{
+    CtrCoopMoney_RefundUse();
+    CtrCoopNpcMotion_End();
+    sCoop.eventStarting = false;
+    sCoop.eventPreparedCount = 0;
+    if (sCoop.eventState == EVENT_HELD || sCoop.eventState == EVENT_PENDING)
+    {
+        sCoop.eventEnding = true;
+        sCoop.eventRetry = 0;
+    }
+    else if (sCoop.eventState == EVENT_DENIED)
+    {
+        sCoop.eventState = EVENT_IDLE;
+        sCoop.eventCount = 0;
+    }
+}
+
+void CtrCoop_StoryTick(void)
+{
+    CtrCoopNpcMotion_Tick();
+    if (!sCoop.wanted || gSaveBlock1Ptr == NULL) return;
+    SyncStoryState();
+    TickEncounter();
+    if (gMain.callback2 != CB2_Overworld) return;
+    sApplyingStoryWorld = true;
+    CtrCoop_EngineStoryRefresh();
+    for (unsigned i = 0; i < sStoryObjectCount; ++i)
+    {
+        struct StoryObject *object = &sStoryObjects[i];
+        if (object->group == gSaveBlock1Ptr->location.mapGroup && object->num == gSaveBlock1Ptr->location.mapNum
+         && !OwnsEncounterNpc(object->group, object->num, object->id)
+        /* Permanent story writes follow the visual tail, instead of snapping
+         * a still-playing remote movement to its final template coordinates. */
+         && !CtrCoopNpcMotion_Controls(object->group, object->num, object->id))
+        {
+            CtrCoop_EngineStoryObject(object->group, object->num, object->id,
+                                       object->fields | (object->pendingLive ? 32 : 0),
+                                       object->x, object->y, object->movement);
+            object->pendingLive = false;
+        }
+    }
+    sApplyingStoryWorld = false;
+}
+
+const uint8_t *CtrCoop_NoticeName(void)
+{
+    return sCoop.eventNotice ? sCoop.pcNoticeName : CtrCoop_PCNoticeName();
+}
+
+bool CtrCoop_NoticeIsInteraction(void) { return sCoop.eventNotice; }
+
+void CtrCoop_DismissNotice(void)
+{
+    sCoop.eventNotice = false;
+    CtrCoop_DismissPCNotice();
+}
+
+static bool SpectatorFieldReady(void)
+{
+    return gSaveBlock1Ptr != NULL && gMain.callback2 == CB2_Overworld && !gMain.inBattle
+        && !sCoop.battleActive && !sCoop.pcOpen && !sCoop.pcPending
+        && sCoop.pcOwner == PC_OWNER_NONE && sCoop.syncState == PC_SYNC_IDLE
+        && !sCoop.eventStarting && sCoop.eventState == EVENT_IDLE
+        && !ArePlayerFieldControlsLocked() && !ScriptContext_IsEnabled();
+}
+
+static void TickSpectator(void)
+{
+    bool connected = PartyPeerReady() && LocalLink_GetSession() == LOCAL_SESSION_IN;
+    bool localBattle = gMain.inBattle && sCoop.battleActive
+        && !(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED | BATTLE_TYPE_WALLY_TUTORIAL));
+    CtrCoopSpectator_SetState(sCoop.peerId, connected,
+        sCoop.peerBattleActive && !sCoop.peerBattleFinished, localBattle, SpectatorFieldReady());
+    CtrCoopSpectator_Tick();
+}
+
+bool CtrCoop_IsWatching(void) { return CtrCoopSpectator_IsWatching(); }
+
+static void UpdateInventorySession(void)
+{
+    bool active=sCoop.wanted && sCoop.peerId && LocalLink_GetSession()==LOCAL_SESSION_IN
+        && (sCoop.guest?sCoop.authenticated:sCoop.peerAuthenticated)
+        && gSaveBlock1Ptr!=NULL && gSaveBlock2Ptr!=NULL;
+    bool applied=!sCoop.guest || sCoop.saveReady;
+    CtrCoopInventoryBridge_Session(active,sCoop.guest,sCoop.peerId,applied);
+    CtrCoopMoney_Session(active,sCoop.guest,sCoop.peerId,applied);
+    CtrCoopInventoryBridge_Tick();
+    CtrCoopMoney_Tick();
+}
+
+void CtrCoop_CheckHostConnection(void)
+{
+    struct LocalPeer peers[1];
+    if (!sCoop.guest || (!sCoop.guestWorldLoaded && !sCoop.authenticated))
+        return;
+    /* The transport worker expires a silent host even while a synchronous
+     * RPC prevents engine frames. Do not depend on its LEFT event surviving. */
+    if (LocalLink_GetSession()!=LOCAL_SESSION_IN
+     || LocalLink_GetSessionKind()!=LOCAL_KIND_COOP
+     || LocalLink_GetPeers(peers,1)==0
+     || (sCoop.peerId && peers[0].id!=sCoop.peerId))
+        CtrGame_ReturnToMenu();
+}
+
+void CtrCoop_PumpInventory(void)
+{
+    CtrCoop_CheckHostConnection();
+    if (sInventoryPumping) return;
+    sInventoryPumping=true;
+    PortRfu_PumpCoopEvents();
+    CtrCoop_CheckHostConnection();
+    UpdateInventorySession();
+    sInventoryPumping=false;
+}
+
+const uint8_t *CtrCoop_WatchingName(void)
+{
+    static const uint8_t host[8] = {0xC2, 0xC9, 0xCD, 0xCE, EOS, EOS, EOS, EOS};
+    static const uint8_t guest[8] = {0xC1, 0xBB, 0xCD, 0xCE, EOS, EOS, EOS, EOS};
+    const uint8_t *name = sCoop.guest ? sCoop.hostName : sCoop.peerName;
+    bool hasText = false;
+    for (unsigned i = 0; i < CTR_COOP_PLAYER_NAME_SIZE - 1 && name[i] != EOS; ++i)
+        hasText |= name[i] != 0;
+    if (!hasText || (!sCoop.guest && memcmp(name, sDefaultGuestName, sizeof(sDefaultGuestName)) == 0))
+        return sCoop.guest ? host : guest;
+    return name;
+}
+
+bool CtrCoop_TryWatchAt(int16_t x, int16_t y)
+{
+    CtrCoopSnapshot local;
+    if (!SpectatorFieldReady() || !CtrCoopSpectator_CanWatchPeer() || !LocalSnapshot(&local))
+        return false;
+    if (sCoop.remoteValid && CtrCoopProtocol_SameMap(&local, &sCoop.remote)
+     && sCoop.remote.x == x && sCoop.remote.y == y)
+        return CtrCoopSpectator_Request();
+    for (uint8_t i = 0; i < OBJECT_EVENTS_COUNT; ++i)
+    {
+        const struct ObjectEvent *object = &gObjectEvents[i];
+        if (!object->active || object->currentCoords.x != x || object->currentCoords.y != y
+         || object->mapGroup != local.mapGroup || object->mapNum != local.mapNum)
+            continue;
+        for (uint8_t k = 0; k < sCoop.peerEventCount; ++k)
+        {
+            const struct EncounterKey *key = &sCoop.peerEventKeys[k];
+            if (key->localId != 0 && key->mapGroup == local.mapGroup
+             && key->mapNum == local.mapNum && key->localId == object->localId)
+                return CtrCoopSpectator_Request();
+        }
+    }
+    return false;
+}
+
+bool CtrCoop_DisconnectSavePending(void) { return sDisconnectSavePending; }
+
+static void TickDisconnectSave(void)
+{
+    if (!sDisconnectSavePending || sCoop.guest || sCoop.battleActive || gMain.inBattle
+     || gMain.callback2 != CB2_Overworld || gSaveBlock1Ptr == NULL
+     || sCoop.pcOpen || sCoop.pcPending || sCoop.pcOwner != PC_OWNER_NONE
+     || sCoop.syncState != PC_SYNC_IDLE || sCoop.battleReceiveState != BATTLE_SYNC_IDLE
+     || sCoop.eventStarting || sCoop.eventState != EVENT_IDLE
+     || CtrCoopNpcMotion_Settling()
+     || ArePlayerFieldControlsLocked() || ScriptContext_IsEnabled())
+        return;
+    if (sDisconnectSaveRetry != 0)
+    {
+        --sDisconnectSaveRetry;
+        return;
+    }
+    if (CtrCoop_EngineAutoSave())
+    {
+        sDisconnectSavePending = false;
+        CtrLog_Write(CTR_LOG_GAME, "coop: disconnected player state saved");
+    }
+    else
+        sDisconnectSaveRetry = 120;
 }
 
 void CtrCoop_OverworldFrame(void)
@@ -2191,6 +3112,12 @@ void CtrCoop_OverworldFrame(void)
     uint8_t state;
     int peerCount;
 
+    CtrCoop_CheckHostConnection();
+    TickSpectator();
+    UpdateInventorySession();
+    CtrCoop_StoryTick();
+    TickDisconnectSave();
+
     if (sCoop.pcResumeScript && gMain.callback2 == CB2_Overworld)
     {
         sCoop.pcResumeScript = false;
@@ -2198,6 +3125,7 @@ void CtrCoop_OverworldFrame(void)
     }
     if (!sCoop.wanted && !sCoop.remoteValid && sCoop.objectEventId == OBJECT_EVENTS_COUNT)
     {
+        CtrCoop_BattleTick();
         SyncParty();
         if (gMain.callback2 == CB2_Overworld && gSaveBlock1Ptr != NULL)
             RemoveRemoteObject();
@@ -2230,6 +3158,7 @@ void CtrCoop_OverworldFrame(void)
         return;
     OpenPCWhenReady();
     SyncStoryState();
+    TickEncounter();
     /* Keep transport and story state running, but only mutate field sprites
      * after the engine has rebuilt them on returning from a menu or battle. */
     if (gMain.callback2 != CB2_Overworld)
@@ -2291,8 +3220,16 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         return false;
     if (!sCoop.wanted || LocalLink_GetSessionKind() != LOCAL_KIND_COOP)
         return false;
-    if (data[0] < CTR_COOP_PEER_PACKET || data[0] > CTR_COOP_BATTLE_READY_PACKET)
+    if ((data[0] < CTR_COOP_PEER_PACKET || data[0] > CTR_COOP_BATTLE_READY_PACKET)
+     && (data[0] < CTR_COOP_EVENT_REQUEST_PACKET || data[0] > CTR_COOP_EVENT_ACK_PACKET)
+     && data[0] != CTR_COOP_PC_RECOVER_PACKET
+     && (data[0] < CTR_SPECTATOR_CONTROL || data[0] > CTR_SPECTATOR_ACK)
+     && data[0] != 75 && data[0] != CTR_COOP_NPC_MOTION_PACKET && data[0] != CTR_COOP_NPC_MOTION_END_PACKET
+     && (data[0]<CTR_COOP_INVENTORY_REQUEST || data[0]>CTR_COOP_INVENTORY_CONTROL)
+     && (data[0]<CTR_COOP_MONEY_FIRST_PACKET || data[0]>CTR_COOP_MONEY_LAST_PACKET))
         return false;
+    if (len < 2)
+        return true;
     if (LocalLink_GetSession() != LOCAL_SESSION_IN || LocalLink_GetPeers(peers, 1) == 0 || peers[0].id != from)
         return true;
     if (data[0] == CTR_COOP_AUTH_PACKET)
@@ -2302,7 +3239,10 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
         accepted = memcmp(password, CtrCoopProfile_Get()->hostPassword, sizeof(password)) == 0;
         sCoop.peerAuthenticated = accepted;
         if (accepted)
+        {
             sCoop.peerId = from;
+            UpdateInventorySession();
+        }
         else
             ClearRemote();
         if (CtrCoopProtocol_EncodeAuthResult(accepted, result, sizeof(result)))
@@ -2320,6 +3260,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             sCoop.authenticated = true;
             sCoop.authRejected = false;
             SendGuestIdentity(from);
+            UpdateInventorySession();
         }
         else
         {
@@ -2332,6 +3273,36 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (from != sCoop.peerId || (sCoop.guest ? !sCoop.authenticated : !sCoop.peerAuthenticated))
         return true;
+    if (data[0] >= CTR_SPECTATOR_CONTROL && data[0] <= CTR_SPECTATOR_ACK)
+        return CtrCoopSpectator_HandlePacket(from, data, len);
+    if (data[0]>=CTR_COOP_INVENTORY_REQUEST && data[0]<=CTR_COOP_INVENTORY_CONTROL)
+    {
+        UpdateInventorySession();
+        bool handled=CtrCoopInventoryBridge_HandlePacket(from,data,len);
+        if (CtrCoopInventoryBridge_IsResuming())
+        {
+            if (!sCoop.guest && sCoop.peerIdentified)
+            {
+                sCoop.peerSaveReady=true; sCoop.peerTeamReady=true;
+                sCoop.savePrepared=true;
+            }
+        }
+        return handled;
+    }
+    if (data[0]>=CTR_COOP_MONEY_FIRST_PACKET && data[0]<=CTR_COOP_MONEY_LAST_PACKET)
+    {
+        UpdateInventorySession();
+        return CtrCoopMoney_HandlePacket(from,data,len);
+    }
+    if (data[0] == 75)
+        return CtrCoop_HandleStoryPacket(from, data, len);
+    if (data[0] == CTR_COOP_NPC_MOTION_PACKET || data[0] == CTR_COOP_NPC_MOTION_END_PACKET)
+        return CtrCoopNpcMotion_HandlePacket(from,data,len);
+    if (data[0] >= CTR_COOP_EVENT_REQUEST_PACKET && data[0] <= CTR_COOP_EVENT_ACK_PACKET)
+    {
+        HandleEncounter(data, len);
+        return true;
+    }
     if (data[0] == CTR_COOP_PARTY_BEGIN_PACKET)
     {
         HandlePartyBegin(from, data, len);
@@ -2453,14 +3424,30 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             ApplyHostNpc(&npc);
         return true;
     }
-    if (data[0] == CTR_COOP_PC_REQUEST_PACKET)
+    if (data[0] == CTR_COOP_PC_REQUEST_PACKET || data[0] == CTR_COOP_PC_RECOVER_PACKET)
     {
-        if (sCoop.guest || len != CTR_COOP_PC_CONTROL_SIZE || data[1] != CTR_COOP_PROTOCOL_VERSION)
+        uint16_t sequence;
+        uint32_t checksum;
+        bool recoveryRequested = data[0] == CTR_COOP_PC_RECOVER_PACKET;
+        bool recovery = recoveryRequested;
+        if (sCoop.guest || data[1] != CTR_COOP_PROTOCOL_VERSION)
+            return true;
+        if (recovery)
+        {
+            if (!CtrCoopProtocol_DecodePcRecover(data, len, &sequence, &checksum))
+                return true;
+            recovery = sCoop.battleSendState == BATTLE_SYNC_SENDING
+                && sequence == sCoop.battleSendSequence && checksum == sCoop.battleSendChecksum
+                && (!sCoop.peerBattleActive || sCoop.peerBattleFinished)
+                && (sCoop.battleReceiveState == BATTLE_SYNC_IDLE || BattlePcRecovery());
+        }
+        else if (len != CTR_COOP_PC_CONTROL_SIZE)
             return true;
         accepted = sCoop.peerAuthenticated && sCoop.peerSaveReady && sCoop.pcOwner != PC_OWNER_HOST
                 && sCoop.syncState == PC_SYNC_IDLE && !sCoop.partySending && !sCoop.partyReceiving
-                && sCoop.battleSendState == BATTLE_SYNC_IDLE && sCoop.battleReceiveState == BATTLE_SYNC_IDLE
-                && !sCoop.battleActive && !sCoop.peerBattleActive;
+                && !sCoop.battleActive
+                && (recovery || (!recoveryRequested && sCoop.battleSendState == BATTLE_SYNC_IDLE
+                    && sCoop.battleReceiveState == BATTLE_SYNC_IDLE && !sCoop.peerBattleActive));
         if (accepted)
             sCoop.pcOwner = PC_OWNER_GUEST;
         if (!accepted && sCoop.pcOwner == PC_OWNER_HOST)
@@ -2562,6 +3549,8 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
                 && sCoop.pcOwner == PC_OWNER_NONE && !sCoop.pcPending && sCoop.syncState == PC_SYNC_IDLE;
         if (accepted)
         {
+            if (!sCoop.peerBattleActive)
+                sCoop.peerBattleFinished = false;
             sCoop.peerTrainerId = trainerId;
             sCoop.peerBattleActive = true;
         }
@@ -2620,8 +3609,11 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (data[0] == CTR_COOP_BATTLE_READY_PACKET)
     {
-        if (sCoop.battleSendState == BATTLE_SYNC_SENDING && len == CTR_COOP_SAVE_READY_SIZE
-         && data[1] == CTR_COOP_PROTOCOL_VERSION)
+        uint16_t sequence;
+        uint32_t checksum;
+        if (sCoop.battleSendState == BATTLE_SYNC_SENDING
+         && CtrCoopProtocol_DecodeBattleReady(data, len, &sequence, &checksum)
+         && sequence == sCoop.battleSendSequence && checksum == sCoop.battleSendChecksum)
         {
             sCoop.battleSendState = BATTLE_SYNC_IDLE;
             sCoop.battleSendOffset = 0;
@@ -2689,6 +3681,24 @@ void CtrCoop_PeerLeft(uint16_t id)
 
 void CtrCoop_SoftReset(void)
 {
+    bool wasGuest = sCoop.guest;
+    sInventoryPumping=false;
+    CtrCoopInventoryBridge_Reset();
+    CtrCoopMoney_Reset();
+    CtrCoop_ClearStoryWorld();
+    /* Explicitly starting another save/title context cannot retain a delayed
+     * result or an autosave request from the previous world. */
+    sCoop.battleReceiveState = BATTLE_SYNC_IDLE;
+    sDisconnectSavePending = false;
+    sDisconnectSaveRetry = 0;
+    sLiveBattleEndPending=false;
+    sResumeSharedWorld=false;
+    sCoop.battleActive = false;
+    CtrCoop_ResetBattleReturn();
+    sCoop.eventState = EVENT_IDLE;
+    sCoop.battleEvent = false;
+    sCoop.eventStarting = sCoop.eventEnding = false;
+    sCoop.eventPreparedCount = sCoop.eventCount = 0;
     sCoop.pcOpen = false;
     sCoop.wanted = false;
     sCoop.guest = false;
@@ -2703,6 +3713,16 @@ void CtrCoop_SoftReset(void)
     ClearRemote();
     sCoop.pcResumeScript = false;
     CtrCoopBike_Reset();
-    if (LocalLink_GetSessionKind() == LOCAL_KIND_COOP)
+    if (wasGuest || LocalLink_GetSessionKind() == LOCAL_KIND_COOP)
         LocalLink_LeaveSession();
+}
+
+void CtrCoop_AfterStackReset(void)
+{
+    /* Only the setjmp re-entry in CtrGame_Init may call this. No abandoned
+     * guest RPC can still return to an item/money effect after this point. */
+    sInventoryPumping=false;
+    CtrCoopInventoryBridge_AfterStackReset();
+    CtrCoopMoney_AfterStackReset();
+    CtrCoopNpcMotion_AfterStackReset();
 }

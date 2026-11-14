@@ -30,11 +30,17 @@
 
 bool VoxelBattle_GameInBattle(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return true;
+#endif
     return gMain.inBattle;
 }
 
 bool VoxelBattle_IsLink(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return false; /* singles, never link battles */
+#endif
     return (gBattleTypeFlags & BATTLE_TYPE_LINK) != 0;
 }
 
@@ -491,6 +497,14 @@ bool VoxelBattle_StepStage(unsigned cells, unsigned candidates, float *targetX, 
 
 unsigned VoxelBattle_Shadows(VoxelBattleShadow *out, unsigned max)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) {
+        unsigned count=p->world.shadowCount<max?p->world.shadowCount:max;
+        memcpy(out,p->world.shadows,count*sizeof(*out));
+        return count;
+    }
+#endif
     unsigned count = 0;
 
     if (!gMain.inBattle || gBattleSpritesDataPtr == NULL || gBattleSpritesDataPtr->healthBoxesData == NULL)

@@ -408,12 +408,12 @@ static void TestBattleProtocol(void)
 {
     uint8_t reserve[CTR_COOP_BATTLE_RESERVE_SIZE];
     uint8_t result[CTR_COOP_BATTLE_RESERVE_RESULT_SIZE];
-    uint8_t begin[CTR_COOP_SAVE_BEGIN_SIZE];
+    uint8_t begin[CTR_COOP_BATTLE_BEGIN_SIZE];
     uint8_t request[CTR_COOP_SAVE_REQUEST_SIZE];
     uint8_t chunk[CTR_COOP_SAVE_CHUNK_HEADER + 3];
     uint8_t payload[] = {1, 2, 3};
     uint8_t decodedPayload[3];
-    uint16_t trainerId, decodedSize;
+    uint16_t trainerId, decodedSize, sequence;
     uint32_t totalSize, checksum, offset;
     bool accepted;
 
@@ -427,14 +427,143 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && trainerId == 321 && accepted, "battle grant roundtrip");
     result[3] &= 0x7F;
     CHECK(CtrCoopProtocol_DecodeBattleReserveResult(result, sizeof(result), &trainerId, &accepted) && !accepted, "battle rejection decodes");
-    CHECK(CtrCoopProtocol_EncodeBattleBegin(616, 0x12345678, begin, sizeof(begin)), "battle begin encodes");
-    CHECK(CtrCoopProtocol_DecodeBattleBegin(begin, sizeof(begin), &totalSize, &checksum) && totalSize == 616 && checksum == 0x12345678, "battle begin roundtrip");
+    CHECK(CtrCoopProtocol_EncodeBattleBegin(616, 0x12345678, 0xABCD, begin, sizeof(begin)), "battle begin encodes");
+    CHECK(CtrCoopProtocol_DecodeBattleBegin(begin, sizeof(begin), &totalSize, &checksum, &sequence)
+        && totalSize == 616 && checksum == 0x12345678 && sequence == 0xABCD, "battle begin roundtrip");
     CHECK(!CtrCoopProtocol_DecodePcSyncBegin(begin, sizeof(begin), &totalSize, &checksum), "battle begin is not PC sync");
     CHECK(CtrCoopProtocol_EncodeBattleRequest(128, request, sizeof(request)), "battle request encodes");
     CHECK(CtrCoopProtocol_DecodeBattleRequest(request, sizeof(request), &offset) && offset == 128, "battle request roundtrip");
     CHECK(CtrCoopProtocol_EncodeBattleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "battle chunk encodes");
     CHECK(CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "battle chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "battle payload roundtrip");
+}
+
+static void TestBattleBeginIdentity(void)
+{
+    static const uint8_t expected[] = {36, 18, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
+    uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE + 1];
+    uint32_t totalSize = 7, checksum = 9;
+    uint16_t sequence = 11;
+
+    memset(packet, 0xA5, sizeof(packet));
+    CHECK(CtrCoopProtocol_EncodeBattleBegin(0x12345678, 0x89ABCDEF, 0x1357, packet, CTR_COOP_BATTLE_BEGIN_SIZE), "identified begin encodes");
+    CHECK(sizeof(expected) == CTR_COOP_BATTLE_BEGIN_SIZE && memcmp(packet, expected, sizeof(expected)) == 0
+        && packet[CTR_COOP_BATTLE_BEGIN_SIZE] == 0xA5, "begin wire layout preserves transfer fields and appends bounded sequence");
+    for (uint16_t size = 0; size <= sizeof(packet); size++)
+    {
+        if (size == CTR_COOP_BATTLE_BEGIN_SIZE)
+            continue;
+        CHECK(!CtrCoopProtocol_EncodeBattleBegin(1, 2, 3, packet, size), "invalid begin output length %u rejected", size);
+        CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, size, &totalSize, &checksum, &sequence), "invalid begin input length %u rejected", size);
+    }
+    CHECK(totalSize == 7 && checksum == 9 && sequence == 11, "bad begin lengths leave outputs unchanged");
+    CHECK(!CtrCoopProtocol_EncodeBattleBegin(1, 2, 3, NULL, CTR_COOP_BATTLE_BEGIN_SIZE), "null begin output rejected");
+    CHECK(!CtrCoopProtocol_EncodeBattleBegin(0, 2, 3, packet, CTR_COOP_BATTLE_BEGIN_SIZE), "empty begin rejected");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(NULL, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "null begin input rejected");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, NULL, &checksum, &sequence), "null begin size output rejected");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, NULL, &sequence), "null begin checksum output rejected");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, NULL), "null begin sequence output rejected");
+    packet[0] = CTR_COOP_PC_SYNC_BEGIN_PACKET;
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "wrong begin type rejected");
+    packet[0] = CTR_COOP_BATTLE_BEGIN_PACKET;
+    packet[1] = CTR_COOP_PROTOCOL_VERSION - 1;
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "old begin version rejected");
+    packet[1] = CTR_COOP_PROTOCOL_VERSION + 1;
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "future begin version rejected");
+    packet[1] = CTR_COOP_PROTOCOL_VERSION;
+    memset(packet + 2, 0, 4);
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "zero-size wire begin rejected");
+    CHECK(totalSize == 7 && checksum == 9 && sequence == 11, "invalid begin leaves outputs unchanged");
+
+    sequence = UINT16_MAX;
+    for (unsigned i = 0; i < 3; i++, sequence++)
+    {
+        uint16_t decodedSequence = 7;
+        CHECK(CtrCoopProtocol_EncodeBattleBegin(UINT32_MAX, 0, sequence, packet, CTR_COOP_BATTLE_BEGIN_SIZE)
+            && CtrCoopProtocol_DecodeBattleBegin(packet, CTR_COOP_BATTLE_BEGIN_SIZE, &totalSize, &checksum, &decodedSequence)
+            && totalSize == UINT32_MAX && checksum == 0 && decodedSequence == sequence,
+            "begin sequence %u survives wrap with full size and zero checksum", sequence);
+    }
+}
+
+static void TestResultIdentityPackets(void)
+{
+    static const struct
+    {
+        uint8_t type;
+        uint16_t size;
+        bool (*encode)(uint16_t, uint32_t, uint8_t *, uint16_t);
+        bool (*decode)(const uint8_t *, uint16_t, uint16_t *, uint32_t *);
+    } codecs[] = {
+        {CTR_COOP_BATTLE_READY_PACKET, CTR_COOP_BATTLE_READY_SIZE, CtrCoopProtocol_EncodeBattleReady, CtrCoopProtocol_DecodeBattleReady},
+        {CTR_COOP_PC_RECOVER_PACKET, CTR_COOP_PC_RECOVER_SIZE, CtrCoopProtocol_EncodePcRecover, CtrCoopProtocol_DecodePcRecover},
+    };
+
+    CHECK(CTR_COOP_BATTLE_READY_PACKET == 39 && CTR_COOP_PC_RECOVER_PACKET == 64
+        && CTR_COOP_PC_CONTROL_SIZE == 2, "result identities use assigned IDs and preserve normal PC request size");
+    for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
+    {
+        uint8_t packet[9];
+        uint8_t expected[] = {codecs[c].type, 18, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
+        uint16_t sequence = 7;
+        uint32_t checksum = 9;
+
+        memset(packet, 0xA5, sizeof(packet));
+        CHECK(codecs[c].size == sizeof(expected) && codecs[c].encode(0x1357, 0x89ABCDEF, packet, codecs[c].size), "identity %u encodes", codecs[c].type);
+        CHECK(memcmp(packet, expected, sizeof(expected)) == 0 && packet[8] == 0xA5, "identity %u uses bounded little-endian wire layout", codecs[c].type);
+        CHECK(codecs[c].decode(packet, codecs[c].size, &sequence, &checksum)
+            && sequence == 0x1357 && checksum == 0x89ABCDEF, "identity %u roundtrip", codecs[c].type);
+        sequence = 7;
+        checksum = 9;
+        for (uint16_t size = 0; size <= sizeof(packet); size++)
+        {
+            if (size == codecs[c].size)
+                continue;
+            CHECK(!codecs[c].encode(1, 2, packet, size), "identity %u output length %u rejected", codecs[c].type, size);
+            CHECK(!codecs[c].decode(packet, size, &sequence, &checksum), "identity %u input length %u rejected", codecs[c].type, size);
+        }
+        CHECK(!codecs[c].encode(1, 2, NULL, codecs[c].size), "null identity output rejected");
+        CHECK(!codecs[c].decode(NULL, codecs[c].size, &sequence, &checksum), "null identity input rejected");
+        CHECK(!codecs[c].decode(packet, codecs[c].size, NULL, &checksum), "null identity sequence rejected");
+        CHECK(!codecs[c].decode(packet, codecs[c].size, &sequence, NULL), "null identity checksum rejected");
+        packet[0] = codecs[1 - c].type;
+        CHECK(!codecs[c].decode(packet, codecs[c].size, &sequence, &checksum), "READY and PC recovery cannot be confused");
+        packet[0] = codecs[c].type;
+        packet[1] = CTR_COOP_PROTOCOL_VERSION - 1;
+        CHECK(!codecs[c].decode(packet, codecs[c].size, &sequence, &checksum), "old identity version rejected");
+        packet[1] = CTR_COOP_PROTOCOL_VERSION + 1;
+        CHECK(!codecs[c].decode(packet, codecs[c].size, &sequence, &checksum), "future identity version rejected");
+        CHECK(sequence == 7 && checksum == 9, "invalid identity leaves outputs unchanged");
+        sequence = UINT16_MAX;
+        for (unsigned i = 0; i < 3; i++, sequence++)
+        {
+            uint16_t decodedSequence = 7;
+            CHECK(codecs[c].encode(sequence, 0, packet, codecs[c].size)
+                && codecs[c].decode(packet, codecs[c].size, &decodedSequence, &checksum)
+                && decodedSequence == sequence && checksum == 0, "identity %u sequence %u survives wrap", codecs[c].type, sequence);
+        }
+    }
+}
+
+static void TestUnchangedTransferBeginLayouts(void)
+{
+    static const struct
+    {
+        uint8_t type;
+        bool (*encode)(uint32_t, uint32_t, uint8_t *, uint16_t);
+    } codecs[] = {
+        {CTR_COOP_SAVE_BEGIN_PACKET, CtrCoopProtocol_EncodeSaveBegin},
+        {CTR_COOP_PC_SYNC_BEGIN_PACKET, CtrCoopProtocol_EncodePcSyncBegin},
+        {CTR_COOP_PARTY_BEGIN_PACKET, CtrCoopProtocol_EncodePartyBegin},
+    };
+    uint8_t packet[CTR_COOP_SAVE_BEGIN_SIZE];
+
+    for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
+    {
+        uint8_t expected[] = {codecs[c].type, 18, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
+        CHECK(sizeof(packet) == sizeof(expected) && codecs[c].encode(0x12345678, 0x89ABCDEF, packet, sizeof(packet))
+            && memcmp(packet, expected, sizeof(expected)) == 0, "transfer %u retains its original ten-byte layout", codecs[c].type);
+    }
 }
 
 static void TestStoryUpdates(void)
@@ -505,6 +634,9 @@ int main(void)
     TestPcSyncTransfer();
     TestPCControl();
     TestBattleProtocol();
+    TestBattleBeginIdentity();
+    TestResultIdentityPackets();
+    TestUnchangedTransferBeginLayouts();
     TestStoryUpdates();
     TestPartyPackets();
     if (sFailures != 0)

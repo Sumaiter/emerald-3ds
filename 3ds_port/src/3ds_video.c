@@ -10,6 +10,7 @@
 #include "3ds_daynight.h"
 #include "3ds_gpumem.h"
 #include "3ds_video.h"
+#include "3ds_coop_spectator.h"
 #include "3ds_tile_banks.h"
 #include "3ds_dex_top.h"
 #include "3ds_corner_art.h"
@@ -511,6 +512,38 @@ static unsigned sWorldLayers;
  * battle_intro.c: the intro is sliding the scenery in. */
 unsigned char CtrBattleBg_MoveBgShown(void);
 unsigned char CtrBattleIntro_Sliding(void);
+#ifdef CTR_BATTLE_PRESENTATION
+static unsigned char PresentMoveBg(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?(p->flags&CTR_PRESENT_MOVE_BG)!=0:CtrBattleBg_MoveBgShown();
+}
+static unsigned char PresentIntroSliding(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?(p->flags&CTR_PRESENT_INTRO)!=0:CtrBattleIntro_Sliding();
+}
+static bool PresentVoxelOption(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?(p->flags&CTR_PRESENT_VOXEL)!=0:CtrSettings_Voxel();
+}
+static bool PresentVoxelBattleOption(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?(p->flags&CTR_PRESENT_VOXEL)!=0:CtrSettings_VoxelBattle();
+}
+static bool PresentBlurOption(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?(p->flags&CTR_PRESENT_BLUR)!=0:CtrSettings_VoxelBlur();
+}
+static int PresentBlurStrength(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?p->blurStrength:CtrSettings_VoxelBlurStrength();
+}
+#define CtrBattleBg_MoveBgShown PresentMoveBg
+#define CtrBattleIntro_Sliding PresentIntroSliding
+#define CtrSettings_Voxel PresentVoxelOption
+#define CtrSettings_VoxelBattle PresentVoxelBattleOption
+#define CtrSettings_VoxelBlur PresentBlurOption
+#define CtrSettings_VoxelBlurStrength PresentBlurStrength
+#endif
 /* Visible extent in GBA coordinates. */
 #define VIEW_LEFT ((int)floorf(-sOffX / sZoom) - sViewX)
 #define VIEW_TOP ((int)floorf(-sOffY / sZoom) - sViewY)
@@ -772,6 +805,84 @@ static C3D_Tex sAtlas, sSurface;
 static C3D_Tex sBloomTex;
 static C3D_RenderTarget *sBloom;
 static C3D_RenderTarget *sLogical, *sTop, *sTopRight;
+/* Optional stream memory is claimed only for a requested capture/view. The
+ * display texture is retained until shutdown: stopping must never delete a
+ * resource the GPU may still sample from the previously submitted frame. */
+static uint8_t *sSpectatorCapture;
+static bool sSpectatorCaptureAsked, sSpectatorCaptureReady;
+static bool sSpectatorLastBattleFrame;
+static const uint8_t *sSpectatorPixels;
+static bool sSpectatorDirty;
+static C3D_Tex sSpectatorTex;
+
+bool CtrVideo_SpectatorRequestCapture(void)
+{
+    if(!sSpectatorCapture) sSpectatorCapture=malloc(CTR_SPECTATOR_PIXELS);
+    if(!sSpectatorCapture) return false;
+    if(!sSpectatorCaptureReady) sSpectatorCaptureAsked=true;
+    return true;
+}
+const uint8_t *CtrVideo_SpectatorTakeCapture(void)
+{
+    if(!sSpectatorCaptureReady) return NULL;
+    sSpectatorCaptureReady=false;
+    return sSpectatorCapture;
+}
+void CtrVideo_SpectatorCancelCapture(void)
+{
+    sSpectatorCaptureAsked=sSpectatorCaptureReady=false;
+    /* A later viewer/battle must first complete a fresh presentation; it
+     * cannot inherit the last screen from a canceled battle generation. */
+    sSpectatorLastBattleFrame=false;
+}
+bool CtrVideo_SpectatorDisplay(const uint8_t *pixels)
+{
+    if(pixels && !sSpectatorTex.data)
+    {
+        if(!C3D_TexInit(&sSpectatorTex,512,256,GPU_RGBA5551)) return false;
+        C3D_TexSetFilter(&sSpectatorTex,GPU_NEAREST,GPU_NEAREST);
+        C3D_TexSetWrap(&sSpectatorTex,GPU_CLAMP_TO_EDGE,GPU_CLAMP_TO_EDGE);
+        memset(sSpectatorTex.data,0,512u*256u*2u);
+    }
+    sSpectatorPixels=pixels;sSpectatorDirty=pixels!=NULL;
+    return true;
+}
+
+/* The normal FrameBegin already fenced last frame's GPU draws. Read the
+ * composed screen, including the voxel pass, HUD and original battle text.
+ * No extra transfer, GPU wait, render target, or game-state snapshot. */
+static void SpectatorCaptureCompleted(void)
+{
+    if(!sSpectatorCaptureAsked || !sSpectatorLastBattleFrame || sSpectatorPixels || !sTop
+     || sTop->frameBuf.colorFmt!=GPU_RB_RGBA8 || sTop->frameBuf.width!=240) return;
+    const volatile uint32_t *source=sTop->frameBuf.colorBuf;
+    unsigned screenWidth=sTop->frameBuf.height;
+    for(unsigned y=0;y<CTR_SPECTATOR_HEIGHT;y++)
+        for(unsigned x=0;x<CTR_SPECTATOR_WIDTH;x++)
+        {
+            /* Screen targets are tilted: x traverses framebuffer rows and
+             * y runs backwards through each 240-pixel row, in Morton tiles. */
+            uint32_t rgba=source[CtrVideo_Texel(239u-y,x*screenWidth/CTR_SPECTATOR_WIDTH,240)];
+            sSpectatorCapture[y*CTR_SPECTATOR_WIDTH+x]=(uint8_t)
+                (((rgba>>24)&0xe0u)|((rgba>>19)&0x1cu)|((rgba>>14)&3u));
+        }
+    sSpectatorCaptureAsked=false;sSpectatorCaptureReady=true;
+}
+
+static void SpectatorUploadCompleted(void)
+{
+    if(!sSpectatorPixels || !sSpectatorDirty || !sSpectatorTex.data) return;
+    uint16_t *pixels=sSpectatorTex.data;
+    for(unsigned y=0;y<CTR_SPECTATOR_HEIGHT;y++)
+        for(unsigned x=0;x<CTR_SPECTATOR_WIDTH;x++)
+        {
+            unsigned index=sSpectatorPixels[y*CTR_SPECTATOR_WIDTH+x];
+            unsigned r=(index>>5)*31u/7u,g=((index>>2)&7u)*31u/7u,b=(index&3u)*31u/3u;
+            pixels[CtrVideo_Texel(x,y,512)]=(uint16_t)((r<<11)|(g<<6)|(b<<1)|1u);
+        }
+    /* The normal FrameEnd flushes the linear heap before the GPU samples it. */
+    sSpectatorDirty=false;
+}
 static bool sStereo;
 static Tile sTiles[CACHE_COUNT];
 static uint16_t sHash[HASH_COUNT];
@@ -1414,6 +1525,13 @@ static unsigned Read16(unsigned offset)
  * as before. Sprites keep the faded colours: they are a few tiles.
  */
 extern uint16_t gPlttBufferUnfaded[];
+#ifdef CTR_BATTLE_PRESENTATION
+static const uint16_t *PresentUnfaded(void) {
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?p->unfaded:gPlttBufferUnfaded;
+}
+#define gPlttBufferUnfaded (PresentUnfaded())
+#endif
 static float sPaletteFade;
 /* The colour it fades towards, GBA BGR555. */
 static uint16_t sPaletteFadeColor;
@@ -3431,6 +3549,13 @@ static float BoxOffset(void)
 /* Once a frame: whether the box waits out of sight, and its slide. */
 static void BoxFrame(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) {
+        sBoxSlide=p->boxSlide;sBoxHidden=p->boxHidden;sBoxDecided=p->boxDecided;sBoxBarsUp=p->boxBarsUp;
+        return; /* Never lift a sprite in the spectator's engine. */
+    }
+#endif
     static bool sliding;
     bool slidingNow = false;
 
@@ -12329,8 +12454,33 @@ static void RenderDexTop(bool stereo, float slider)
     BlendForget();
 }
 
+static void RenderSpectator(bool stereo)
+{
+    if(!sSpectatorPixels || !sSpectatorTex.data) return;
+    const Tex3DS_SubTexture region={400,240,0,1,400.0f/512.0f,1.0f-240.0f/256.0f};
+    C2D_Prepare();
+    C3D_DepthTest(false,GPU_ALWAYS,GPU_WRITE_COLOR);
+    BlendForget();Blend(5,false,false);
+    C3D_SetScissor(GPU_SCISSOR_DISABLE,0,0,0,0);
+    SceneOn(sTop);C2D_ViewReset();
+    C2D_DrawImageAt((C2D_Image){&sSpectatorTex,&region},0,0,0,NULL,1,1);
+    if(stereo && sTopRight)
+    {
+        SceneOn(sTopRight);C2D_ViewReset();
+        C2D_DrawImageAt((C2D_Image){&sSpectatorTex,&region},0,0,0,NULL,1,1);
+    }
+    C2D_Flush();BlendForget();
+}
+
+#ifdef CTR_BATTLE_PRESENTATION
+#include "3ds_battle_present_video.inc"
+#endif
+
 void CtrVideo_Present(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    PresentBegin();
+#endif
     /* The frame's entry tick: its preparation, before FrameBegin. */
     uint64_t entry = svcGetSystemTick();
 
@@ -12374,6 +12524,9 @@ void CtrVideo_Present(void)
         else
             gspWaitForVBlank();
         ++sStats.frames;
+#ifdef CTR_BATTLE_PRESENTATION
+        PresentRestore();
+#endif
         return;
     }
     /* Wait for previous GPU work before editing the atlas. C3D owns VBlank
@@ -12462,7 +12615,16 @@ void CtrVideo_Present(void)
     sVramAsked = false;
     uint64_t waitStart = svcGetSystemTick();
     CtrVoxel_NoteFrameWait(waitStart);
+#ifdef CTR_BATTLE_PRESENTATION
+    if (!C3D_FrameBegin(C3D_FRAME_SYNCDRAW)) {
+        PresentRestore();
+        return;
+    }
+#else
     if (!C3D_FrameBegin(C3D_FRAME_SYNCDRAW)) return;
+#endif
+    SpectatorCaptureCompleted();
+    SpectatorUploadCompleted();
     /* A late clear wiped the scene surface's kept scenery, if it was that. */
     if (ClearsRun()) sSceneCached = sSceneEmpty = false;
     /* Before anything samples what the CPU wrote since the last frame. */
@@ -12974,6 +13136,9 @@ void CtrVideo_Present(void)
             if (stereo) DrawSpeedBadge(sTopRight, speedHalves);
         }
     }
+    /* Replace presentation only; the viewer's field render/engine callbacks
+     * still ran normally. Both eyes show the same remotely composed image. */
+    RenderSpectator(stereo);
     /* Queued in the frame, behind the drawing into sBottom (BottomTransfer). */
     if (bottom) BottomTransfer();
     PORT_PROF_END(draw, PORT_PROF_DRAW);
@@ -13026,9 +13191,14 @@ void CtrVideo_Present(void)
             if (used > sCmdBufPeak) sCmdBufPeak = used;
         }
         C3D_FrameEnd(running ? GX_CMDLIST_FLUSH : 0);
+        sSpectatorLastBattleFrame=sBattle && !sSpectatorPixels;
         sGpuEarly = false;
     }
     PORT_PROF_END(frameEnd, PORT_PROF_FRAMEEND);
+#ifdef CTR_BATTLE_PRESENTATION
+    /* CPU display inputs stay valid even when the GPU submitted early. */
+    PresentCapture();
+#endif
     sStats.flat = sFrameFlat;
     ++sStats.frames;
     ++sFpsFrames;
@@ -13081,6 +13251,9 @@ void CtrVideo_Present(void)
                          stats->reflections, stats->draftsVisible, stats->draftsMade);
         }
     }
+#ifdef CTR_BATTLE_PRESENTATION
+    PresentRestore();
+#endif
 }
 
 const CtrVideoStats *CtrVideo_GetStats(void) { return &sStats; }
@@ -13121,6 +13294,12 @@ void CtrVideo_SetLineScroll(unsigned reg, bool wide, const void *values, unsigne
 
 void CtrVideo_Shutdown(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    PresentShutdown();
+#endif
+    sSpectatorPixels=NULL;
+    sSpectatorLastBattleFrame=false;
+    CtrVideo_SpectatorCancelCapture();
     BottomRelease();
     CtrVoxel_Shutdown();
     StereoSurfaceRelease();
@@ -13130,6 +13309,10 @@ void CtrVideo_Shutdown(void)
     if (sLogical) C3D_RenderTargetDelete(sLogical);
     if (sTop) C3D_RenderTargetDelete(sTop);
     if (sTopRight) C3D_RenderTargetDelete(sTopRight);
+    /* Target deletion above has fenced the last draw using this texture. */
+    if(sSpectatorTex.data) C3D_TexDelete(&sSpectatorTex);
+    memset(&sSpectatorTex,0,sizeof(sSpectatorTex));
+    free(sSpectatorCapture);sSpectatorCapture=NULL;
     BandsRelease();
     sBandsFailed = false;
     if (sC2d) C2D_Fini();

@@ -1,0 +1,202 @@
+--- a/src/event_data.c
++++ b/src/event_data.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "event_data.h"
+ #include "pokedex.h"
+ 
+@@ -185,6 +188,9 @@
+     if (!ptr)
+         return FALSE;
+     *ptr = value;
++#ifdef PLATFORM_3DS
++    CtrCoop_StoryVarChanged(id);
++#endif
+     return TRUE;
+ }
+ 
+@@ -207,7 +213,12 @@
+ {
+     u8 *ptr = GetFlagPointer(id);
+     if (ptr)
++    {
+         *ptr |= 1 << (id & 7);
++#ifdef PLATFORM_3DS
++        CtrCoop_StoryFlagChanged(id);
++#endif
++    }
+     return 0;
+ }
+ 
+@@ -215,7 +226,12 @@
+ {
+     u8 *ptr = GetFlagPointer(id);
+     if (ptr)
++    {
+         *ptr &= ~(1 << (id & 7));
++#ifdef PLATFORM_3DS
++        CtrCoop_StoryFlagChanged(id);
++#endif
++    }
+     return 0;
+ }
+ 
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -1,4 +1,8 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#include "constants/local_link.h"
++#endif
+ #include "malloc.h"
+ #include "battle_pyramid.h"
+ #include "berry.h"
+@@ -1421,6 +1425,9 @@
+     u8 objectEventId;
+     if (!TryGetObjectEventIdByLocalIdAndMap(localId, mapNum, mapGroup, &objectEventId))
+     {
++#ifdef PLATFORM_3DS
++        CtrCoop_StoryObject(mapGroup, mapNum, localId, 8, 0, 0, 0);
++#endif
+         FlagSet(GetObjectEventFlagIdByObjectEventId(objectEventId));
+         RemoveObjectEvent(&gObjectEvents[objectEventId]);
+     }
+@@ -1573,13 +1580,20 @@
+ {
+     const struct ObjectEventTemplate *objectEventTemplate;
+     s16 cameraX, cameraY;
++    u8 objectEventId;
+ 
+     objectEventTemplate = GetObjectEventTemplateByLocalIdAndMap(localId, mapNum, mapGroup);
+     if (!objectEventTemplate)
+         return OBJECT_EVENTS_COUNT;
+ 
+     GetObjectEventMovingCameraOffset(&cameraX, &cameraY);
+-    return TrySpawnObjectEventTemplate(objectEventTemplate, mapNum, mapGroup, cameraX, cameraY);
++    objectEventId = TrySpawnObjectEventTemplate(objectEventTemplate, mapNum, mapGroup, cameraX, cameraY);
++#ifdef PLATFORM_3DS
++    if (objectEventId != OBJECT_EVENTS_COUNT)
++        CtrCoop_StoryObject(mapGroup, mapNum, localId, 7, objectEventTemplate->x,
++                             objectEventTemplate->y, objectEventTemplate->movementType);
++#endif
++    return objectEventId;
+ }
+ 
+ static void CopyResolvedGraphicsInfoToSpriteTemplate(const struct ObjectEventGraphicsInfo *graphicsInfo, void (*callback)(struct Sprite *), struct SpriteTemplate *spriteTemplate, const struct SubspriteTable **subspriteTables)
+@@ -2820,6 +2834,10 @@
+     {
+         objectEventTemplate->x = objectEvent->currentCoords.x - MAP_OFFSET;
+         objectEventTemplate->y = objectEvent->currentCoords.y - MAP_OFFSET;
++#ifdef PLATFORM_3DS
++        CtrCoop_StoryObject(objectEvent->mapGroup, objectEvent->mapNum, objectEvent->localId,
++                             1, objectEventTemplate->x, objectEventTemplate->y, 0);
++#endif
+     }
+ }
+ 
+@@ -2838,8 +2856,100 @@
+ 
+     objectEventTemplate = GetBaseTemplateForObjectEvent(objectEvent);
+     if (objectEventTemplate != NULL)
++    {
+         objectEventTemplate->movementType = movementType;
+-}
++#ifdef PLATFORM_3DS
++        CtrCoop_StoryObject(objectEvent->mapGroup, objectEvent->mapNum, objectEvent->localId,
++                             2, 0, 0, movementType);
++#endif
++    }
++}
++
++#ifdef PLATFORM_3DS
++bool CtrCoop_EngineStoryNpcAvailable(u8 group, u8 num, u8 localId)
++{
++    const struct ObjectEventTemplate *object;
++    if (group != gSaveBlock1Ptr->location.mapGroup || num != gSaveBlock1Ptr->location.mapNum)
++        return true;
++    object = GetObjectEventTemplateByLocalIdAndMap(localId, num, group);
++    return object == NULL || !object->flagId || !FlagGet(object->flagId);
++}
++
++void CtrCoop_EngineStoryRefresh(void)
++{
++    u8 i;
++    for (i = 0; i < OBJECT_EVENTS_COUNT; ++i)
++    {
++        struct ObjectEvent *object = &gObjectEvents[i];
++        if (object->active && !object->isPlayer && object->localId != LOCALID_COOP_PLAYER
++         && !CtrCoop_StoryOwnsNpc(object->mapGroup, object->mapNum, object->localId)
++         && !CtrCoop_StoryNpcVisible(object->mapGroup, object->mapNum, object->localId))
++            RemoveObjectEvent(object);
++    }
++}
++
++void CtrCoop_EngineStoryTemplateChanged(u8 localId, u8 fields)
++{
++    u8 i;
++    for (i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT; ++i)
++    {
++        const struct ObjectEventTemplate *object = &gSaveBlock1Ptr->objectEventTemplates[i];
++        if (object->localId == localId)
++        {
++            CtrCoop_StoryObject(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum,
++                                 localId, fields, object->x, object->y, object->movementType);
++            break;
++        }
++    }
++}
++
++void CtrCoop_EngineStoryObject(u8 group, u8 num, u8 localId, u8 fields, s16 x, s16 y, u8 movement)
++{
++    u8 i, objectId;
++    bool coordsChanged = false, movementChanged = false;
++    if (group != gSaveBlock1Ptr->location.mapGroup || num != gSaveBlock1Ptr->location.mapNum)
++        return;
++    for (i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT; ++i)
++    {
++        struct ObjectEventTemplate *object = &gSaveBlock1Ptr->objectEventTemplates[i];
++        if (object->localId != localId) continue;
++        if (fields & 1)
++        {
++            coordsChanged = object->x != x || object->y != y;
++            object->x = x; object->y = y;
++        }
++        if ((fields & 2) && movement < NUM_MOVEMENT_TYPES)
++        {
++            movementChanged = object->movementType != movement;
++            object->movementType = movement;
++        }
++        break;
++    }
++    /* Save-template updates are safe during battle/menu callbacks too. Their
++     * sprite arrays are not field objects, so defer all live mutations. */
++    if (fields & 16) return;
++    if (fields & 32)
++    {
++        if (fields & 1) coordsChanged = true;
++        if ((fields & 2) && movement < NUM_MOVEMENT_TYPES) movementChanged = true;
++    }
++    if (TryGetObjectEventIdByLocalIdAndMap(localId, num, group, &objectId))
++    {
++        if (!(fields & 4) || i == OBJECT_EVENT_TEMPLATES_COUNT) return;
++        objectId = TrySpawnObjectEvent(localId, num, group);
++        if (objectId >= OBJECT_EVENTS_COUNT) return;
++    }
++    if (fields & 8)
++    {
++        RemoveObjectEvent(&gObjectEvents[objectId]);
++        return;
++    }
++    if (coordsChanged)
++        MoveObjectEventToMapCoords(&gObjectEvents[objectId], x + MAP_OFFSET, y + MAP_OFFSET);
++    if (movementChanged)
++        SetTrainerMovementType(&gObjectEvents[objectId], movement);
++}
++#endif
+ 
+ void TryOverrideObjectEventTemplateCoords(u8 localId, u8 mapNum, u8 mapGroup)
+ {

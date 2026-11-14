@@ -818,14 +818,10 @@ static uint32_t FadeOf(const Slot *slot, float *strength, uint32_t *colour)
  * fifth of the picture: the whole of it was drawn and uploaded every frame of
  * the slide, 3 ms a box in Azahar.
  */
-static void Compose(int index, int top, int bottom)
+static void ComposeValues(const Slot *slot, uint32_t *pic, bool numbers, const uint16_t *tiles, int top, int bottom)
 {
-    Slot *slot = &sSlots[index];
     const Layout *layout = &sLayouts[slot->kind];
-    uint32_t *pic = sPixels[index];
     int barX = Px(layout->barX), barY = Px(layout->barY);
-    bool numbers = layout->numbers && gBattleSpritesDataPtr
-                && gBattleSpritesDataPtr->battlerData[slot->battler].hpNumbersNoBars;
 
     sRowTop = top < 0 ? 0 : top;
     sRowBottom = bottom > CTR_HUD_H ? CTR_HUD_H : bottom;
@@ -837,8 +833,7 @@ static void Compose(int index, int top, int bottom)
     }
     memset(pic + sRowTop * CTR_HUD_W, 0, (size_t)(sRowBottom - sRowTop) * CTR_HUD_W * sizeof(pic[0]));
     /* The EXP label is only on the player's singles box. */
-    MakeLabels(slot->kind == CTR_HUD_SINGLE_PLAYER
-               ? (const uint16_t *)(OBJ_VRAM0 + gSprites[slot->sprite].oam.tileNum * TILE_SIZE_4BPP) : NULL);
+    MakeLabels(tiles);
     BlitOverNothing(pic, &sArt[ART_FRAME + slot->kind]);
 
     if (!layout->safari)
@@ -919,6 +914,16 @@ static void Compose(int index, int top, int bottom)
     }
     sRowTop = 0;
     sRowBottom = CTR_HUD_H;
+}
+
+static void Compose(int index, int top, int bottom)
+{
+    const Slot *slot = &sSlots[index];
+    bool numbers = sLayouts[slot->kind].numbers && gBattleSpritesDataPtr
+                && gBattleSpritesDataPtr->battlerData[slot->battler].hpNumbersNoBars;
+    const uint16_t *tiles = slot->kind == CTR_HUD_SINGLE_PLAYER
+        ? (const uint16_t *)(OBJ_VRAM0 + gSprites[slot->sprite].oam.tileNum * TILE_SIZE_4BPP) : NULL;
+    ComposeValues(slot, sPixels[index], numbers, tiles, top, bottom);
 }
 
 /* Rows [top, bottom) of the slot's picture to draw again. */
@@ -1210,6 +1215,84 @@ static bool SlotAlive(int i)
     return true;
 }
 
+#ifdef CTR_BATTLE_PRESENTATION
+static CtrPresentHud sPresentValues[CTR_HUD_BOXES];
+static CtrHudBox sPresentBoxes[CTR_HUD_BOXES];
+static uint32_t sPresentPixels[CTR_HUD_BOXES][CTR_HUD_W * CTR_HUD_H];
+
+void CtrBattleHud_PresentReset(void)
+{
+    memset(sPresentValues,0,sizeof(sPresentValues));
+    memset(sPresentBoxes,0,sizeof(sPresentBoxes));
+}
+
+void CtrBattleHud_PresentCapture(CtrPresentHud out[CTR_PRESENT_HUDS])
+{
+    memset(out,0,sizeof(CtrPresentHud)*CTR_PRESENT_HUDS);
+    for(unsigned i=0;i<CTR_HUD_BOXES;++i) {
+        const Slot *s=&sSlots[i];const CtrHudBox *b=&sBoxes[i];CtrPresentHud *h=&out[i];
+        if(!b->used) continue;
+        h->used=1;h->kind=s->kind;h->gender=s->gender;h->level=s->level;
+        memcpy(h->name,s->name,sizeof(s->name));h->name[11]=0xff;
+        h->hp=s->hp;h->maxHp=s->maxHp;h->hpPixels=s->hpPixels;h->hpColour=s->hpColour;
+        h->expPixels=s->expPixels;h->status=s->status;h->ball=s->ball;h->safariBalls=s->safariBalls;
+        h->numbers=sLayouts[s->kind].numbers && gBattleSpritesDataPtr
+            && gBattleSpritesDataPtr->battlerData[s->battler].hpNumbersNoBars;
+        h->boxTile=b->boxTile;h->boxTiles=b->boxTiles;h->barTile=b->barTile;h->barTiles=b->barTiles;
+        h->fade=b->fade;h->fadeColour=b->fadeColour;
+    }
+}
+
+static const CtrHudBox *PresentBoxes(const CtrBattlePresentFrame *frame)
+{
+    if(!(frame->flags&CTR_PRESENT_HD) || !CtrBattleHud_Ready()) return NULL;
+    for(unsigned i=0;i<CTR_HUD_BOXES;++i) {
+        const CtrPresentHud *h=&frame->hud[i];CtrHudBox *b=&sPresentBoxes[i];
+        b->used=h->used;
+        if(!h->used) continue;
+        b->fade=h->fade;b->fadeColour=h->fadeColour;
+        if(b->pixels && !memcmp(h,&sPresentValues[i],sizeof(*h))) continue;
+        int top=0,bottom=CTR_HUD_H;
+        CtrPresentHud old=sPresentValues[i],continuous=old;
+        continuous.fade=h->fade;continuous.fadeColour=h->fadeColour;
+        if(b->pixels && !memcmp(&continuous,h,sizeof(*h))) {
+            sPresentValues[i]=*h;continue; /* tint only, no texture upload */
+        }
+        continuous.hp=h->hp;continuous.hpPixels=h->hpPixels;continuous.hpColour=h->hpColour;
+        continuous.expPixels=h->expPixels;
+        if(b->pixels && !memcmp(&continuous,h,sizeof(*h))) {
+            const Layout *layout=&sLayouts[h->kind];
+            top=CTR_HUD_H;bottom=0;
+            if(old.hp!=h->hp || old.hpPixels!=h->hpPixels || old.hpColour!=h->hpColour) {
+                top=Px(layout->barY)-5;bottom=Px(layout->barY)+12;
+                if(layout->hpText && bottom<Px(24)+13) bottom=Px(24)+13;
+            }
+            if(old.expPixels!=h->expPixels) {
+                if(top>Px(34)) top=Px(34);
+                bottom=CTR_HUD_H;
+            }
+            if(b->changedBottom>b->changedTop) {
+                if(top>b->changedTop) top=b->changedTop;
+                if(bottom<b->changedBottom) bottom=b->changedBottom;
+            }
+        }
+        Slot slot={0};
+        slot.kind=h->kind;slot.gender=h->gender;slot.level=h->level;
+        memcpy(slot.name,h->name,sizeof(slot.name));slot.name[sizeof(slot.name)-1]=0xff;
+        slot.hp=h->hp;slot.maxHp=h->maxHp;slot.hpPixels=h->hpPixels;slot.hpColour=h->hpColour;
+        slot.expPixels=h->expPixels;slot.status=h->status;slot.ball=h->ball;slot.safariBalls=h->safariBalls;
+        const uint16_t *tiles=slot.kind==CTR_HUD_SINGLE_PLAYER
+            ? (const uint16_t *)(frame->vram+0x10000u+h->boxTile*32u) : NULL;
+        ComposeValues(&slot,sPresentPixels[i],h->numbers,tiles,top,bottom);
+        b->pixels=sPresentPixels[i];b->boxTile=h->boxTile;b->boxTiles=h->boxTiles;
+        b->barTile=h->barTile;b->barTiles=h->barTiles;
+        b->changedTop=top<0?0:top;b->changedBottom=bottom>CTR_HUD_H?CTR_HUD_H:bottom;
+        ++b->version;sPresentValues[i]=*h;
+    }
+    return sPresentBoxes;
+}
+#endif
+
 void CtrBattleHud_Clear(void)
 {
     for (int i = 0; i < CTR_HUD_BOXES; ++i)
@@ -1218,12 +1301,22 @@ void CtrBattleHud_Clear(void)
 
 void CtrBattleHud_Uploaded(unsigned index)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) {
+        if(index<CTR_HUD_BOXES) sPresentBoxes[index].changedTop=sPresentBoxes[index].changedBottom=0;
+        return;
+    }
+#endif
     if (index < CTR_HUD_BOXES)
         sBoxes[index].changedTop = sBoxes[index].changedBottom = 0;
 }
 
 const CtrHudBox *CtrBattleHud_Boxes(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *present=CtrBattlePresent_Current();
+    if(present) return PresentBoxes(present);
+#endif
     if (!CtrBattleHud_Ready())
         return NULL;
     for (int i = 0; i < CTR_HUD_BOXES; ++i)

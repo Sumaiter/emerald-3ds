@@ -41,8 +41,18 @@
 #define CTR_COOP_BATTLE_CHUNK_PACKET 37
 #define CTR_COOP_BATTLE_REQUEST_PACKET 38
 #define CTR_COOP_BATTLE_READY_PACKET 39
+/* 40..50 are reserved by the subsequent double-battle/logout sprints. */
+#define CTR_COOP_EVENT_REQUEST_PACKET 60
+#define CTR_COOP_EVENT_RESULT_PACKET 61
+#define CTR_COOP_EVENT_RELEASE_PACKET 62
+#define CTR_COOP_EVENT_ACK_PACKET 63
+#define CTR_COOP_PC_RECOVER_PACKET 64
+#define CTR_COOP_PC_RECOVER_SIZE 8
+#define CTR_COOP_EVENT_PACKET_SIZE 22
 #define CTR_COOP_BATTLE_RESERVE_SIZE 4
 #define CTR_COOP_BATTLE_RESERVE_RESULT_SIZE 4
+#define CTR_COOP_BATTLE_BEGIN_SIZE 12
+#define CTR_COOP_BATTLE_READY_SIZE 8
 #define CTR_COOP_PC_CONTROL_SIZE 2
 #define CTR_COOP_PC_RESULT_SIZE 3
 #define CTR_COOP_FLAG_SIZE 5
@@ -58,7 +68,7 @@
 #define CTR_COOP_SAVE_CHUNK_MAX (CTR_COOP_SAVE_CHUNK_HEADER + CTR_COOP_SAVE_CHUNK_DATA_MAX)
 #define CTR_COOP_SAVE_READY_SIZE 2
 #define CTR_COOP_PLAYER_NAME_SIZE 8
-#define CTR_COOP_PROTOCOL_VERSION 11
+#define CTR_COOP_PROTOCOL_VERSION 18
 #define CTR_COOP_GRAPHICS_ID_MAX 238
 #define CTR_COOP_PACKET_SIZE 15
 #define CTR_COOP_HEARTBEAT_FRAMES 60
@@ -150,8 +160,12 @@ bool CtrCoopProtocol_EncodeBattleReserve(uint16_t trainerId, uint8_t *out, uint1
 bool CtrCoopProtocol_DecodeBattleReserve(const uint8_t *data, uint16_t size, uint16_t *trainerId);
 bool CtrCoopProtocol_EncodeBattleReserveResult(uint16_t trainerId, bool accepted, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodeBattleReserveResult(const uint8_t *data, uint16_t size, uint16_t *trainerId, bool *accepted);
-bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize);
-bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum);
+bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint16_t sequence, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum, uint16_t *sequence);
+bool CtrCoopProtocol_EncodeBattleReady(uint16_t sequence, uint32_t checksum, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodeBattleReady(const uint8_t *data, uint16_t size, uint16_t *sequence, uint32_t *checksum);
+bool CtrCoopProtocol_EncodePcRecover(uint16_t sequence, uint32_t checksum, uint8_t *out, uint16_t outSize);
+bool CtrCoopProtocol_DecodePcRecover(const uint8_t *data, uint16_t size, uint16_t *sequence, uint32_t *checksum);
 bool CtrCoopProtocol_EncodeBattleRequest(uint32_t offset, uint8_t *out, uint16_t outSize);
 bool CtrCoopProtocol_DecodeBattleRequest(const uint8_t *data, uint16_t size, uint32_t *offset);
 bool CtrCoopProtocol_EncodeBattleChunk(uint32_t offset, const uint8_t *data, uint16_t dataSize, uint8_t *out, uint16_t outSize);

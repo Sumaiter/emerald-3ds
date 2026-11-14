@@ -183,6 +183,13 @@ void CtrPlatform_SleepUs(unsigned microseconds)
 
 void CtrPlatform_RequestExit(void) { sExit = true; }
 
+void CtrPlatform_CoopSyncWait(void)
+{
+    if (sExit || !aptMainLoop())
+        exit(0);
+    CtrPlatform_SleepUs(16000);
+}
+
 bool CtrPlatform_BeginFrame(void)
 {
     if (sExit || !aptMainLoop())
@@ -400,6 +407,23 @@ static void UpdateHomeAllowed(void)
     }
     if (!allowed && aptCheckHomePressRejected())
         CtrVideo_ShowNoHome();
+}
+
+void CtrPlatform_AfterStackReset(void)
+{
+    /* Host loss may longjmp from the VBlank hook below. Its old EndFrame
+     * never reaches the normal guard release, and must never be resumed. */
+    sWaiting = false;
+    sWorkStart = svcGetSystemTick();
+    sLastFrame = CtrPlatform_Milliseconds();
+    sLastTick = sExitStart = 0;
+    sFrameMs = 0;
+    sEarned = sHidden = 0;
+    sPaceStart = sShownTick = 0;
+    sPaceFrames = 0.0f;
+    sPacedFrame = false;
+    sSoundTick = true;
+    memset(&sTiming, 0, sizeof(sTiming));
 }
 
 void CtrPlatform_EndFrame(void)

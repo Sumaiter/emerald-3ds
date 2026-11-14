@@ -33,8 +33,12 @@ bool CtrPlatform_Init(void);
 void CtrPlatform_Shutdown(void);
 bool CtrPlatform_BeginFrame(void);
 void CtrPlatform_EndFrame(void);
+/* Only after longjmp has discarded every previous frame/game callback. */
+void CtrPlatform_AfterStackReset(void);
 void CtrPlatform_SetHooks(const CtrPlatformHooks *hooks);
 void CtrPlatform_RequestExit(void);
+/* Yield during an unresolved shared transaction without running game tasks. */
+void CtrPlatform_CoopSyncWait(void);
 void CtrPlatform_Fatal(const char *reason) __attribute__((noreturn));
 void CtrPlatform_ShowDataError(const char *title, const char *detail) __attribute__((noreturn));
 uint64_t CtrPlatform_Milliseconds(void);
@@ -166,6 +170,9 @@ void CtrGame_Init(void);
 /* The game's variables back to how AgbMain first saw them, AgbMain again:
  * returns only when the reset is unavailable. */
 void CtrGame_SoftReset(void);
+/* Discard the complete engine/RPC stack and reload the native main menu.
+ * Never resumes the caller, including when reset resources are unavailable. */
+void CtrGame_ReturnToMenu(void) __attribute__((noreturn));
 void CtrGame_VBlank(void);
 /* The field is on screen (CB2_Overworld), whichever way it is drawn. */
 bool CtrGame_IsOverworld(void);

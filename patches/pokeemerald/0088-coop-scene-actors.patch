@@ -1,0 +1,116 @@
+--- a/src/script_movement.c
++++ b/src/script_movement.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "script_movement.h"
+ #include "event_object_movement.h"
+ #include "task.h"
+@@ -31,6 +34,9 @@
+ 
+     if (TryGetObjectEventIdByLocalIdAndMap(localId, mapNum, mapGroup, &objEventId))
+         return TRUE;
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(mapGroup, mapNum, localId);
++#endif
+     if (!FuncIsActiveTask(ScriptMovement_MoveObjects))
+         ScriptMovement_StartMoveObjects(50);
+     return ScriptMovement_TryAddNewMovement(GetMoveObjectsTaskId(), objEventId, movementScript);
+--- a/src/scrcmd.c
++++ b/src/scrcmd.c
+@@ -1,6 +1,7 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
++#include "3ds_coop.h"
+ #endif
+ #include "frontier_util.h"
+ #include "battle_setup.h"
+@@ -53,6 +54,7 @@
+ #include "window.h"
+ #ifdef PORT_BRIDGE
+ #include "port_platform.h"
++#include "malloc.h"
+ #endif
+ #include "constants/event_objects.h"
+ 
+@@ -1077,6 +1079,9 @@
+ {
+     u16 localId = VarGet(ScriptReadHalfword(ctx));
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum, localId);
++#endif
+     RemoveObjectEventByLocalIdAndMap(localId, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup);
+     return FALSE;
+ }
+@@ -1087,6 +1092,9 @@
+     u8 mapGroup = ScriptReadByte(ctx);
+     u8 mapNum = ScriptReadByte(ctx);
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(mapGroup, mapNum, objectId);
++#endif
+     RemoveObjectEventByLocalIdAndMap(objectId, mapNum, mapGroup);
+     return FALSE;
+ }
+@@ -1094,7 +1102,12 @@
+ bool8 ScrCmd_addobject(struct ScriptContext *ctx)
+ {
+     u16 objectId = VarGet(ScriptReadHalfword(ctx));
+-    u8 objectEventId = TrySpawnObjectEvent(objectId, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup);
++    u8 objectEventId;
++
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum, objectId);
++#endif
++    objectEventId = TrySpawnObjectEvent(objectId, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup);
+ 
+ #ifdef PORT_BRIDGE
+     Port_SetBirchDebugEx(0x0422,
+@@ -1112,6 +1125,9 @@
+     u8 mapGroup = ScriptReadByte(ctx);
+     u8 mapNum = ScriptReadByte(ctx);
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(mapGroup, mapNum, objectId);
++#endif
+     TrySpawnObjectEvent(objectId, mapNum, mapGroup);
+     return FALSE;
+ }
+@@ -1122,6 +1138,9 @@
+     u16 x = VarGet(ScriptReadHalfword(ctx));
+     u16 y = VarGet(ScriptReadHalfword(ctx));
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum, localId);
++#endif
+     TryMoveObjectEventToMapCoords(localId, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup, x, y);
+     return FALSE;
+ }
+@@ -1188,7 +1207,13 @@
+ bool8 ScrCmd_faceplayer(struct ScriptContext *ctx)
+ {
+     if (gObjectEvents[gSelectedObjectEvent].active)
++    {
++#ifdef PLATFORM_3DS
++        const struct ObjectEvent *object = &gObjectEvents[gSelectedObjectEvent];
++        CtrCoop_ScriptActor(object->mapGroup, object->mapNum, object->localId);
++#endif
+         ObjectEventFaceOppositeDirection(&gObjectEvents[gSelectedObjectEvent], GetPlayerFacingDirection());
++    }
+     return FALSE;
+ }
+ 
+@@ -1197,6 +1222,9 @@
+     u16 localId = VarGet(ScriptReadHalfword(ctx));
+     u8 direction = ScriptReadByte(ctx);
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_ScriptActor(gSaveBlock1Ptr->location.mapGroup, gSaveBlock1Ptr->location.mapNum, localId);
++#endif
+     ObjectEventTurnByLocalIdAndMap(localId, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup, direction);
+     return FALSE;
+ }

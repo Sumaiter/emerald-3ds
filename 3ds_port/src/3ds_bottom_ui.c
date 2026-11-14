@@ -114,6 +114,7 @@
 #include "3ds_extras.h"
 #include "3ds_bottom_art.h"
 #include "3ds_coop.h"
+#include "3ds_coop_spectator.h"
 #include "3ds_coop_title.h"
 #include "3ds_clock_store.h"
 #include "3ds_input.h"
@@ -2272,6 +2273,7 @@ typedef struct
 {
     u8 mode, screen, pressed, gender, inBattle;
     u8 pcBusy, pcBusyName[8];
+    u8 watching, watchFrame, watchName[8];
     u8 title;                         /* MODE_OFF on the title screen */
     u16 enabled;                      /* bit per section */
     /* Whether the dock and the header are on screen (not under the game's
@@ -2369,6 +2371,9 @@ static bool8 DexShown(u8 mode)
 }
 
 static ViewState sState, sShown;
+/* Consume only the spectator's exit button, allowing a held direction to
+ * resume walking immediately without releasing the whole controller. */
+static u16 sSpectatorExitMask;
 static bool8 sForceRedraw = TRUE;
 static bool8 sInGame;
 static u8 sScreen = SCR_MAP;
@@ -3539,10 +3544,16 @@ static void Snapshot(ViewState *s, u8 mode, u8 pressed)
 {
     memset(s, 0, sizeof(*s));
     s->mode = mode;
-    if (mode == MODE_FIELD && CtrCoop_PCNoticeName() != NULL)
+    if (CtrCoop_IsWatching())
     {
-        s->pcBusy = TRUE;
-        memcpy(s->pcBusyName, CtrCoop_PCNoticeName(), sizeof(s->pcBusyName));
+        s->watching = TRUE;
+        s->watchFrame = CtrCoopSpectator_HasFrame();
+        memcpy(s->watchName, CtrCoop_WatchingName(), sizeof(s->watchName));
+    }
+    if (mode == MODE_FIELD && CtrCoop_NoticeName() != NULL)
+    {
+        s->pcBusy = CtrCoop_NoticeIsInteraction() ? 2 : 1;
+        memcpy(s->pcBusyName, CtrCoop_NoticeName(), sizeof(s->pcBusyName));
     }
     s->pressed = pressed;
     s->pickMapsec = MAPSEC_NONE;
@@ -5166,17 +5177,58 @@ static void MapCacheTake(void)
 static void DrawPcBusy(const ViewState *s)
 {
     const Rgb ink = {30, 57, 61};
-    const u8 *line = Ascii("PC wird gerade von");
+    const u8 *line = Ascii(s->pcBusy == 2 ? "Hier spricht / kaempft" : "PC wird gerade von");
     ShadeRect(0, 0, W, H);
     FillRect(14, 71, W - 28, 108, PackRgb(24, 116, 100));
     FillRect(17, 74, W - 34, 102, PackRgb(252, 245, 234));
     DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2, 83, 4, ink, sCream, NULL);
     DrawSmoothStr(&sNormal, s->pcBusyName, (W - SmoothInkWidth(&sNormal, s->pcBusyName, 6)) / 2,
                   105, 6, ink, sCream, NULL);
-    line = Ascii("benutzt.");
+    line = Ascii(s->pcBusy == 2 ? "gerade. Bitte warten." : "benutzt.");
     DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2, 133, 4, ink, sCream, NULL);
     line = Ascii("A / B oder tippen: Zurueck");
     DrawSmoothStr(&sSmall, line, (W - SmoothInkWidth(&sSmall, line, 4)) / 2, 156, 4, ink, sCream, NULL);
+}
+
+static void DrawSpectator(const ViewState *s)
+{
+    const Rgb ink = {30, 57, 61};
+    const u8 *line;
+    FillRect(0, 0, W, H, PackRgb(20, 74, 70));
+    FillRect(14, 24, W - 28, 112, PackRgb(252, 245, 234));
+    line = Ascii("Du schaust dem Kampf von");
+    DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2,
+                  39, 4, ink, sCream, NULL);
+    DrawSmoothStr(&sNormal, s->watchName, (W - SmoothInkWidth(&sNormal, s->watchName, 6)) / 2,
+                  67, 6, ink, sCream, NULL);
+    line = Ascii(s->watchFrame ? "zu." : "Kampfbild wird geladen ...");
+    DrawSmoothStr(&sSmall, line, (W - SmoothInkWidth(&sSmall, line, 4)) / 2,
+                  104, 4, ink, sCream, NULL);
+    FillRect(36, 156, W - 72, 54, PackRgb(252, 245, 234));
+    FillRect(39, 159, W - 78, 48, PackRgb(41, 143, 112));
+    /* The locale converter has no ASCII parentheses; keep every glyph in
+     * this action label supported instead of displaying '?B?'. */
+    line = Ascii("B: Zuschauen verlassen");
+    DrawSmoothStr(&sNormal, line, (W - SmoothInkWidth(&sNormal, line, 4)) / 2,
+                  176, 4, sWhite, (Rgb){41, 143, 112}, NULL);
+}
+
+void CtrBottom_CoopSyncWait(void)
+{
+    const Rgb ink = {30, 57, 61};
+    const u8 *line;
+    if (!sRes.ready) return;
+    ResolveFonts();
+    sDst=sCanvas; sOX=0;
+    sClipX0=sClipY0=sClipX1=sClipY1=0;
+    FillRect(0,0,W,H,PackRgb(20,74,70));
+    FillRect(18,77,W-36,86,PackRgb(252,245,234));
+    line=Ascii("Warte auf Verbindung ...");
+    DrawSmoothStr(&sNormal,line,(W-SmoothInkWidth(&sNormal,line,4))/2,99,4,ink,sCream,NULL);
+    line=Ascii("Gemeinsamer Stand wird abgeglichen.");
+    DrawSmoothStr(&sSmall,line,(W-SmoothInkWidth(&sSmall,line,3))/2,132,3,ink,sCream,NULL);
+    CtrBottom_Blit(sCanvas,0,W);
+    sForceRedraw=TRUE;
 }
 
 static void Render(const ViewState *s)
@@ -5221,7 +5273,12 @@ static void Render(const ViewState *s)
     sDst = sCanvas;
     sOX = 0;
 
-    if (s->mode == MODE_OFF)
+    if (s->watching)
+    {
+        DrawSpectator(s);
+        phase[1] = phase[2] = CtrPlatform_Ticks();
+    }
+    else if (s->mode == MODE_OFF)
     {
         memset(sCanvas, 0, sizeof(sCanvas));
         phase[1] = CtrPlatform_Ticks();
@@ -5467,7 +5524,7 @@ static bool8 DirtyRect(const ViewState *now, const ViewState *shown, Rect *r)
     bool8 battle = now->mode >= MODE_BATTLE_INFO;
     bool8 iconsOnly = FALSE;
 
-    if (now->pcBusy || shown->pcBusy)
+    if (now->pcBusy || shown->pcBusy || now->watching || shown->watching)
         return FALSE;
     if (now->mode != shown->mode || now->screen != shown->screen || now->dock != shown->dock)
         return FALSE;
@@ -6646,12 +6703,24 @@ static u8 ProcessTouch(u8 mode)
 {
     const CtrInput *in = CtrInput_Get();
 
-    if (CtrCoop_PCNoticeName() != NULL)
+    if (CtrCoop_IsWatching())
+    {
+        sTouch.active = sTouch.bag = FALSE;
+        if (sShown.watching && in->touchDown && in->touchX >= 36 && in->touchX < W - 36
+         && in->touchY >= 156 && in->touchY < 210)
+        {
+            CtrCoopSpectator_Stop();
+            sSpectatorExitMask = 0;
+        }
+        return HIT_NONE;
+    }
+
+    if (CtrCoop_NoticeName() != NULL)
     {
         sTouch.active = sTouch.bag = FALSE;
         if (in->touchDown && sShown.pcBusy)
         {
-            CtrCoop_DismissPCNotice();
+            CtrCoop_DismissNotice();
             sSwallow = TRUE;
         }
         return HIT_NONE;
@@ -6874,13 +6943,15 @@ static u8 ProcessTouch(u8 mode)
  */
 uint16_t CtrBottom_FilterKeys(uint16_t held)
 {
+    sSpectatorExitMask &= held;
+    held &= ~sSpectatorExitMask;
     /* The soft reset's chord reaches the game whatever has the buttons
      * (main.c reads it from them), and only that; not while the game
      * forbids the reset (a link save). */
     if ((held & CTR_SOFT_RESET_KEYS) == CTR_SOFT_RESET_KEYS && !gSoftResetDisabled)
         return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow ? CTR_SOFT_RESET_KEYS : held;
     return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow || sMapFly
-        || CtrCoop_PCNoticeName() != NULL ? 0 : held;
+        || CtrCoop_NoticeName() != NULL || CtrCoop_IsWatching() ? 0 : held;
 }
 
 /* Whether the dock is on screen: not in battle, not under the boxes or the
@@ -7029,11 +7100,21 @@ static void ProcessKeys(u8 mode)
     u16 down = in->down;
     bool8 x = (in->physicalDown & CTR_KEY_X) != 0;
 
-    if (CtrCoop_PCNoticeName() != NULL)
+    if (CtrCoop_IsWatching())
+    {
+        if (down & B_BUTTON)
+        {
+            CtrCoopSpectator_Stop();
+            sSpectatorExitMask = B_BUTTON;
+        }
+        return;
+    }
+
+    if (CtrCoop_NoticeName() != NULL)
     {
         if (sShown.pcBusy && (down & (A_BUTTON | B_BUTTON)))
         {
-            CtrCoop_DismissPCNotice();
+            CtrCoop_DismissNotice();
             sSwallow = TRUE;
         }
         return;
@@ -7364,6 +7445,7 @@ static void BottomProfile(u32 frame, u8 mode, const uint64_t ticks[3], unsigned 
  */
 void CtrBottom_SoftReset(void)
 {
+    sSpectatorExitMask = 0;
     sInGame = FALSE;
     memset(&sSession, 0, sizeof(sSession));
     memset(&sPlan, 0, sizeof(sPlan));

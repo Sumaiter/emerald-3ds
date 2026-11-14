@@ -1,0 +1,131 @@
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -1,6 +1,7 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_coop.h"
++#include "3ds_coop_npc_motion.h"
+ #include "constants/local_link.h"
+ #endif
+ #include "malloc.h"
+@@ -2866,6 +2867,112 @@
+ }
+ 
+ #ifdef PLATFORM_3DS
++bool CtrCoop_EngineNpcMotionCapture(u8 group, u8 num, u8 localId, CtrCoopNpcMotionPose *pose)
++{
++    u8 id;
++    const struct ObjectEvent *object;
++    if (!pose || group != gSaveBlock1Ptr->location.mapGroup || num != gSaveBlock1Ptr->location.mapNum
++     || TryGetObjectEventIdByLocalIdAndMap(localId, num, group, &id) || id >= OBJECT_EVENTS_COUNT) return false;
++    object = &gObjectEvents[id];
++    if (!object->active || object->isPlayer || localId == LOCALID_COOP_PLAYER || localId >= 254 || !localId
++     || object->spriteId >= MAX_SPRITES || !gSprites[object->spriteId].inUse
++     || gSprites[object->spriteId].sObjEventId != id) return false;
++    memset(pose, 0, sizeof(*pose));
++    pose->group = group; pose->num = num; pose->id = localId;
++    pose->x = object->currentCoords.x; pose->y = object->currentCoords.y;
++    pose->facing = object->facingDirection; pose->graphics = object->graphicsId;
++    pose->action = object->heldMovementActive && !object->heldMovementFinished ? object->movementActionId : MOVEMENT_ACTION_NONE;
++    pose->flags = (object->heldMovementActive && !object->heldMovementFinished ? 1 : 0) | (object->invisible ? 2 : 0);
++    return true;
++}
++
++static bool NpcMotionTravels(u8 action)
++{
++    return (action >= 0x04 && action <= 0x0F) || (action >= 0x15 && action <= 0x18)
++        || (action >= 0x29 && action <= 0x38) || (action >= 0x3A && action <= 0x3D)
++        || (action >= 0x42 && action <= 0x45) || (action >= 0x62 && action <= 0x63)
++        || (action >= 0x74 && action <= 0x7B) || (action >= 0x80 && action <= 0x93)
++        || action == 0x96 || action == 0x97;
++}
++
++static u8 NpcMotionTravelAction(u8 action, s16 dx, s16 dy)
++{
++    u8 dir = dx < 0 ? DIR_WEST : dx > 0 ? DIR_EAST : dy < 0 ? DIR_NORTH : DIR_SOUTH;
++    if (dx && dy && action >= 0x8C && action <= 0x93)
++        return (action < 0x90 ? 0x8C : 0x90) + (dy > 0 ? 2 : 0) + (dx > 0 ? 1 : 0);
++    if (action >= 0x0C && action <= 0x0F && (dx >= 2 || dx <= -2 || dy >= 2 || dy <= -2))
++        return GetJump2MovementAction(dir);
++    if ((action >= 0x42 && action <= 0x45) || (action >= 0x3A && action <= 0x3D))
++        return GetJumpMovementAction(dir);
++    if (action >= 0x04 && action <= 0x07) return GetWalkSlowMovementAction(dir);
++    if (action >= 0x15 && action <= 0x18) return GetWalkFastMovementAction(dir);
++    if (action >= 0x29 && action <= 0x2C) return GetRideWaterCurrentMovementAction(dir);
++    if (action >= 0x2D && action <= 0x30) return GetWalkFasterMovementAction(dir);
++    if (action >= 0x31 && action <= 0x34) return GetSlideMovementAction(dir);
++    if (action >= 0x35 && action <= 0x38) return GetPlayerRunMovementAction(dir);
++    if (action >= 0x74 && action <= 0x77) return GetAcroWheelieHopDirectionMovementAction(dir);
++    if (action >= 0x78 && action <= 0x7B) return GetAcroWheelieJumpDirectionMovementAction(dir);
++    if (action >= 0x80 && action <= 0x83) return GetAcroPopWheelieMoveDirectionMovementAction(dir);
++    if (action >= 0x84 && action <= 0x87) return GetAcroWheelieMoveDirectionMovementAction(dir);
++    if (action >= 0x88 && action <= 0x8B) return GetAcroEndWheelieMoveDirectionMovementAction(dir);
++    return GetWalkNormalMovementAction(dir);
++}
++
++int CtrCoop_EngineNpcMotionApply(const CtrCoopNpcMotionPose *pose, CtrCoopNpcMotionPlayback *state, bool ending)
++{
++    u8 id, action;
++    s16 dx, dy;
++    struct ObjectEvent *object;
++    if (!pose || !state || pose->group != gSaveBlock1Ptr->location.mapGroup || pose->num != gSaveBlock1Ptr->location.mapNum
++     || pose->x < 0 || pose->y < 0 || (u32)pose->x >= (u32)gMapHeader.mapLayout->width + MAP_OFFSET * 2
++     || (u32)pose->y >= (u32)gMapHeader.mapLayout->height + MAP_OFFSET * 2
++     || pose->graphics >= NUM_OBJ_EVENT_GFX || pose->facing < DIR_SOUTH || pose->facing > DIR_EAST
++     || (pose->action > MOVEMENT_ACTION_FLY_DOWN && pose->action != MOVEMENT_ACTION_NONE)) return -1;
++    if (TryGetObjectEventIdByLocalIdAndMap(pose->id, pose->num, pose->group, &id)) return -1;
++    object = &gObjectEvents[id];
++    if (!object->active || object->isPlayer || pose->id == LOCALID_COOP_PLAYER || pose->id >= 254 || !pose->id
++     || object->spriteId >= MAX_SPRITES || !gSprites[object->spriteId].inUse
++     || gSprites[object->spriteId].sObjEventId != id) return -1;
++    if (!state->attached)
++    {
++        state->attached = true; state->wasFrozen = object->frozen;
++        state->objectId = id; state->spriteId = object->spriteId;
++    }
++    else if (state->objectId != id || state->spriteId != object->spriteId) return -1;
++    /* Finish an existing autonomous mini-step using its native action before
++     * taking ownership. Freezing without this would strand it between tiles. */
++    object->frozen = TRUE;
++    if (object->singleMovementActive)
++    {
++        if (object->movementActionId > MOVEMENT_ACTION_FLY_DOWN) return -1;
++        if (ObjectEventExecSingleMovementAction(object, &gSprites[object->spriteId]))
++            object->singleMovementActive = FALSE;
++        return 0;
++    }
++    if (ObjectEventIsHeldMovementActive(object) && !ObjectEventClearHeldMovementIfFinished(object)) return 0;
++    if (object->graphicsId != pose->graphics) ObjectEventSetGraphicsId(object, pose->graphics);
++    object->invisible = (pose->flags & 2) != 0;
++    dx = pose->x - object->currentCoords.x; dy = pose->y - object->currentCoords.y;
++    if (dx || dy)
++    {
++        action = NpcMotionTravelAction(pose->action, dx, dy);
++        if (!ObjectEventSetHeldMovement(object, action)) state->playedAction = pose->actionSerial;
++        return 0;
++    }
++    if (!ending && pose->actionSerial != state->playedAction && (pose->flags & 1)
++     && !NpcMotionTravels(pose->action) && pose->action > MOVEMENT_ACTION_FACE_RIGHT
++     && pose->action != MOVEMENT_ACTION_FACE_PLAYER && pose->action != MOVEMENT_ACTION_FACE_AWAY_PLAYER
++     && pose->action != MOVEMENT_ACTION_FACE_ORIGINAL_DIRECTION && pose->action != MOVEMENT_ACTION_NONE)
++    {
++        if (!ObjectEventSetHeldMovement(object, pose->action)) state->playedAction = pose->actionSerial;
++        return 0;
++    }
++    state->playedAction = pose->actionSerial;
++    if (object->facingDirection != pose->facing) ObjectEventTurn(object, pose->facing);
++    if (ending) object->frozen = state->wasFrozen;
++    return 1;
++}
++
+ bool CtrCoop_EngineStoryNpcAvailable(u8 group, u8 num, u8 localId)
+ {
+     const struct ObjectEventTemplate *object;
+@@ -5334,6 +5441,7 @@
+     gSprites[objectEvent->spriteId].sActionFuncId = 0;
+ #ifdef PLATFORM_3DS
+     CtrCoopBike_MovementStarted(objectEvent, movementActionId);
++    CtrCoopNpcMotion_Started(objectEvent->mapGroup, objectEvent->mapNum, objectEvent->localId);
+ #endif
+     return FALSE;
+ }

@@ -47,6 +47,7 @@ EXESUFFIX := $(if $(filter Windows_NT,$(OS)),.exe,)
 SOURCES := src/main_3ds.c src/3ds_log.c src/3ds_platform.c src/3ds_input.c src/3ds_input_decode.c src/3ds_fs.c src/3ds_audio.c src/3ds_icons_ptbr.c
 SOURCES += src/3ds_data.c src/3ds_pak.c src/3ds_settings.c src/3ds_prof.c src/3ds_gpumem.c src/3ds_scenario.c
 SOURCES += src/3ds_video.c src/3ds_video_decode.c src/3ds_bottom_screen.c
+SOURCES += src/3ds_battle_present.c
 # The Game Corner's backdrops (include/3ds_corner_art.h).
 SOURCES += src/3ds_corner_art.c
 # The Pokédex on the top screen (include/3ds_dex_top.h).
@@ -64,6 +65,9 @@ LIBS := -lcitro2d -lcitro3d $(LIBS)
 OBJECTS := $(patsubst src/%.c,build/%.o,$(SOURCES))
 GAMEFLAGS := -DPORTABLE -DPLATFORM_3DS -D__3DS__ -DMODERN=1 -DUBFIX -D__INTELLISENSE__
 GAMEFLAGS += -iquote include -iquote ../include -iquote ../include/constants -iquote ..
+# Keep native video and the HUD/voxel bridge on the same presentation format.
+CPPFLAGS += -DCTR_BATTLE_PRESENTATION
+GAMEFLAGS += -DCTR_BATTLE_PRESENTATION
 # Baked clock-driven lighting and contact shadows, targeting Old 3DS.
 VOXEL_LIGHTING ?= 1
 ifneq ($(VOXEL_LIGHTING),0)
@@ -430,12 +434,78 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	./build/local_session_test$(EXESUFFIX)
 	./build/local_build_test$(EXESUFFIX)
 	"$(PYTHON)" tests/coop_join_flow_test.py
+	"$(PYTHON)" tests/test_coop_event_hooks.py --source $(STARTER_MENU_ROOT)/src
+	"$(PYTHON)" tests/test_coop_scene_hooks.py --source $(STARTER_MENU_ROOT)/src
+	"$(PYTHON)" tests/test_coop_battle_return_hooks.py --source $(STARTER_MENU_ROOT)/src
+	"$(PYTHON)" tests/test_coop_spectator.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_spectator_video.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_spectator_benchmark.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_battle_present.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_battle_present_world.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_battle_present_hud.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_battle_present_patch.py
+	"$(PYTHON)" tests/test_coop_story_hooks.py --source $(STARTER_MENU_ROOT)/src
+	"$(PYTHON)" tests/test_coop_npc_motion_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_npc_save_barriers.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_remote_grass.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_live_hooks.py --source $(STARTER_MENU_ROOT)/src
+	"$(PYTHON)" tests/test_coop_inventory_engine.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_inventory_bridge.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_money_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_transport.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_guest_reset.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_frame_reset.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_reset_menu_callbacks.py --cc "$(HOSTCC)"
+	./build/coop_inventory_test$(EXESUFFIX)
+	./build/coop_money_test$(EXESUFFIX)
+	./build/coop_guest_disconnect_test$(EXESUFFIX)
+	./build/coop_scene_regression_test$(EXESUFFIX)
+	./build/coop_story_regression_test$(EXESUFFIX)
+	./build/coop_live_regression_test$(EXESUFFIX)
+	./build/coop_npc_motion_test$(EXESUFFIX)
+
+verify-coop: build/coop_scene_regression_test$(EXESUFFIX)
+verify-coop: build/coop_story_regression_test$(EXESUFFIX) build/coop_live_regression_test$(EXESUFFIX)
+verify-coop: build/coop_inventory_test$(EXESUFFIX) build/coop_money_test$(EXESUFFIX)
+verify-coop: build/coop_guest_disconnect_test$(EXESUFFIX)
+verify-coop: build/coop_npc_motion_test$(EXESUFFIX)
+
+build/coop_npc_motion_test$(EXESUFFIX): tests/coop_npc_motion_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_story.inc src/3ds_coop_npc_motion.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h include/3ds_coop_npc_motion.h include/3ds_coop_inventory.h include/3ds_coop_inventory_bridge.h include/3ds_coop_money.h include/3ds_coop_spectator.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_npc_motion_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+
+build/coop_guest_disconnect_test$(EXESUFFIX): tests/coop_guest_disconnect_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_story.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_guest_disconnect_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+
+build/coop_inventory_test$(EXESUFFIX): tests/coop_inventory_test.c src/3ds_coop_inventory.c include/3ds_coop_inventory.h
+	@mkdir -p build
+	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_inventory_test.c src/3ds_coop_inventory.c -o $@
+
+build/coop_money_test$(EXESUFFIX): tests/coop_money_test.c tests/coop_host/main.h tests/coop_host/global.h src/3ds_coop_money.c src/3ds_coop_inventory.c include/3ds_coop_money.h include/3ds_coop_inventory.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -Itests/coop_host -Iinclude tests/coop_money_test.c src/3ds_coop_inventory.c -o $@
+
+# These suites include the production backend and its shared external seams.
+build/coop_session_test$(EXESUFFIX) build/coop_runtime_test$(EXESUFFIX) build/coop_scene_regression_test$(EXESUFFIX) build/coop_story_regression_test$(EXESUFFIX) build/coop_live_regression_test$(EXESUFFIX) build/coop_guest_disconnect_test$(EXESUFFIX): tests/coop_live_fixture.inc src/3ds_coop_story.inc src/3ds_coop_npc_motion.inc include/3ds_coop_inventory.h include/3ds_coop_inventory_bridge.h include/3ds_coop_money.h include/3ds_coop_spectator.h include/3ds_coop_npc_motion.h
+
+build/coop_story_regression_test$(EXESUFFIX): tests/coop_story_regression_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_story.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_story_regression_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+
+build/coop_live_regression_test$(EXESUFFIX): tests/coop_live_regression_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_story.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_live_regression_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+
+build/coop_scene_regression_test$(EXESUFFIX): tests/coop_scene_regression_test.c tests/coop_session_test.c tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_scene_regression_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
 
 build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_storage.c include/3ds_coop_storage.h
 	@mkdir -p $(@D)
 	$(HOSTCC) -std=c99 -O2 -Wall -Wextra -Werror -Iinclude tests/coop_storage_test.c src/3ds_coop_storage.c -o $@
 
-build/coop_session_test$(EXESUFFIX): tests/coop_session_test.c tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
+build/coop_session_test$(EXESUFFIX): tests/coop_session_test.c tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
 	@mkdir -p build
 	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=5 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
 

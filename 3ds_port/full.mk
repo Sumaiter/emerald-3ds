@@ -83,6 +83,8 @@ BACKEND_SRCS += src/3ds_nuzlocke_game.c
 # talks to (its radio is src/3ds_local.c).
 BACKEND_SRCS += src/3ds_rfu_adapter.c
 BACKEND_SRCS += src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_profile.c src/3ds_coop_storage.c
+BACKEND_SRCS += src/3ds_coop_spectator.c src/3ds_coop_inventory.c src/3ds_coop_inventory_bridge.c
+BACKEND_SRCS += src/3ds_coop_money.c
 BACKEND_SRCS += src/3ds_coop_battle.c
 BACKEND_SRCS += src/3ds_coop_bike.c
 BACKEND_SRCS += src/3ds_coop_walk.c

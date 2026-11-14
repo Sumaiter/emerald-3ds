@@ -1,6 +1,24 @@
 # Status: Emerald 3DS Koop-Mod
 
-Stand: 2026-11-12
+Stand: 2026-11-14
+
+Neuester Emulatornachtest: Gras beim entfernten Spieler fehlt weiterhin;
+Zuschauen ist verbessert, aber noch laggy. Beide Nachtests sind NICHT bestanden
+und als getrennte Issues zurueckgestellt: [Gras #1](https://github.com/Sumaiter/emerald-3ds/issues/1)
+und [Zuschauen #2](https://github.com/Sumaiter/emerald-3ds/issues/2).
+Auf Nutzerwunsch folgen jetzt Upstreampruefung und Sprint6-Integration.
+Der neue Build wurde anhand beider Logs bestaetigt.
+Die anderen vom Nutzer bestaetigten Standardtests bleiben anerkannt.
+
+Aktuelle Sprint-5-Abnahme: Der Nutzer bestaetigt die bisherigen Standardtests
+sowie Host-F6/Gast-Hauptmenue, Zuschauer-B-Beschriftung und NPC-Marktfuehrung.
+Grasbewegung und lokale Zuschauerpraesentation sind jetzt implementiert,
+gemeinsam im Hintergrund geprueft und als neuer Release/PAK gebaut.
+Der gezielte Emulatornachtest dieser zwei Aenderungen steht aus; insbesondere
+ist die praktische Zuschauerfluessigkeit noch nicht abgenommen. Unter Rueckstau
+koennen kurze Displayzustaende weiterhin fehlen. Einzelne Grenzfaelle und die
+Reservierung einmaliger fester Wildgegner bleiben offen. Details in HANDOFF.md
+und LOKAL_TESTEN.md. Sprint 9 ist fuer vollstaendiges Solospiel eingeplant.
 
 ## Ziel
 
@@ -25,10 +43,11 @@ Festgelegte Grenzen: maximal zehn gespeicherte Gastnamen pro Host-Spielstand, oh
 | 2 | Local-Wireless-Lobby und Passwort-Beitritt | Fertig |
 | 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | Fertig |
 | 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Fertig |
-| 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | Offen |
+| 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | In Arbeit: Standardtests bestanden; Gras-/Zuschauer-Nachtest und Grenzfaelle offen |
 | 6 | Gemeinsame Doppelkämpfe | Offen |
 | 7 | Abmeldung, Verbindungsabbrüche und sicheres Speichern | Offen |
 | 8 | Hardwaretests, Stabilisierung und spielbare Alpha | Offen |
+| 9 | Vollständiges Solospiel: Entwicklungen und frühere Event-Inhalte | Offen |
 
 ## Multiplayer-Review vom 2026-11-12
 
@@ -202,42 +221,48 @@ Abgenommen auf Branch `sprint-4` mit zwei isolierten Azahar-Instanzen und neun a
 
 ## Sprint 5: Unabhängige Einzelkämpfe und gemeinsame Trainerwelt
 
-**Status: Integriert aus origin/sprint-5; automatische Tests bestanden, Emulator-/Hardware-Abnahme offen.**
+**Status: In Arbeit. Standardablaeufe vom Nutzer im Emulator bestanden; Gras-/Zuschauer-Nachtest, einzelne Grenzfaelle und Hardware-Abnahme offen.**
 
 ### Aufgaben
 
 - [x] Wilde Begegnungen und Trainerkämpfe auch durch den Gast auslösbar machen.
 - [x] Einzelkämpfe mit der Gruppe des auslösenden Spielers durchführen.
 - [x] Oberwelt auf einer Konsole und Kampf auf der anderen gleichzeitig betreiben.
-- [ ] Trainer und nicht wiederholbare Gegner während eines ausgelösten Kampfes reservieren.
+- [x] Trainer bereits waehrend Dialog und Kampf reservieren; erneuten Einstieg nach gemeinsamem Szenarioabschluss verhindern (Nutzertest bestanden).
+- [ ] Einmalige feste Wildgegner waehrend eines ausgeloesten Kampfes reservieren.
 - [x] Kampfsiege, besiegte Trainer und andere Weltänderungen Host-autoritativ übernehmen.
 - [x] EP, Level, Fangversuche und Teamveränderungen der richtigen Spielergruppe zuordnen.
 - [x] Niederlagen, Flucht und Rückkehr zur Oberwelt für beide Spielerrollen behandeln.
 - [x] Doppelte Belohnungen und mehrfaches Auslösen desselben Gegners verhindern.
 
 
-Integrierte Quelle: `1be2515` (Implementierung `dbb9ff0` plus Sprint-5-Tests).
-Der neuere main-Stand und alle lokalen Grafik-, Gastnamen-, Beitritts- und
-PC-Meldungskorrekturen bleiben erhalten. Protokollversion 11 verwendet freie
-Kampf-Paketnummern 33..39. Ergebnisse haben Sequenznummern, werden atomar und
-ohne doppelte Belohnungen angewendet und warten bei aktiven lokalen Kaempfen
-oder PC-Besuchen. Auch wilde Gastkaempfe stimmen den Start mit dem Host ab;
-der PC bleibt waehrend aktiver Kaempfe und offener Ergebnisuebertragungen
-gesperrt. Zwei unabhaengige Kaempfe bleiben moeglich.
+Urspruenglich integrierte Quelle: `1be2515` (Implementierung `dbb9ff0` plus Sprint-5-Tests).
+Der aktuelle Stand nutzt Protokoll18 und behaelt die Grafik-, Gastnamen-,
+Beitritts- und PC-Meldungskorrekturen. Trainer- und Szenariosperren greifen
+bereits vor dem Kampfeinstieg; abgeschlossene Szenen werden gemeinsam
+uebernommen. Ergebnisse sind sequenziert und werden ohne doppelte Belohnungen
+angewendet. Gemeinsame Gegenstaende und Geld werden waehrend des Spiels
+synchronisiert; am Kampfende werden diese Liveaenderungen nicht erneut addiert.
+Getrennte Spielergruppen und zwei unabhaengige Kaempfe bleiben moeglich.
+Neu hinzu kommen Schritt-Graseffekte fuer entfernte Spieler und lokale
+Zuschauerpraesentation. Buildkennungen und Nachtestgrenzen in LOKAL_TESTEN.md.
 
 Automatisch geprueft: Reservierung/Wiederholung, getrennte Spielerreihen,
 verschluesselte Geld-/Itemmengen nach Save-Rekey, wiederholte/alte Ergebnisse,
 Kollisionen mehrerer Faenge, volle Boxen ohne Teiluebernahme, Inventarfehler,
 Transferfortsetzung sowie Kampf-/PC-Rennen. Statische einmalige Wildgegner
 haben im uebernommenen Branch noch keine eigene Gegnerreservierung; dieser
-Teil der Aufgabe bleibt offen. Die Abnahme unten ist ein manueller Nutzertest.
+Teil der Aufgabe bleibt offen. Die Standardabnahme unten beruht auf der
+Rueckmeldung des Nutzers vom 2026-11-14. Die aktuelle Gras-/Zuschauer-Fixwelle
+wartet auf ihren gezielten Nachtest; Einzelheiten und weitere Grenzfaelle
+stehen in `LOKAL_TESTEN.md`.
 
 ### Akzeptanzkriterien
 
-- [ ] Beide Spieler können unabhängig voneinander Einzelkämpfe auslösen und abschließen.
-- [ ] Ein Spieler kann weiterlaufen oder selbst kämpfen, während der andere im Kampf ist.
-- [ ] Derselbe Trainer kann nicht gleichzeitig zweimal herausgefordert werden.
-- [ ] Kampfergebnisse sind nach einem Speichern und Neuladen auf beiden Seiten konsistent.
+- [x] Beide Spieler können unabhängig voneinander Einzelkämpfe auslösen und abschließen.
+- [x] Ein Spieler kann weiterlaufen oder selbst kämpfen, während der andere im Kampf ist.
+- [x] Derselbe Trainer kann nicht gleichzeitig zweimal herausgefordert werden.
+- [x] Kampfergebnisse sind nach einem Speichern und Neuladen auf beiden Seiten konsistent.
 
 ## Sprint 6: Gemeinsame Doppelkämpfe
 
@@ -304,6 +329,49 @@ Teil der Aufgabe bleibt offen. Die Abnahme unten ist ein manueller Nutzertest.
 - [ ] Build und automatisierte Tests bestehen aus einem sauberen Checkout.
 - [ ] Veröffentlichte Archive enthalten keine ROMs, Spielstände oder anderen nicht freigegebenen Spieldaten.
 
+## Sprint 9: Vollständiges Solospiel und dauerhaft erreichbare Pokémon
+
+**Status: Offen — nach Sprint 8 geplant**
+
+Das Spiel soll einschließlich seiner vorgesehenen Pokémon und Inhalte auf
+einem Gerät allein durchspielbar sein. Ein zweiter Spieler, ein externer
+Tausch und historische Event-Verteilungen dürfen dafür keine Voraussetzung
+sein. Koop bleibt optional nutzbar. Dieser Sprint ist ein eigener Ausbau;
+die laufenden Fehlerkorrekturen aus Sprint 5 werden dadurch nicht ersetzt.
+
+### Aufgaben
+
+- [ ] Alle Entwicklungen und Erwerbswege auf Abhängigkeiten von Tausch,
+  anderen Editionen, externen Verteilungen und heute fehlendem Event-Zugang
+  prüfen; vollständige Liste der betroffenen Pokémon und Inhalte erstellen.
+- [ ] Für reine Tauschentwicklungen regulär erreichbare Solo-Bedingungen
+  festlegen und umsetzen; auch Tauschentwicklungen mit getragenem Item abdecken.
+- [ ] Ehemalige Event-Pokémon und zugehörige Orte, Schlüsselitems oder
+  Freischaltungen durch dauerhaft verfügbare Ingame-Wege erreichbar machen,
+  etwa über Aufgaben, NPCs oder Funde mit passendem Storyfortschritt.
+- [ ] Verbleibende externe Erwerbshürden für die im Projekt vorgesehenen Arten
+  durch nachvollziehbare Solo-Fundorte oder alternative Erwerbswege schließen.
+- [ ] Jede Änderung mit ursprünglicher Voraussetzung, neuer Bedingung sowie
+  Fundort/Freischaltpunkt dokumentieren und im Spiel verständlich vermitteln.
+- [ ] Story- und Nachspiel-Durchlauf ohne Netzwerk prüfen; Entwicklungen,
+  einmalige Belohnungen, Speichern/Neuladen und bestehende Spielstände abdecken.
+- [ ] Optionale Koop-Nutzung auf Regressionen prüfen, einschließlich gemeinsamem
+  Fortschritt und Schutz vor doppelten Event-Belohnungen.
+
+### Akzeptanzkriterien
+
+- [ ] Story und vorgesehene Nachspiel-Inhalte lassen sich vollständig allein
+  auf einem Gerät ohne externe Event-Verteilung abschließen.
+- [ ] Jede betroffene Tauschentwicklung besitzt einen funktionierenden,
+  dokumentierten Solo-Weg, einschließlich der Varianten mit getragenem Item.
+- [ ] Jedes zuvor ausschließlich an frühere Events gebundene vorgesehene
+  Pokémon und der notwendige Zugang sind regulär im Spiel erreichbar.
+- [ ] Die Erwerbs-/Entwicklungsliste enthält für jede erfasste externe Hürde
+  eine getestete Alternative; keine Art bleibt nur wegen eines nötigen zweiten
+  Spielers oder einer vergangenen Verteilung unerreichbar.
+- [ ] Entwicklungen, Zugänge und Belohnungen bleiben nach Neuladen korrekt
+  erhalten; bestehende Spielstände bleiben spielbar und Koop bleibt optional.
+
 ## Noch zu entscheidende Details
 
 - Dürfen Gäste story-kritische Ereignisse auslösen oder nur normale Trainer und wilde Begegnungen?
@@ -314,4 +382,13 @@ Teil der Aufgabe bleibt offen. Die Abnahme unten ist ein manueller Nutzertest.
 
 ## Aktueller Gesamtstand
 
-Sprint 0 bis Sprint 4 sind abgeschlossen und mit zwei Azahar-Instanzen geprüft. Startteam, PC-Sperre über den gesamten PC-Besuch, atomare Übernahme, Reihensperren und laufende Gruppensynchronisierung sind abgenommen. Der Bestand bleibt in den geprüften Abläufen auch nach hartem Gast-Abbruch, Entnahme aus der freigegebenen Gast-Reihe, Host-Speichern, vollständigem Neustart und Wiederbeitritt erhalten. Alle neun automatisierten Testsuiten und der Release-Build bestehen. Sprint 5 ist aus origin/sprint-5 integriert und automatisch geprueft; die interaktive Abnahme und die Reservierung einmaliger Wildgegner bleiben offen. Hardwaretests bleiben offen. `HANDOFF.md` enthält Details, `SETUP.md` die Ersteinrichtung. Es gibt noch keine vollständig spielbare Alpha.
+Sprint 0 bis Sprint 4 sind abgeschlossen und mit zwei Azahar-Instanzen
+geprueft. Die Standardablaeufe aus Sprint 5 sind vom Nutzer als bestanden
+gemeldet. Die anschliessenden Gras-/Zuschauer-Aenderungen bestehen die
+gemeinsamen Hintergrundtests und den ARM-Release/PAK-Build; ihre gezielte
+Emulatorabnahme steht aus. Einmalige feste Wildgegner und vorbereitete
+Sonderfaelle bleiben separat offen. Hardwaretests sind weiterhin offen.
+Sprint 6 bis 8 bleiben als folgende Ausbaustufen bestehen; Sprint 9 ergaenzt
+vollstaendiges Solospiel mit alternativen Entwicklungen und Event-Zugaengen.
+HANDOFF.md enthaelt den neuesten Build-/Teststand, SETUP.md die Ersteinrichtung.
+Es gibt noch keine vollstaendig abgenommene Alpha.

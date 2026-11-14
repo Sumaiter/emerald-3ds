@@ -14,6 +14,8 @@
 
 #include "global.h"
 #include "main.h"
+#include "main_menu.h"
+#include "intro.h"
 #include "overworld.h"
 #include "gba/flash_internal.h"
 #include "gpu_regs.h"
@@ -133,6 +135,8 @@ extern char __ctr_game_bss[], __ctr_game_bss_end[];
 static char *sGameAtStart;
 static jmp_buf sAgbMainEntry;
 static u32 sResets;
+static bool sReturnToMenu;
+static bool sReturnMenuBootSeen;
 
 static size_t GameDataBytes(void) { return (size_t)(__ctr_game_data_end - __ctr_game_data); }
 static size_t GameBssBytes(void) { return (size_t)(__ctr_game_bss_end - __ctr_game_bss); }
@@ -187,6 +191,31 @@ void CtrGame_SoftReset(void)
         CTR_STUB("RESET", "soft reset unavailable");
         return;
     }
+    sReturnToMenu = false;
+    sReturnMenuBootSeen = false;
+    longjmp(sAgbMainEntry, 1);
+}
+
+void CtrGame_ReturnToMenu(void)
+{
+    if (sGameAtStart == NULL || !sStarted)
+    {
+        /* Continuing a guest's effect is unsafe even if the boot snapshot
+         * could not be allocated. End the process without writing a save. */
+        CtrPlatform_Fatal("cannot restore main menu after host disconnect");
+        exit(1);
+    }
+    sReturnToMenu = true;
+    sReturnMenuBootSeen = false;
+    longjmp(sAgbMainEntry, 1);
+}
+
+static void ResetGameAfterStackUnwind(void)
+{
+    /* Running here proves every previous AgbMain/RPC frame was abandoned.
+     * Only now may the guest's open item/wallet journals be discarded. */
+    CtrPlatform_AfterStackReset();
+    CtrCoop_AfterStackReset();
     /* Port state that belongs to the running game lives outside the restored
      * sections: the bottom screen's would keep acting as if in the field. */
     CtrBottom_SoftReset();
@@ -212,7 +241,23 @@ void CtrGame_SoftReset(void)
      * below must not take the battle speed's keys, which read the save. */
     CtrPlatform_SetBattleScene(false);
     WaitForResetKeysUp();
-    longjmp(sAgbMainEntry, 1);
+}
+
+static void FinishReturnToMenu(void)
+{
+    if (!sReturnToMenu)
+        return;
+    if (gMain.callback2 == CB2_InitCopyrightScreenAfterBootup)
+        sReturnMenuBootSeen = true;
+    else if (sReturnMenuBootSeen && gMain.callback2 != NULL
+          && gSaveBlock1Ptr != NULL && gSaveBlock2Ptr != NULL)
+    {
+        /* Native boot has loaded the local save and rebuilt its heap. Skip
+         * the intro/title animation only now; InitMainMenu resets its tasks. */
+        sReturnToMenu = false;
+        sReturnMenuBootSeen = false;
+        SetMainCallback2(CB2_InitMainMenu);
+    }
 }
 
 static void CheckAudioRate(void)
@@ -653,6 +698,9 @@ static void CaptureLineScroll(void)
 void CtrGame_VBlank(void)
 {
     PORT_PROF_BEGIN(vblank);
+    /* Also check when the RFU adapter is disabled or the engine is in a
+     * battle/PC/menu callback. Never execute one more old-world effect. */
+    CtrCoop_CheckHostConnection();
     CtrEmu_BeginVBlank();
     /*
      * The GBA VBlank handler is the game's own VBlankIntr: it runs the vblank
@@ -664,6 +712,7 @@ void CtrGame_VBlank(void)
     /* The emulated Wireless Adapter's "interrupts" (3ds_rfu_adapter.c). */
     PortRfu_Frame();
     CtrEmu_EndVBlank();
+    FinishReturnToMenu();
     PORT_PROF_END(vblank, PORT_PROF_VBLANK);
     UpdateStage();
     PORT_PROF_BEGIN(lines);
@@ -817,7 +866,10 @@ void CtrGame_Init(void)
     if (setjmp(sAgbMainEntry) == 0)
         CtrLog_Write(CTR_LOG_GAME, "entering AgbMain");
     else
+    {
+        ResetGameAfterStackUnwind();
         CtrLog_Write(CTR_LOG_GAME, "soft reset %lu: entering AgbMain again", (unsigned long)sResets);
+    }
     AgbMain();
     CtrPlatform_Fatal("AgbMain returned");
 }

@@ -555,14 +555,73 @@ bool CtrCoopProtocol_DecodeBattleReserveResult(const uint8_t *data, uint16_t siz
     return true;
 }
 
-bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint8_t *out, uint16_t outSize)
+bool CtrCoopProtocol_EncodeBattleBegin(uint32_t totalSize, uint32_t checksum, uint16_t sequence, uint8_t *out, uint16_t outSize)
 {
-    return EncodeTransferBegin(CTR_COOP_BATTLE_BEGIN_PACKET, totalSize, checksum, out, outSize);
+    if (out == NULL || totalSize == 0 || outSize != CTR_COOP_BATTLE_BEGIN_SIZE)
+        return false;
+    out[0] = CTR_COOP_BATTLE_BEGIN_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    Put32(out + 2, totalSize);
+    Put32(out + 6, checksum);
+    out[10] = sequence & 0xFF;
+    out[11] = sequence >> 8;
+    return true;
 }
 
-bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum)
+bool CtrCoopProtocol_DecodeBattleBegin(const uint8_t *data, uint16_t size, uint32_t *totalSize, uint32_t *checksum, uint16_t *sequence)
 {
-    return DecodeTransferBegin(CTR_COOP_BATTLE_BEGIN_PACKET, data, size, totalSize, checksum);
+    if (data == NULL || totalSize == NULL || checksum == NULL || sequence == NULL
+     || size != CTR_COOP_BATTLE_BEGIN_SIZE || data[0] != CTR_COOP_BATTLE_BEGIN_PACKET
+     || data[1] != CTR_COOP_PROTOCOL_VERSION || Get32(data + 2) == 0)
+        return false;
+    *totalSize = Get32(data + 2);
+    *checksum = Get32(data + 6);
+    *sequence = data[10] | ((uint16_t)data[11] << 8);
+    return true;
+}
+
+bool CtrCoopProtocol_EncodeBattleReady(uint16_t sequence, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_BATTLE_READY_SIZE)
+        return false;
+    out[0] = CTR_COOP_BATTLE_READY_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = sequence & 0xFF;
+    out[3] = sequence >> 8;
+    Put32(out + 4, checksum);
+    return true;
+}
+
+bool CtrCoopProtocol_DecodeBattleReady(const uint8_t *data, uint16_t size, uint16_t *sequence, uint32_t *checksum)
+{
+    if (data == NULL || sequence == NULL || checksum == NULL || size != CTR_COOP_BATTLE_READY_SIZE
+     || data[0] != CTR_COOP_BATTLE_READY_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION)
+        return false;
+    *sequence = data[2] | ((uint16_t)data[3] << 8);
+    *checksum = Get32(data + 4);
+    return true;
+}
+
+bool CtrCoopProtocol_EncodePcRecover(uint16_t sequence, uint32_t checksum, uint8_t *out, uint16_t outSize)
+{
+    if (out == NULL || outSize != CTR_COOP_PC_RECOVER_SIZE)
+        return false;
+    out[0] = CTR_COOP_PC_RECOVER_PACKET;
+    out[1] = CTR_COOP_PROTOCOL_VERSION;
+    out[2] = sequence & 0xFF;
+    out[3] = sequence >> 8;
+    Put32(out + 4, checksum);
+    return true;
+}
+
+bool CtrCoopProtocol_DecodePcRecover(const uint8_t *data, uint16_t size, uint16_t *sequence, uint32_t *checksum)
+{
+    if (data == NULL || sequence == NULL || checksum == NULL || size != CTR_COOP_PC_RECOVER_SIZE
+     || data[0] != CTR_COOP_PC_RECOVER_PACKET || data[1] != CTR_COOP_PROTOCOL_VERSION)
+        return false;
+    *sequence = data[2] | ((uint16_t)data[3] << 8);
+    *checksum = Get32(data + 4);
+    return true;
 }
 
 bool CtrCoopProtocol_EncodeBattleRequest(uint32_t offset, uint8_t *out, uint16_t outSize)

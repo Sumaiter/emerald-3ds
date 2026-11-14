@@ -1231,22 +1231,11 @@ s32 PortRfu_CheckID(void)
     return LocalLink_Enabled() ? RFU_ID : 0;
 }
 
-// Once a frame, from the vblank (3ds_game_full.c).
-void PortRfu_Frame(void)
+/* Also used by a synchronous shared-item decision. No game callbacks, tasks,
+ * frame counters or physics may run while its effect is awaiting approval. */
+void PortRfu_PumpCoopEvents(void)
 {
     struct LocalEvent ev;
-    struct STWIStatus *st = gSTWIStatus;
-    u8 i;
-
-    if (!LocalLink_Enabled())
-        return;
-    LocalSession_Update();
-    CtrCoop_OverworldFrame();
-    if (st == NULL)
-        return;
-    sA.frame++;
-    CheckGeneration();
-
     while (LocalLink_PollEvent(&ev))
     {
         if (ev.type == LOCAL_EV_RECV)
@@ -1260,6 +1249,23 @@ void PortRfu_Frame(void)
             PeerGone(ev.id, REASON_LINK_LOSS);
         }
     }
+}
+
+// Once a frame, from the vblank (3ds_game_full.c).
+void PortRfu_Frame(void)
+{
+    struct STWIStatus *st = gSTWIStatus;
+    u8 i;
+
+    if (!LocalLink_Enabled())
+        return;
+    LocalSession_Update();
+    CtrCoop_OverworldFrame();
+    if (st == NULL)
+        return;
+    sA.frame++;
+    CheckGeneration();
+    PortRfu_PumpCoopEvents();
     FinishLeaving();
 
     for (i = 0; i < sA.numPending; i++)

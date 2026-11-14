@@ -35,6 +35,7 @@ static struct CtrCoopProfile sProfile;
 static struct SaveBlock2 sSaveBlock2;
 static struct SaveBlock1 sSaveBlock1;
 static struct PokemonStorage sStorage;
+#include "coop_live_fixture.inc"
 
 uint8_t CtrCoopBike_LocalMode(void) { return CTR_COOP_BIKE_NONE; }
 uint8_t CtrCoopBike_LocalMovementSequence(void) { return 0; }
@@ -107,6 +108,9 @@ static void ResetFixture(void)
     static const uint8_t password[] = {1, 2, 3, 4};
     static const uint8_t name[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
 
+    ResetLiveFixture();
+    CtrCoop_ResetBattleReturn();
+    memset(&gMain, 0, sizeof(gMain));
     memset(&sCoop, 0, sizeof(sCoop));
     sCoop.objectEventId = OBJECT_EVENTS_COUNT;
     memset(&sSaveBlock2, 0, sizeof(sSaveBlock2));
@@ -208,6 +212,26 @@ static void BuildPcPayload(uint8_t *payload, struct PokemonStorage *storage, con
 {
     memcpy(payload, storage, sizeof(*storage));
     memcpy(payload + sizeof(*storage), party, sizeof(struct Pokemon) * PARTY_SIZE);
+}
+
+static void SendBattleTransfer(const uint8_t *payload, uint32_t size, uint32_t checksum,
+    bool sendBegin, uint32_t startOffset)
+{
+    if (sendBegin)
+    {
+        uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE];
+        CHECK(CtrCoopProtocol_EncodeBattleBegin(size, checksum, ReadBattle16(payload, 14),
+            packet, sizeof(packet)), "battle begin encodes transaction identity");
+        CtrCoop_HandlePacket(PEER_ID, packet, sizeof(packet));
+    }
+    SendTransfer(NULL, CtrCoopProtocol_EncodeBattleChunk, payload, size, checksum, false, startOffset);
+}
+
+static void AcknowledgeBattle(void)
+{
+    uint8_t packet[CTR_COOP_BATTLE_READY_SIZE];
+    CtrCoopProtocol_EncodeBattleReady(sCoop.battleSendSequence, sCoop.battleSendChecksum, packet, sizeof(packet));
+    CtrCoop_HandlePacket(PEER_ID, packet, sizeof(packet));
 }
 
 static void TestStorageMigration(void)
@@ -379,7 +403,7 @@ static void TestGuestNameAfterHostSnapshot(void)
     struct PokemonStorage incomingStorage = {0};
     uint8_t expectedName[8];
 
-    for (unsigned i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
+    for (volatile unsigned i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
     {
         ResetFixture();
         sCoop.guest = true;
@@ -410,8 +434,8 @@ static void TestGuestNameAfterHostSnapshot(void)
         ApplyHostSave();
         CHECK(memcmp(gSaveBlock2Ptr->playerName, expectedName, sizeof(expectedName)) == 0,
             "reapplying the host snapshot on rejoin keeps the guest's own name");
-        CtrCoop_Stop();
-        CHECK(CtrCoop_GuestSaveBlocked(), "guest identity substitution cannot permit writing the local SAV");
+        EXPECT_GUEST_MENU(CtrCoop_Stop());
+        CHECK(!sCoop.guestWorldLoaded && !sAutoSaves, "leaving the guest identity discards its world without a SAV write");
     }
     ResetFixture();
     memcpy(gSaveBlock2Ptr->playerName, hostName, sizeof(hostName));
@@ -455,8 +479,8 @@ static void TestGuestJoinFlow(void)
     CtrCoop_JoinGame(1234, sProfile.guestPassword);
     AcceptGuestSnapshot();
     original1 = sSaveBlock1;
-    SendTransfer(CtrCoopProtocol_EncodeSaveBegin, CtrCoopProtocol_EncodeSaveChunk,
-        payload, sizeof(payload), CtrCoopProtocol_Checksum(payload, sizeof(payload)) ^ 1, true, 0);
+    EXPECT_GUEST_MENU(SendTransfer(CtrCoopProtocol_EncodeSaveBegin, CtrCoopProtocol_EncodeSaveChunk,
+        payload, sizeof(payload), CtrCoopProtocol_Checksum(payload, sizeof(payload)) ^ 1, true, 0));
     CHECK(!CtrCoop_IsEnabled(), "corrupt initial snapshot aborts join");
     CHECK(memcmp(&sSaveBlock1, &original1, sizeof(sSaveBlock1)) == 0, "corrupt initial snapshot leaves guest RAM save unchanged");
     CHECK(CtrCoop_GuestSaveBlocked() == false, "aborted join releases guest save block");
@@ -640,8 +664,7 @@ static void TestBattleStorageCollision(void)
     ReadyHost();
     SetBoxMon(&sStorage.boxes[0][0], 90);
     size = BuildBattlePayload(payload, 91);
-    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
-        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    SendBattleTransfer(payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
     CHECK(sStorage.boxes[0][0].species == 90, "collision keeps original occupant in place");
     CHECK(sStorage.boxes[0][1].species == 91, "collision moves incoming catch to a free slot");
     CHECK(LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL, "relocated battle result is confirmed");
@@ -653,13 +676,11 @@ static void TestBattleStorageCollision(void)
         for (uint8_t position = box == CTR_COOP_STORAGE_BOX_ID ? CTR_COOP_STORAGE_ROW_SIZE * 2 : 0; position < IN_BOX_COUNT; position++)
             SetBoxMon(&sStorage.boxes[box][position], 100 + box);
     before = sStorage;
-    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
-        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    SendBattleTransfer(payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
     CHECK(memcmp(&before, &sStorage, sizeof(before)) == 0, "full storage rejects battle result without partial writes");
     CHECK(LastPacket(CTR_COOP_BATTLE_READY_PACKET) == NULL, "unapplied battle result is not confirmed");
     SetBoxMon(&sStorage.boxes[0][1], 0);
-    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
-        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    SendBattleTransfer(payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
     CHECK(sStorage.boxes[0][1].species == 91 && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL, "fresh begin retries a previously unapplied battle result");
 }
 #endif
@@ -714,8 +735,7 @@ static uint32_t BuildRewardPayload(uint8_t *payload, uint16_t sequence)
 
 static void ReceiveBattlePayload(const uint8_t *payload, uint32_t size)
 {
-    SendTransfer(CtrCoopProtocol_EncodeBattleBegin, CtrCoopProtocol_EncodeBattleChunk,
-        payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
+    SendBattleTransfer(payload, size, CtrCoopProtocol_Checksum(payload, size), true, 0);
 }
 
 static void TestBattleResultExactlyOnce(void)
@@ -857,6 +877,52 @@ static void TestMultipleBattleCatchDestinations(void)
         "battle catch records cannot overwrite a protected player row");
 }
 
+static void TestBattleEntryProgressesPendingTransactions(void)
+{
+    uint8_t packet[CTR_COOP_BATTLE_RESERVE_RESULT_SIZE];
+    uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE];
+    uint32_t size;
+
+    ReadyHost();
+    sCoop.guest = true;
+    sCoop.authenticated = sCoop.saveReady = true;
+    CHECK(BeginLocalBattle(), "previous guest wild battle begins");
+    gBattleOutcome = B_OUTCOME_RAN;
+    CtrCoop_BattleEnd();
+    CHECK(sCoop.battleReleasePending && sCoop.battleSendState == BATTLE_SYNC_SENDING,
+          "guest retains the reservation until its result is confirmed");
+    ClearPackets();
+    for (unsigned i = 0; i < 120; i++) CtrCoop_BattleStart();
+    CHECK(CountPacket(CTR_COOP_BATTLE_BEGIN_PACKET) == 1,
+          "waiting battle entry retries the previous result without overworld callbacks");
+    AcknowledgeBattle();
+    ClearPackets();
+    CHECK(!CtrCoop_BattleStart() && !sCoop.battleReleasePending && sCoop.battleReservePending,
+          "confirmed previous result releases its lock and requests the next battle");
+    CHECK(CountPacket(CTR_COOP_BATTLE_RELEASE_PACKET) == 1
+       && CountPacket(CTR_COOP_BATTLE_RESERVE_PACKET) == 1,
+          "old reservation is released before the next reservation request");
+    CtrCoopProtocol_EncodeBattleReserveResult(0, true, packet, sizeof(packet));
+    CtrCoop_HandlePacket(PEER_ID, packet, sizeof(packet));
+    CHECK(CtrCoop_BattleStart() && sCoop.battleActive,
+          "guest resumes battle initialization after the new grant");
+
+    ReadyHost();
+    sCoop.pcOwner = PC_OWNER_HOST;
+    size = BuildBattlePayload(payload, 91);
+    ReceiveBattlePayload(payload, size);
+    CHECK(sCoop.battleReceiveState == BATTLE_SYNC_READY,
+          "incoming result waits while a PC transaction is active");
+    sCoop.pcOwner = PC_OWNER_NONE;
+    ClearPackets();
+    CHECK(CtrCoop_BattleStart() && sCoop.battleReceiveState == BATTLE_SYNC_IDLE,
+          "new battle entry drains an applicable queued result before starting");
+    CHECK(sStorage.boxes[0][0].species == 91
+       && sBattleStorageBaseline.boxes[0][0].species == 91
+       && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL,
+          "received catch is confirmed and included in the next baseline without echo");
+}
+
 static void TestBattleTransferResumeAndReservationRetry(void)
 {
     uint8_t payload[BATTLE_HEADER_SIZE + sizeof(gPlayerParty) + BATTLE_STORAGE_RECORD_SIZE];
@@ -867,12 +933,12 @@ static void TestBattleTransferResumeAndReservationRetry(void)
     uint16_t trainer;
 
     ReadyHost();
-    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), packet, CTR_COOP_SAVE_BEGIN_SIZE);
-    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), ReadBattle16(payload, 14), packet, CTR_COOP_BATTLE_BEGIN_SIZE);
+    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_BATTLE_BEGIN_SIZE);
     CtrCoopProtocol_EncodeBattleChunk(0, payload, CTR_COOP_SAVE_CHUNK_DATA_MAX, packet, CTR_COOP_SAVE_CHUNK_MAX);
     CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_CHUNK_MAX);
-    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), packet, CTR_COOP_SAVE_BEGIN_SIZE);
-    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_SAVE_BEGIN_SIZE);
+    CtrCoopProtocol_EncodeBattleBegin(size, CtrCoopProtocol_Checksum(payload, size), ReadBattle16(payload, 14), packet, CTR_COOP_BATTLE_BEGIN_SIZE);
+    CtrCoop_HandlePacket(PEER_ID, packet, CTR_COOP_BATTLE_BEGIN_SIZE);
     last = LastPacket(CTR_COOP_BATTLE_REQUEST_PACKET);
     CHECK(last && CtrCoopProtocol_DecodeBattleRequest(last->data,last->len,&offset) && offset == CTR_COOP_SAVE_CHUNK_DATA_MAX,
         "sender retry resumes a stalled transfer at the next missing chunk");
@@ -899,7 +965,7 @@ static void TestBattleTransferResumeAndReservationRetry(void)
     ReleaseTrainerReservation();
     CHECK(CountPacket(CTR_COOP_BATTLE_RELEASE_PACKET) == 0,
         "PC protection remains held until the battle result is confirmed");
-    CtrCoop_HandlePacket(PEER_ID,(uint8_t[]){CTR_COOP_BATTLE_READY_PACKET,CTR_COOP_PROTOCOL_VERSION},CTR_COOP_SAVE_READY_SIZE);
+    AcknowledgeBattle();
     ReleaseTrainerReservation();
     CHECK(CountPacket(CTR_COOP_BATTLE_RELEASE_PACKET) == 1,
         "confirmed battle result permits the reservation to be released");
@@ -917,13 +983,189 @@ static void TestBattleTransferResumeAndReservationRetry(void)
 }
 #endif
 
+static struct SentPacket EventPacket(uint8_t type, uint32_t token, uint8_t group,
+                                     uint8_t num, uint8_t localId, uint32_t script)
+{
+    struct EncounterKey key = {group, num, localId, script};
+    SendEncounter(type, token, &key, 1, false);
+    return *LastPacket(type);
+}
+
+static void TestEncounterConversationArbitration(void)
+{
+    __typeof__(sCoop) host, guest;
+    struct SentPacket request, grant, release, ack;
+    ReadyHost();
+    host = sCoop;
+    sCoop.guest = true; sCoop.authenticated = true; sCoop.saveReady = true;
+    CtrCoop_ScriptObject(0, 18, 1);
+    CtrCoop_ScriptBegin((const void *)0x1000);
+    CHECK(sCoop.storyInitialized, "story baseline exists before any event bytecode can mutate it");
+    CHECK(CtrCoop_ScriptPoll() == 0, "guest cannot execute rival dialogue before a host grant");
+    request = *LastPacket(CTR_COOP_EVENT_REQUEST_PACKET);
+    guest = sCoop;
+    sCoop = host;
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    grant = *LastPacket(CTR_COOP_EVENT_RESULT_PACKET);
+    CHECK(grant.data[21] == 1 && sCoop.peerEventCount == 1, "guest claims the NPC before talking");
+    /* Different starter/gender entry scripts still resolve to the same NPC. */
+    CtrCoop_ScriptObject(0, 18, 1);
+    CtrCoop_ScriptBegin((const void *)0x9000);
+    CHECK(CtrCoop_ScriptPoll() < 0, "host cannot start the guest's rival even with another trainer variant");
+    CHECK(CtrCoop_NoticeIsInteraction() && CtrCoop_NoticeName() != NULL, "blocked event displays its owner");
+    CtrCoop_ScriptEnd(); CtrCoop_DismissNotice();
+    CHECK(!sCoop.pcResumeScript && sCoop.peerEventCount == 1, "dismissal never starts the rejected conversation or releases its owner");
+    CtrCoop_ScriptObject(0, 18, 2);
+    CtrCoop_ScriptBegin((const void *)0x1000);
+    CHECK(CtrCoop_ScriptPoll() == 1, "a distinct trainer remains available on the same map");
+    CtrCoop_ScriptEnd(); TickEncounter();
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 1, "repeated guest request is idempotent");
+    host = sCoop;
+    sCoop = guest;
+    CtrCoop_HandlePacket(PEER_ID, grant.data, grant.len);
+    CHECK(CtrCoop_ScriptPoll() == 1 && OwnsEncounterNpc(0, 18, 1), "only the granted guest can run the NPC movement/script");
+    CHECK(sCoop.eventState == EVENT_HELD, "battle waitstate retains the conversation lease");
+    CtrCoop_ScriptEnd(); TickEncounter();
+    release = *LastPacket(CTR_COOP_EVENT_RELEASE_PACKET);
+    CHECK(sCoop.eventState == EVENT_RELEASING, "guest retains its lease until release is acknowledged");
+    guest = sCoop;
+    sCoop = host;
+    CtrCoop_HandlePacket(PEER_ID, release.data, release.len);
+    ack = *LastPacket(CTR_COOP_EVENT_ACK_PACKET);
+    CHECK(sCoop.peerEventCount == 0, "completion releases the guest NPC");
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 0, "late request cannot resurrect a completed conversation");
+    sCoop = guest;
+    CtrCoop_HandlePacket(PEER_ID, ack.data, ack.len);
+    CHECK(sCoop.eventState == EVENT_IDLE, "release acknowledgement clears the guest transaction");
+
+    ReadyHost();
+    CtrCoop_ScriptObject(0, 18, 1); CtrCoop_ScriptBegin((const void *)0x1000);
+    CHECK(CtrCoop_ScriptPoll() == 1, "host acquires a free trainer conversation");
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 1, 0, 18, 1, 0);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 0 && sCoop.peerEventCount == 0,
+          "guest cannot enter the host's conversation, including a simultaneous request");
+    CtrCoop_ScriptEnd(); TickEncounter();
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 2, 0, 18, 1, 0);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 1, "new interaction can acquire a released trainer after loss/abort");
+
+    ReadyHost();
+    CtrCoop_ScriptBegin((const void *)0x1234);
+    CHECK(CtrCoop_ScriptPoll() == 1, "scripted wild/boss event is claimed before its first command");
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 1, 0, 9, 0, 0x1234);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 0, "fixed event without NPC is exclusive too");
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 2, 0, 9, 1, 0);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 0, "automatic scene also blocks a manual NPC entry on that map");
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 3, 0, 10, 0, 0x1234);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21] == 1, "events on different maps are independent");
+
+    ReadyHost();
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 1, 255, 255, 0, 1);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    gMain.savedCallback = CB2_Overworld;
+    gBattleTypeFlags = BATTLE_TYPE_ROAMER;
+    CHECK(!CtrCoop_BattleStart() && !sCoop.battleActive && sMainCallback == CB2_Overworld,
+          "roaming legendary owned by guest is rejected before host transition, even across maps");
+    ReadyHost();
+    gBattleTypeFlags = BATTLE_TYPE_ROAMER;
+    CHECK(CtrCoop_BattleStart() && sCoop.battleEvent, "host can acquire an unoccupied roaming encounter");
+    request = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 1, 255, 255, 0, 1);
+    CtrCoop_HandlePacket(PEER_ID, request.data, request.len);
+    CHECK(!LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21], "guest cannot acquire host's roaming encounter");
+    gBattleOutcome = B_OUTCOME_RAN;
+    CtrCoop_BattleEnd();
+    CHECK(sCoop.eventEnding && !sCoop.battleEvent, "roaming encounter lease ends with escape/result transaction");
+}
+
+static void TestEncounterCleanupAndTransport(void)
+{
+    struct SentPacket packet, request;
+    ReadyHost();
+    CtrCoop_ScriptObject(0, 18, 1); CtrCoop_ScriptObject(0, 18, 2);
+    CtrCoop_ScriptBegin((const void *)0x1000);
+    CHECK(CtrCoop_ScriptPoll() == 1 && sCoop.eventCount == 2, "both approaching trainers are claimed atomically");
+    packet = EventPacket(CTR_COOP_EVENT_REQUEST_PACKET, 1, 0, 18, 2, 0);
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(!LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21], "second approaching trainer cannot be taken by another player");
+    CtrCoop_ScriptEnd();
+    sCoop.battleSendState = BATTLE_SYNC_SENDING;
+    TickEncounter();
+    CHECK(sCoop.eventState == EVENT_HELD, "result in flight retains encounter ownership");
+    sCoop.battleSendState = BATTLE_SYNC_IDLE;
+    ResetStoryBaseline();
+    sSaveBlock1.vars[0x13] = 7;
+    TickEncounter();
+    CHECK(sCoop.eventState == EVENT_HELD && CountPacket(CTR_COOP_VAR_PACKET) > 0,
+          "post-battle story updates precede lease release");
+    TickEncounter();
+    CHECK(sCoop.eventState == EVENT_IDLE, "drained story/results permit release");
+
+    ReadyHost(); sCoop.guest = true; sCoop.authenticated = true; sCoop.saveReady = true;
+    CtrCoop_ScriptObject(0, 18, 1); CtrCoop_ScriptBegin((const void *)0x1000);
+    CHECK(CtrCoop_ScriptPoll() == 0, "guest begins asynchronous request");
+    request = *LastPacket(CTR_COOP_EVENT_REQUEST_PACKET);
+    for (unsigned i = 0; i < 65; ++i) CHECK(CtrCoop_ScriptPoll() == 0, "lost request waits without executing dialogue");
+    CHECK(CountPacket(CTR_COOP_EVENT_REQUEST_PACKET) >= 2, "lost conversation requests are retried");
+    packet = request; packet.data[0] = CTR_COOP_EVENT_RESULT_PACKET; packet.data[21] = 1;
+    CtrCoop_HandlePacket(PEER_ID + 1, packet.data, packet.len);
+    CHECK(sCoop.eventState == EVENT_PENDING, "foreign peer cannot grant an event");
+    packet.data[1]--;
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(sCoop.eventState == EVENT_PENDING, "old protocol cannot grant an event");
+    packet.data[1]++; packet.data[2]++;
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(sCoop.eventState == EVENT_PENDING, "another transaction cannot grant an event");
+    packet.data[2]--; packet.data[9]++;
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(sCoop.eventState == EVENT_PENDING, "another NPC cannot grant an event");
+    packet.data[9]--;
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len - 1);
+    CHECK(sCoop.eventState == EVENT_PENDING, "truncated grant is ignored");
+    sCoop.eventWait = 599;
+    CHECK(CtrCoop_ScriptPoll() < 0, "unanswered request times out before any script command");
+    CtrCoop_ScriptEnd(); TickEncounter();
+    CHECK(sCoop.eventState == EVENT_RELEASING, "timeout cancels potentially granted remote ownership");
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(sCoop.eventState == EVENT_RELEASING, "late grant cannot restart a cancelled script");
+    for (unsigned i = 0; i < 65; ++i) TickEncounter();
+    CHECK(CountPacket(CTR_COOP_EVENT_RELEASE_PACKET) >= 2, "release retries until acknowledged");
+    EXPECT_GUEST_MENU(CtrCoop_PeerLeft(PEER_ID));
+    TickEncounter();
+    CHECK(sCoop.eventState == EVENT_IDLE && sCoop.peerEventCount == 0, "disconnect cleans cancelled ownership");
+
+    ReadyHost(); sCoop.guest = true; sCoop.authenticated = true; sCoop.saveReady = true;
+    CtrCoop_ScriptObject(0, 18, 1); CtrCoop_ScriptBegin((const void *)0x1000);
+    CtrCoop_ScriptPoll(); EXPECT_GUEST_MENU(CtrCoop_PeerLeft(PEER_ID));
+    CHECK(!sCoop.eventStarting && !sCoop.pcResumeScript, "guest disconnect discards the ungranted script stack");
+    CHECK(sCoop.eventState == EVENT_IDLE && !sCoop.eventCount && !sCoop.eventPreparedCount, "soft reset clears all local encounter state");
+
+    ReadyHost();
+    packet = EventPacket(CTR_COOP_EVENT_RELEASE_PACKET, 4, 0, 18, 1, 0);
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    packet.data[0] = CTR_COOP_EVENT_REQUEST_PACKET;
+    CtrCoop_HandlePacket(PEER_ID, packet.data, packet.len);
+    CHECK(sCoop.peerEventCount == 0 && !LastPacket(CTR_COOP_EVENT_RESULT_PACKET)->data[21],
+          "cancel-before-request ordering cannot leave an orphaned lease");
+}
+
+#include "coop_battle_regressions.inc"
+
 int main(void)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
     TestGuestNameAfterHostSnapshot();
     TestStorageMigration();
     TestHostJoinAndPcLock();
     TestPcTransactionAndSpawn();
     TestGuestJoinFlow();
+    TestEncounterConversationArbitration();
+    TestEncounterCleanupAndTransport();
 #if CTR_COOP_TEST_MAX_SPRINT >= 7
     TestLogoutTransaction();
 #endif
@@ -935,6 +1177,12 @@ int main(void)
     TestConcurrentBattleAndPcResults();
     TestBattleInventoryRollbackAndRetry();
     TestBattleTransferResumeAndReservationRetry();
+    TestBattleTransactionIdentity();
+    TestSpecialTrainerFlagRelease();
+    TestBattleReturnDisconnectAndReset();
+    TestBattlePcRecoveryGuards();
+    TestTwoPeerFullStorageRecovery();
+    TestBattleEntryProgressesPendingTransactions();
     TestMultipleBattleCatchDestinations();
     TestBattleAndPcArbitration();
 #endif
@@ -995,6 +1243,16 @@ void CtrLog_Write(CtrLogCategory category, const char *format, ...)
 
 void ZeroMonData(struct Pokemon *mon) { memset(mon, 0, sizeof(*mon)); }
 uint32_t GetBoxMonData(const struct BoxPokemon *mon, int attribute) { (void)attribute; return mon->species; }
+uint32_t GetMonData(const struct Pokemon *mon, int attribute)
+{
+    uint32_t value;
+    if (attribute == MON_DATA_PERSONALITY || attribute == MON_DATA_OT_ID)
+    {
+        memcpy(&value, mon->box.data + (attribute == MON_DATA_PERSONALITY ? 0 : 4), sizeof(value));
+        return value;
+    }
+    return mon->box.species;
+}
 void BoxMonToMon(const struct BoxPokemon *boxMon, struct Pokemon *mon) { ZeroMonData(mon); mon->box = *boxMon; }
 uint8_t CalculatePlayerPartyCount(void) { uint8_t count = 0; while (count < PARTY_SIZE && gPlayerParty[count].box.species != 0) count++; return count; }
 uint32_t GetBoxMonDataAt(uint8_t box, uint8_t position, int attribute) { return GetBoxMonData(&gPokemonStoragePtr->boxes[box][position], attribute); }
@@ -1012,11 +1270,38 @@ void WarpIntoMap(void) { sWarpCount++; }
 void RemoveObjectEvent(struct ObjectEvent *objectEvent) { objectEvent->active = FALSE; }
 uint8_t GetPlayerFacingDirection(void) { return DIR_SOUTH; }
 uint8_t ObjectEventGetHeldMovementActionId(struct ObjectEvent *objectEvent) { (void)objectEvent; return CTR_COOP_ACTION_FACE_DOWN; }
-uint8_t TryGetObjectEventIdByLocalIdAndMap(uint8_t localId, uint8_t mapNum, uint8_t mapGroup, uint8_t *objectEventId) { (void)localId; (void)mapNum; (void)mapGroup; (void)objectEventId; return 1; }
+uint8_t TryGetObjectEventIdByLocalIdAndMap(uint8_t localId, uint8_t mapNum, uint8_t mapGroup, uint8_t *objectEventId)
+{
+    for (uint8_t i = 0; i < OBJECT_EVENTS_COUNT; ++i)
+        if (gObjectEvents[i].active && gObjectEvents[i].localId == localId
+         && gObjectEvents[i].mapNum == mapNum && gObjectEvents[i].mapGroup == mapGroup)
+        {
+            *objectEventId = i;
+            return 0;
+        }
+    return 1;
+}
 bool FreeObjectEventSlotNearPlayer(void) { return true; }
 uint8_t MapGridGetElevationAt(int16_t x, int16_t y) { (void)x; (void)y; return 0; }
-uint8_t SpawnSpecialObjectEvent(const struct ObjectEventTemplate *objectEventTemplate) { (void)objectEventTemplate; return OBJECT_EVENTS_COUNT; }
-void ObjectEventTurn(struct ObjectEvent *objectEvent, uint8_t direction) { (void)objectEvent; (void)direction; }
+uint8_t SpawnSpecialObjectEvent(const struct ObjectEventTemplate *objectEventTemplate)
+{
+    for (uint8_t i = 0; i < OBJECT_EVENTS_COUNT; ++i)
+        if (!gObjectEvents[i].active)
+        {
+            struct ObjectEvent *object = &gObjectEvents[i];
+            memset(object, 0, sizeof(*object));
+            object->active = true;
+            object->localId = objectEventTemplate->localId;
+            object->graphicsId = objectEventTemplate->graphicsId;
+            object->mapNum = sSaveBlock1.location.mapNum;
+            object->mapGroup = sSaveBlock1.location.mapGroup;
+            object->currentCoords.x = objectEventTemplate->x + MAP_OFFSET;
+            object->currentCoords.y = objectEventTemplate->y + MAP_OFFSET;
+            return i;
+        }
+    return OBJECT_EVENTS_COUNT;
+}
+void ObjectEventTurn(struct ObjectEvent *objectEvent, uint8_t direction) { objectEvent->facingDirection = direction; }
 void ObjectEventClearHeldMovementIfFinished(struct ObjectEvent *objectEvent) { (void)objectEvent; }
 bool ObjectEventIsHeldMovementActive(struct ObjectEvent *objectEvent) { (void)objectEvent; return false; }
 void ObjectEventSetHeldMovement(struct ObjectEvent *objectEvent, uint8_t movementActionId) { (void)objectEvent; (void)movementActionId; }

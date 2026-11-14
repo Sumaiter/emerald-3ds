@@ -15,6 +15,7 @@
  * (src/local_session.c) are game units: only fixed-size types here.
  */
 #include <stdint.h>
+#include <stdbool.h>
 
 #define LOCAL_MAX_PEERS 8    /* a session holds 5; room to spare */
 #define LOCAL_MAX_FOUND 16
@@ -62,6 +63,11 @@ uint32_t LocalLink_Generation(void); /* changes with every session */
 void LocalLink_SetAdvert(uint8_t hosting, uint8_t nextSlot, const uint8_t *data);
 int LocalLink_GetPeers(struct LocalPeer *out, int max);
 void LocalLink_Send(uint16_t dest, const void *data, uint32_t len);
+/* Reliable gameplay send with explicit admission, never truncates. */
+bool LocalLink_TrySend(uint16_t dest, const void *data, uint32_t len);
+/* Video is optional: refuse it before consuming the last 32 reliable slots
+ * needed for gameplay. False leaves the message entirely unqueued. */
+bool LocalLink_TrySendLowPriority(uint16_t dest, const void *data, uint32_t len);
 uint8_t LocalLink_PollEvent(struct LocalEvent *ev);
 uint32_t LocalLink_Milliseconds(void);
 

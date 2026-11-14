@@ -37,6 +37,7 @@ static uint8_t sLocalBikeMode, sLocalBikeSequence, sRemoteBikeGraphics, sRemoteB
 static bool sRemoteBikeValid;
 static bool sRemoteMovementActive;
 static unsigned sBikeRebinds, sBikeActions;
+#include "coop_live_fixture.inc"
 
 uint8_t CtrCoopBike_LocalMode(void) { return sLocalBikeMode; }
 uint8_t CtrCoopBike_LocalMovementSequence(void) { return sLocalBikeSequence; }
@@ -103,6 +104,17 @@ void CopyPartyAndObjectsFromSave(void) {}
 void LoadPlayerBag(void) {}
 void ZeroMonData(struct Pokemon *mon) { memset(mon, 0, sizeof(*mon)); }
 u32 GetBoxMonData(struct BoxPokemon *mon, s32 field) { (void)field; return mon->hasSpecies; }
+u32 GetMonData2(struct Pokemon *mon, s32 field)
+{
+    u32 value = 0;
+    if (field == MON_DATA_PERSONALITY)
+        value = mon->box.personality;
+    else if (field == MON_DATA_OT_ID)
+        value = mon->box.otId;
+    else if (field == MON_DATA_SPECIES || field == MON_DATA_SPECIES_OR_EGG)
+        value = mon->box.hasSpecies;
+    return value;
+}
 void BoxMonToMon(const struct BoxPokemon *box, struct Pokemon *mon) { mon->box = *box; }
 u8 CalculatePlayerPartyCount(void)
 {
@@ -165,6 +177,7 @@ const struct CtrCoopProfile *CtrCoopProfile_Get(void)
 
 static void ResetGuest(void)
 {
+    ResetLiveFixture();
     CtrCoop_SoftReset();
     memset(&sCoop, 0, sizeof(sCoop));
     memset(&sSave1, 0, sizeof(sSave1));
@@ -243,7 +256,7 @@ static void TestRemoteBikeChanges(void)
     sRemoteMovementActive = false;
     UpdateRemoteObject(&local);
     CHECK(sBikeRebinds == 3 && sRemoteBikeMode == CTR_COOP_BIKE_NONE, "dismounting restores the selected walking character");
-    CtrCoop_PeerLeft(2);
+    EXPECT_GUEST_MENU(CtrCoop_PeerLeft(2));
     CHECK(!sRemoteBikeValid, "disconnect clears the remote bike context");
 }
 
@@ -375,23 +388,22 @@ static void TestSavedTeamRejoinsWithoutPcMenu(void)
 static void TestGuestSaveProtection(void)
 {
     ResetGuest();
+    sCoop.authenticated=false; /* Discovery has not joined a host yet. */
     CtrCoop_Stop();
     CHECK(!CtrCoop_GuestSaveBlocked(), "cancelled search permits saving the original local world");
     ResetGuest();
     memset(sSaveData, 0, sizeof(sSaveData));
     ApplyHostSave();
-    CtrCoop_Stop();
-    CHECK(CtrCoop_GuestSaveBlocked(), "leaving the host world cannot overwrite the local save");
-    CtrCoop_SoftReset();
+    EXPECT_GUEST_MENU(CtrCoop_Stop());
+    CHECK(!sAutoSaves && !sCoop.guestWorldLoaded, "leaving the host world discards it without a local save write");
     CHECK(!CtrCoop_GuestSaveBlocked(), "reset restores local save access");
     ResetGuest();
     ApplyHostSave();
-    CtrCoop_PeerLeft(2);
+    EXPECT_GUEST_MENU(CtrCoop_PeerLeft(2));
     CHECK(!sCoop.authenticated && sCoop.peerId == 0, "disconnect invalidates the authenticated peer");
     sSession = LOCAL_SESSION_NONE;
     CtrCoop_OverworldFrame();
-    CHECK(CtrCoop_GuestSaveBlocked(), "network loss preserves the local save guard");
-    CtrCoop_SoftReset();
+    CHECK(!sAutoSaves && !sCoop.guestWorldLoaded, "network loss returns to clean boot without saving the guest world");
     sCoop.wanted = true;
     sCoop.guest = false;
     CHECK(!CtrCoop_GuestSaveBlocked(), "the host can still save its own world");
@@ -441,16 +453,16 @@ static void TestPacketAuthentication(void)
     ResetGuest();
     sCoop.peerId = 2;
     ResetStoryBaseline();
-    CtrCoopProtocol_EncodeFlag(1, true, flag, sizeof(flag));
+    CtrCoopProtocol_EncodeFlag(64, true, flag, sizeof(flag));
     sCoop.authenticated = false;
     CtrCoop_HandlePacket(2, flag, sizeof(flag));
-    CHECK(!FlagGet(1), "unauthenticated packets cannot change story flags");
+    CHECK(!FlagGet(64), "unauthenticated packets cannot change story flags");
     sCoop.authenticated = true;
     CtrCoop_HandlePacket(3, flag, sizeof(flag));
-    CHECK(!FlagGet(1), "another sender cannot impersonate the authenticated peer");
+    CHECK(!FlagGet(64), "another sender cannot impersonate the authenticated peer");
     sCoop.saveReady = true;
     CtrCoop_HandlePacket(2, flag, sizeof(flag));
-    CHECK(FlagGet(1), "authenticated peer can synchronize story flags");
+    CHECK(FlagGet(64), "authenticated peer can synchronize story flags");
     sCoop.pcOwner = PC_OWNER_GUEST;
     CtrCoop_HandlePacket(2, release, sizeof(release));
     CHECK(sCoop.pcOwner == PC_OWNER_GUEST, "remote release cannot unlock the local player's PC");
@@ -492,8 +504,9 @@ static void TestHostSnapshotThroughPackets(void)
     CHECK(sCoop.saveReady && sSave1.flags[2] == 4, "authenticated snapshot is applied after checksum validation");
     CtrCoop_MenuFrame();
     CHECK(sStarterOpened == 1, "complete snapshot allows the starter menu");
-    CtrCoop_Stop();
-    CHECK(CtrCoop_GuestSaveBlocked(), "receiving the snapshot preserves save protection after leaving");
+    CHECK(CtrCoop_GuestSaveBlocked(), "receiving the snapshot protects the local save before stack abandonment");
+    EXPECT_GUEST_MENU(CtrCoop_Stop());
+    CHECK(!sAutoSaves && !sCoop.guestWorldLoaded, "leaving the received snapshot resets without saving");
 }
 
 static void TestPcPreservesLiveParty(void)
@@ -562,12 +575,10 @@ static void TestSpritesWaitForOverworld(void)
     sSpriteMutations = 0;
     CtrCoop_OverworldFrame();
     CHECK(sSpriteMutations == 0, "remote avatar updates wait while menu sprites are active");
-    CtrCoop_Stop();
+    EXPECT_GUEST_MENU(CtrCoop_Stop());
     CtrCoop_OverworldFrame();
     CHECK(sRemovals == 0, "disconnect cleanup cannot remove a menu sprite");
-    gMain.callback2 = CB2_Overworld;
-    CtrCoop_OverworldFrame();
-    CHECK(sRemovals == 1, "disconnect removes the avatar after returning to the overworld");
+    CHECK(!sCoop.guest && !sCoop.wanted, "guest leaves the menu stack for native boot instead of resuming its field");
 }
 
 static void TestPcMutualExclusion(void)
@@ -670,18 +681,18 @@ static void TestPcDenialResumesScript(void)
     CtrCoop_OverworldFrame();
     CHECK(sScriptResumed == 0 && CtrCoop_PCNoticeName() != NULL,
         "reordered claim upgrades a pending rejection to the named notice");
-    CtrCoop_PeerLeft(2);
+    EXPECT_GUEST_MENU(CtrCoop_PeerLeft(2));
     CtrCoop_OverworldFrame();
-    CHECK(sScriptResumed == 1 && CtrCoop_PCNoticeName() == NULL,
-        "disconnect dismisses the PC notice without stranding the script");
+    CHECK(sScriptResumed == 0 && CtrCoop_PCNoticeName() == NULL,
+        "disconnect discards the waiting guest script and PC notice");
 
     ResetGuest();
     sCoop.saveReady = true;
     CtrCoop_RequestPC();
     sSession = LOCAL_SESSION_NONE;
+    EXPECT_GUEST_MENU(CtrCoop_OverworldFrame());
     CtrCoop_OverworldFrame();
-    CtrCoop_OverworldFrame();
-    CHECK(sScriptResumed == 1, "disconnect releases a pending PC script");
+    CHECK(sScriptResumed == 0 && !sCoop.pcPending, "disconnect discards a pending PC script instead of resuming it");
 
     ResetGuest();
     gMain.callback2 = MenuCallback;

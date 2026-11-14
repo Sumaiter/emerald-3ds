@@ -1,9 +1,414 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Auftrag: Issues sichern, GitHub aktualisieren, dann Sprint6 (2026-11-14)
+
+Die zwei Restfehler sind auf Nutzerwunsch getrennte offene GitHub-Issues:
+
+- [#1 Gras beim entfernten Spieler](https://github.com/Sumaiter/emerald-3ds/issues/1)
+- [#2 Zuschauer-Ruckeln](https://github.com/Sumaiter/emerald-3ds/issues/2)
+
+Weitere Arbeit daran wurde zugunsten von Sprint6 zurueckgestellt. Astra hat
+seit letzter Quellenfreigabe keine Dateien geaendert und ist gestoppt.
+Belegt ist vermeidbare Vollpruefsumme vor dem statischen Vergleich im
+Spectator-Capture; noch kein kausaler ARMnachweis. Gras-Restursache weiterhin
+nicht gesichert. Keine unfertige Optimierung enthalten. Collector sauber
+beendet; finale read-only Logs liegen in der oben beschriebenen Belegsession.
+Nutzerauftrag: aktuellen geprueften Stand pushen, vor Sprint6 aktuelle Merges
+von ZallaxDev/emerald-3ds:main pruefen/uebernehmen, danach Sprint6 mergen und
+direkt erkennbare Probleme ueberarbeiten. Emulatoren/SAVs bleiben beim Nutzer.
+
+## Erneuter Emulatorbefund: beide Nachtests offen (2026-11-14)
+
+Nutzer meldet beim neuen Build weiterhin keinerlei Graswackeln auf dem Geraet
+des nicht laufenden Spielers. Zuschauen ist verbessert, aber noch laggy.
+Am Gast selbst ist Ruckeln schwer erkennbar, wenn dann nur wenig. Beide
+Nachtests gelten damit als NICHT bestanden. Alle anderen zuvor bestaetigten
+Standardtests bleiben anerkannt. Die folgenden Hintergrundpruefungen des
+vorherigen Fixstands ersetzen diese konkrete Laufzeitabnahme nicht.
+
+Aktuell Gast im Wildkampf, Host schaut zu; Root hat beide Fenster ohne Eingaben
+beobachtet (Waumpel Lv3, Hydropi Lv5 15/20HP, passende statische Topbilder).
+Keine Animationslatenz aus diesen Einzelbildern ableiten. Beide laufenden Logs
+bestaetigen E3ID-6a834575fbbbc71c / ABI bd6f7986, also den neuen Protokoll18-Build.
+Read-only Collector: build/coop-observation/20261114-171821Z; Baselinezeiten
+sind Erfassungszeit, keine urspruengliche Ereigniszeit. Gast zeigt wiederholt
+PROF slow mit vbl12.35..12.8ms und DROP33.4ms; noch keine gesicherte Ursache.
+
+Derselbe einzige Astra-Agent 5be417bc-1c7c-48f5-b124-66454b74a3e4 bleibt
+auto-review und untersucht/optimiert seine Zuschauerdateien. Zusaetzlich
+prueft er Gras nur lesend; Root/Sol implementiert danach den Grasfix.
+Keine weiteren Agenten, Emulator-/SAV-/Profil-/Installationsaenderungen.
+Auftrag lokal build/coop-nextwave/runtime-followup-task.txt.
+
+## Neue Planung: Sprint 9 (2026-11-14)
+
+Auf Nutzerwunsch in `Status.md` als offen nach Sprint8 ergaenzt:
+vollstaendiges Solospiel auf einem Geraet, Solo-Alternativen fuer
+Tauschentwicklungen (auch mit Item) und regulaere Ingame-Wege fuer fruehere
+Event-Pokemon samt notwendigem Zugang. Weitere externe Erwerbshuerden werden
+systematisch erfasst. Aufgaben und Abnahmekriterien stehen im eigenen
+Sprint9-Abschnitt. Nur Planung; kein neuer Branch und noch keine Umsetzung.
+Die Gras-/Zuschauer-Fixwelle ist unten mit Build und ausstehendem Nachtest dokumentiert.
+
+## Fix-Welle Gras und lokale Zuschaueransicht: gebaut (2026-11-14)
+
+Beide Aenderungen sind implementiert und gemeinsam im Hintergrund geprueft.
+Release und PAK sind gebaut: **Protokoll18**, Build **d3d091c44f788f8e**,
+Boot **E3ID-6a834575fbbbc71c**, ABI **bd6f7986**. Dieser Stand ersetzt den unten
+historisch dokumentierten Protokoll17-Build. Noch keine Emulatorabnahme dieser
+beiden Aenderungen; Emulatoren, SAVs und Profile blieben unveraendert.
+
+Der Nutzer bestaetigt alle bisherigen Standardtests einschliesslich Host-F6/
+Gast-Hauptmenue, NPC-Marktfuehrung und B-Beschriftung als bestanden. Sie bleiben
+anerkannt. Nach dieser Lieferung nur Gras und neue Zuschaueransicht gezielt
+nachtesten; vorbereitete Sonderfaelle und einmalige feste Wildgegner bleiben
+separat offen (LOKAL_TESTEN.md).
+
+- **Gras (Root/Sol):** Zusammengefasste Remote-Positionskorrekturen landeten
+  im nativen Spawnpfad, der die Grasanimation ans Ende setzt. Jetzt wird nur
+  nach einer solchen Korrektur einmal der native Schritt-Grundeffekt benutzt.
+  Normale Schritte bleiben nativ; Stillstand, Drehen und Heartbeats starten
+  nichts erneut. Patch0096 ist im Enginebaum bereits angewendet. Echte
+  Backend-/Engine-/TallGrass-/LongGrass-Tests gruen; gesicherte Ausgangsbasis
+  reproduziert den Fehler. ARM und isolierter Patchroundtrip bestanden.
+- **Zuschauen (einziger Astra-Subagent):** Aufgeloeste pointerfreie
+  Darstellungszustaende statt fertiger RGB-Bilder, lokal mit Originalrenderer
+  und Zwischenbildern. VRAM/OAM/Paletten/Scanlines plus HD-HUD und privater
+  Voxel-Karten-/Kamerakontext; keine fremde Kampfentscheidung, Party-, Save-
+  oder Taskausfuehrung. Unterschiedliche Zuschauer-/Quellkarten sind abgedeckt.
+  Workerjoin/Jobabbruch und GPU-Fence sichern den Renderbesitzwechsel;
+  B/Touch/Stop/Reset stellen die eigene Ansicht wieder her.
+  **Kein vollstaendiges semantisches Ereignisprotokoll:** Unter Rueckstau
+  koennen kurzlebige Quellzustaende zusammenfallen. Der native Belastungsfall
+  mit grossem Tile-/Palettenwechsel und verlorenem Chunk benoetigt 704ms;
+  ruckelfreie Wiedergabe jeder Attacke ist nicht nachgewiesen. Messungen mit
+  lokalen Zwischenframes sind Hosttests, keine Emulator-/Hardware-FPS.
+
+Astra `5be417bc-1c7c-48f5-b124-66454b74a3e4` lief sichtbar in Paseo als
+gpt-6-astra/xhigh/auto-review; Root Sol/xhigh/auto-review uebernahm Gras,
+Integration und Gesamtbuild. Quellenfreigabe vom Agenten ausdruecklich erhalten.
+Keine weiteren Agenten. Neue Quellen 3ds_battle_present.c/.h sowie beide
+3ds_battle_present_video.inc und 3ds_battle_present_assets.inc sind gestaged;
+CPPFLAGS und GAMEFLAGS aktivieren CTR_BATTLE_PRESENTATION. Patch0097 (read-only
+Fieldmap-Export) ist bereits angewendet. 0096/0097 nicht doppelt anwenden.
+
+Bestanden: `make -C 3ds_port verify-coop -B -j8` inklusive neuer aktivierter
+Present-/World-/Fence-/HD-/Patchtests und Grastest, ARM-Release/Link/PAK,
+Quellenabgleich und Release-Audit einschliesslich unversionierter Quellen.
+Belege: build/coop-nextwave/final-tests.log, final-release.log,
+build-hashes.json, source-stage-check.log, audit.log. Detailberichte:
+grass-integration.md und spectator-integration.md im selben Belegordner.
+
+Artefakte: build/upstream/3ds_port/dist/Emerald3DS.3dsx und Emerald3DS.smdh,
+dazu build/upstream/3ds_port/build/emerald3ds.pak. Keine Installation/Commits/
+Pushes. Fuer den neuen Nutzertest beide Fenster schliessen und das Paseo-Script
+"Host und Gast starten" manuell starten; F6 installiert keinen neuen Build.
+
+## Vorherige Fix-Welle vom 2026-11-14 (historischer Arbeitsstand)
+
+Aktuelle Abnahme und neue Beauftragung stehen im obersten Abschnitt.
+
+Aktueller ausdruecklicher Auftrag: alle vier Befunde jetzt beheben und die
+uebrigen Tests als vom Nutzer bestanden dokumentieren. Die vorherige
+Zurueckstellung ist aufgehoben. Nur Hintergrundtests; Emulatorbedienung und
+SAV-/Profilaenderungen bleiben beim Nutzer. Gesicherte read-only Portlogs
+unter `build/coop-fixes-20261114/{host,guest}-before.log` bestaetigen den
+getesteten Build 9ddd5d54d9fa7579 / E3ID-47028c29f2d44c12, ABI 9242b424.
+
+Alle vier Korrekturen sind implementiert und im Hintergrund geprueft;
+die beteiligten sichtbaren Paseo-Agenten nutzten auto-review. Der eigene Emulator-Nachtest dieser vier
+Faelle bleibt beim Nutzer; die bisherigen Standardtests bleiben anerkannt.
+
+1. **Urspruenglicher Fehler: Host F6 / Gast-Hauptmenue:** Drueckt der Nutzer F6 beim
+   Host, friert der Gast ein und erreicht das Hauptmenue nicht. Screenshot:
+   Oberwelt oben stehengeblieben, unten schwarz mit Versions-/Credittext.
+   Ursache: longjmp aus dem VBlank umgeht das Freigeben von sWaiting in
+   CtrPlatform_EndFrame. Der Post-Stackreset setzt diese Framesperre und die
+   Zeit-/Pacingdaten vor dem neuen Boot zurueck. Ein echter EndFrame-Test
+   prueft den Sprung und vier Folgeframes; ein unabhaengiger Test verfolgt
+   die nativen Copyright-/Save-/Menuecallbacks und den Taskscheduler.
+2. **Zuschauen ruckelt stark:** Nutzer verlangt Optimierung der sichtbaren
+   Uebertragung. Codec-/Queue-Tests gelten nicht als Performanceabnahme im
+   Emulator. Die bisherige Vier-Chunk-Abfrage wartete alle 512 Bytes auf
+   eine weitere Runde; hinzu kamen 100 ms nach dem Bild-ACK. Neu sind
+   XOR/LZ-Aenderungen, 146-Byte-Chunks, ein gleitendes 32-Chunk-Fenster und
+   maximal acht Low-Priority-Pakete je 16 ms. Unveraenderte Bilder werden
+   nicht erneut uebertragen. Die 32 reservierten Gameplay-Queueplaetze bleiben.
+   Im simulierten lokalen Link erreicht die native Assetfixture 7,625 statt
+   1,75 geaenderte Bilder/s und ein Erstbild nach 160 statt 672 ms.
+   Das sind kontrollierte Hintergrundmessungen, keine Emulator-/Hardwarewerte.
+3. **Zuschauer-Text fehlerhaft:** Touch-Schaltflaeche zeigt
+   `Zuschauen verlassen ?B?`. Die Fragezeichen um B muessen entfernt werden.
+   Neu: `B: Zuschauen verlassen`. Die tatsaechliche Locale-Konvertierung und
+   der echte UI-Zweig pruefen die Darstellung ohne Fragezeichen.
+4. **Marktfuehrer bewegt sich beim Host nicht mit:** Spricht der Gast den
+   Verkaeufer/Marktfuehrer im zweiten Ort an, laeuft dieser beim Gast zum
+   Pokemon-Markt, bleibt beim Host aber am vorherigen Ort. Screenshot zeigt
+   unterschiedliche NPC-Positionen waehrend derselben Fuehrung. Erwartet ist
+   die sichtbare NPC-Bewegung auf beiden Seiten. Der alte Snapshotpfad war
+   Host->Gast; permanente Objektupdates erfassten keine laufende Fuehrung.
+   Neu uebertragen authentifizierte Pakete 76/77 die ereignisgebundenen
+   Akteursposen und ein geordnetes Ende. Die Gegenseite bewegt nur den NPC
+   mit nativen Bewegungsschritten und fuehrt kein zweites Skript aus.
+   Der Ereignisabschluss wartet bei Backpressure; bereits empfangene
+   Bewegungsschritte werden vor Autosave und neuem Join-Snapshot beendet.
+
+Die Zuschauer-Alternative ueber Ereignisse wurde am vorhandenen Code geprueft:
+Battlecontroller aendern neben der Anzeige auch Party, Battle-TV und
+Animationsglobale. Ein reiner Praesentationskontext mit eigener Animation und
+2D/3D-Renderzustand waere ein eigener Ausbau. Dieser Fix nutzt komprimierte
+Bildunterschiede und behaelt den vollstaendig gerenderten 400x240-Bildschirm.
+
+PC-Sperre wurde zuvor vom Nutzer als erledigt gemeldet, Wildkampf-XP als gut
+beobachtet (keine extern geprueften Zahlen). Figurengalerie wurde akzeptiert.
+Neue Nutzerrueckmeldung vom 2026-11-14: "der rest hat alles funktioniert".
+Die uebrigen Punkte der zuletzt ausgegebenen Sprint-5-Testliste gelten damit
+als vom Nutzer erfolgreich gemeldet; keine eigenen Emulatorpruefungen oder
+Messungen daraus ableiten. Die Emulator-Nachabnahme der vier obigen
+Korrekturen bleibt offen und erfolgt mit dem neuen Build. Testliste und Grenzfallabgrenzung unter
+`LOKAL_TESTEN.md`. Sprint 5 ist damit noch nicht vollstaendig abgenommen.
+
+## Neuer Testbuild nach den vier Korrekturen
+
+Protokoll **17**, Build **11d899b9ae0f4952**, Bootkennung **E3ID-dc155c4f365fa25e**,
+ABI **04c2f1eb**. Beide Spieler brauchen den passenden neuen Build samt PAK.
+Release und Datenpack sind gebaut; alle Port-Eingaben wurden bytegleich in
+den Buildarbeitsbaum uebernommen. Belege unter `build/coop-fixes-20261114/`:
+`final-tests.log`, `final-release.log`, `source-stage-check.log`,
+`build-hashes.json` und `audit.log`. Es wurden keine Emulatoren bedient,
+Profile installiert oder SAVs geaendert.
+
+Der komplette Hintergrundlauf `make -C 3ds_port verify-coop -B -j8` ist gruen,
+einschliesslich realem Frame-/Menue-Reset, NPC-Zweiendpunkt-/Engine- und
+Speicherbarrieretests sowie Zuschauer-Codec, Queuebudget, Exit, GPU-Fence,
+Schriftkonvertierung und Lastbenchmark. Die unabhaengige Nachpruefung steht in
+`reset-review.md`, Implementierungsbelege in `npc-integration.md` und
+`spectator-integration.md` im selben Belegordner. Patch 0095 ist im
+Buildarbeitsbaum bereits angewendet; nicht erneut anwenden.
+
+Nur die vier obigen Fehler gezielt mit dem neuen Build nachtesten. Das
+Emulatorergebnis bleibt offen; Standardtests wurden vom Nutzer bestanden
+gemeldet. Volle Boxen, Sonderkampf-Rueckkehr und die separat dokumentierte
+Reservation einmaliger fester Wildgegner werden dadurch nicht abgenommen.
+
+## Historisch: Live-Koop und Hostverlust (2026-11-13)
+
+Protokoll **16**. Beide Spieler brauchen denselben neuen Build. Die folgenden
+aelteren Buildkennungen gehoeren zu den dort bezeichneten historischen Abnahmen.
+
+Finaler Release-/PAK-Build: **9ddd5d54d9fa7579**, Bootkennung
+**E3ID-47028c29f2d44c12**, ABI **9242b424**. Build und Datenpack erfolgreich;
+6388 Assets/1339 Pointerzeilen sowie Script-/Songrelokationen geprueft.
+Alle 284 Port-Eingaben stimmen bytegleich mit den Buildquellen ueberein.
+Belege: `build/coop-live/final-release.log`, `source-stage-check.log`,
+`build-hashes.json` (SHA256 aller drei Startdateien), `root-patch.log`.
+
+- Beutel und PC-Items werden ueber einen gemeinsamen Hostledger sofort
+  uebernommen, auch waehrend unabhaengiger normaler Kaempfe. Verbrauch wird
+  vor der Wirkung reserviert; Transfers, Helditemtausch und Rueckgaben sind
+  atomar. Eine ungeklaerte Antwort wartet vor der Wirkung auf die Entscheidung.
+- Geld und Muenzen verwenden denselben Transaktionskern mit eigenem Ledger.
+  Kaeufe, Services, Wetten, Gewinne und Verluste sind gemeinsam. Livebuchungen
+  werden am Kampfende kein zweites Mal angewendet.
+- A auf den kaempfenden Spieler oder dessen aktuellen NPC-Gegner startet die
+  Zuschaueransicht. B oder die Touch-Schaltflaeche verlaesst sie; eine gehaltene
+  Richtung kann danach sofort weiterlaufen. Der obere Bildschirm uebertraegt
+  das fertig gerenderte Kampfbild mit begrenztem Netzwerkbudget.
+- Abgeschlossene Szenarien gleichen Hideflags, aktive NPCs und permanente
+  Objektmutationen ab, bevor die Ereignissperre freigegeben wird. Alle sechs
+  Route-103-Rivalvarianten sind geprueft. Kartenlokale TEMP-Flags und -Variablen
+  bleiben getrennt; NPC- und Skripteinstieg pruefen inzwischen versteckte Objekte.
+- Die Gast-Teamreihe im Koop-PC behaelt HP, Status und Mail; der Boxpayload
+  behaelt AP, Attacken und weitere Daten. Pruefsummen binden die Vitalwerte an
+  das konkrete Pokemon. Normale Boxkonvertierungen bleiben nativ.
+- Verlaesst der Gast die Sitzung, behaelt der Host den zuletzt vollstaendig
+  empfangenen Zustand im RAM und speichert automatisch im naechsten sicheren,
+  entsperrten Oberweltzustand. Fehlgeschlagenes Speichern wird erneut versucht.
+- Bei Hostverlust kehrt der Gast automatisch ins Hauptmenue zurueck. Der
+  gesamte alte Spiel-/Item-/Geldaufrufstapel wird vor dem RAMreset verworfen;
+  es gibt keine Fortsetzung der Gastwelt. Der lokale Spielstand wird beim Boot
+  neu geladen. Eine neue Teilnahme authentifiziert sich frisch und uebernimmt
+  den aktuellen Hostzustand. Stiller Transportverlust wird nach 6000 ms erkannt.
+- Ein ausdruecklicher voller Reset verwirft nach dem Stackabbruch beide lokalen
+  Ledger, damit sie keinen anderen Spielstand ueberschreiben. Beim gewoehnlichen
+  Gastverlust behaelt der weiterlaufende Host seine Entscheidungen und Abbuchungen.
+
+Hintergrundabnahme: `build/coop-live/final-tests.log` ist gruen, null erwartete
+Fehler. Echte Enginekoerper, zwei Endpunkte, verschluesselte Beutel und volle
+Taschen, konkurrierende letzte Items/Kaeufe, 48 Gast-Kontext/Disconnectkombinationen,
+native Boot-/Hauptmenue-Reihenfolge, 6000-ms-Transporttimeout, Zuschauer-/GPU-Pfade
+und die bestehenden Sprint-5-Regressionen sind Teil von `verify-coop`.
+Berichte: `build/coop-live/{inventory-integration,inventory-bridge-review,
+money-integration,story-integration,spectator-integration,live-integration-review}.md`.
+Hostverlust/Reset: `build/coop-live/guest-disconnect-menu.md` und
+`guest-disconnect-validation.log` einschliesslich vier erkannter Mutationen.
+Patch 0090/0092/0093/0094 sind im Buildbaum bereits angewendet.
+
+Emulator-/Hardwareabnahme bleibt beim Nutzer. Gezielte Nachtests: beide Rollen
+beim letzten Item und gleichzeitigen Kauf; A/B/Touch beim Zuschauen; Maike-Sieg
+und verschwundener NPC beim anderen Spieler; verletzte/kampfunfaehige Gastreihe
+nach Disconnect, Autosave und Rejoin; Hostverlust in Oberwelt/Kampf/PC/Beutel.
+Ein Prozesscrash genau zwischen Abbuchung und Effektuebernahme ist ohne
+persistent gespeichertes Transaktionsjournal weiterhin keine atomare
+Welt-/Party-Saveoperation; bestaetigte normale Buchungen werden dedupliziert.
+
 Stand: 2026-11-13. Der zuvor lokale Stand nach main fdc4b48 wird fuer die
 Branch-Aktualisierung versioniert: Sprint 5, alle 99 Figuren und reparierte
 Hintergrundtests. Die folgenden aelteren Abnahmen dokumentieren ihre jeweiligen
 Builds; fuer den aktuellen Teststand gelten die ersten Abschnitte.
+
+## Reparatur der sieben Reviewbefunde (2026-11-13)
+
+Nutzer hat alle sieben Reparaturen ausdruecklich beauftragt. Neue Version des
+Koop-Protokolls: **15**. Beide Spieler muessen denselben neuen Build benutzen.
+Die bisherigen roten Probes unter build/coop-review bleiben historische
+Vorher-Evidenz; die dauerhaften Regressionen sind jetzt Teil von verify-coop.
+
+- BATTLE_BEGIN fuehrt die Ergebnisnummer mit; alte bereits angewendete Anfaenge
+  werden passend bestaetigt, ohne den Empfang erneut zu oeffnen. BATTLE_READY
+  bestaetigt ausschliesslich die passende Ergebnisnummer und Pruefsumme.
+- Sondertrainer warten nicht mehr auf gewoehnliche Trainerflags. Normale
+  Trainer behalten die Flag-/Story-Freigabe. Aufzeichnungen und Wallys
+  Fangtutorial erzeugen keine Spieler-Kampftransaktion.
+- Patch 0089 schliesst Nicht-WhiteOut-Rueckkehrwege und erfasst Resultate erst
+  nach nativer Item-/Teamwiederherstellung. Temporaere Frontier-/Partnerteams
+  duerfen das gespeicherte volle Team nicht ersetzen. Normaler WhiteOut bleibt
+  nach Geldverlust/Heilung; SoftReset raeumt auch aktive Kampftransaktionen auf.
+- Ein vollstaendig empfangener Fang bei vollen Boxen bleibt im RAM erhalten.
+  PC-Wiederherstellungsanfrage 64 bindet sich an das wartende Ergebnis. Der PC
+  bleibt gegen aktive Kaempfe und unvollstaendige Transfers gesperrt. Nach
+  Schliessen wird der Fang vor dem PC-Snapshot uebernommen, damit beide Seiten
+  denselben Boxinhalt erhalten. Ein neuerer PC-Snapshot hat Vorrang vor dem
+  wartenden Kampfresultat: Verschieben, Bearbeiten, Freilassen und Entnehmen
+  eines Fangs erzeugen keine Duplikate oder Wiederherstellungen. Dieser Vorrang
+  bleibt auch bei erneutem Transfer nach fehlgeschlagener Inventaruebernahme
+  erhalten. Zwoelf Endpunktfaelle (beide PC-Besitzer mit je sechs Aktionen)
+  pruefen Boxen, Team, Geld, Items und die abschliessenden Bestaetigungen.
+- Patch 0088 schuetzt weitere vom lokalen Skript bewegte/entfernte/gedrehte
+  Szenenakteure gegen Host-Snapshots. Pending/Prepared-Trainer behalten ihre
+  zur Annaeherung erfasste Position/Richtung. Ablehnung/Timeout/Reset geben
+  diesen Schutz frei, unabhaengige NPCs synchronisieren weiter.
+
+Neue Tests: coop_battle_regressions.inc (in Session-Suite),
+coop_scene_regression_test.c, test_coop_scene_hooks.py,
+test_coop_battle_return_hooks.py; Codec-/Runtime-Fixtures erweitert.
+Gegenpruefungen ueber sichtbare Paseo-Agenten mit auto-review.
+Abnahme: finales verify-coop gruen, null erwartete Fehler. Echte
+Kampf-Rueckkehr/Teamrestore/WhiteOut-Funktionskoerper: 517 Checks; Szenen-/
+Annaeherungssuite: null Fehler. Beide PC-Erholungsrollen mit zwei vollstaendig
+simulierten Endpunkten bestanden. ARM-Syntax fuer Backend/Codec und alle zehn
+geanderten Enginequellen bestanden; 0087/0088/0089 Reverse-Checks bestanden.
+Release-Audit inklusive unversionierter neuer Dateien: 1244 Dateien, null Befunde.
+Belege: build/coop-review/final-tests.log, fix-arm.log, fix-patches.log,
+fix-audit.log. Sonderkampf-Mutationsnachweise unter build/coop-finding4-validation:
+Baseline scheitert; vorzeitiger WhiteOut-Abschluss und fehlende Unterdrueckung
+eines temporaeren Teamladens werden von den neuen Tests erkannt.
+Finaler Release-/PAK-Build erfolgreich: **8c6a3526999fafca**, Bootkennung
+**E3ID-6c073b4f16e97129**, ABI **a48e1627**, Protokoll **15**.
+Belege: build/coop-review/final-release.log und build-hashes.json mit SHA256
+aller drei Startdateien. Alle 15 geaenderten Portdateien stimmen bytegleich
+mit den Release-Eingaben ueberein (source-stage-check.log).
+Unabhaengiges Abschlussreview: keine offenen Restbefunde im geprueften Umfang;
+Sitzungs-/Codec-Suite und separate Snapshot-/Inventar-Retry-Probe bestanden.
+Emulator-Nachtests bleiben beim Nutzer. Keine laufenden Emulatoren, Profile
+oder SAVs wurden fuer diese Reparatur geaendert; kein Commit/Push.
+
+## Historisch: Hintergrundreview mit sieben offenen Faellen (2026-11-13)
+
+Nutzer bat nach der neuen Sperre um weitere Fehlerpruefung, ohne Emulatoren.
+Fuenf gezielte neue Probes plus zwei unabhaengige Reviewer-Probes schlagen
+reproduzierbar fehl; die bisherige verify-coop-Suite ist weiterhin gruen.
+Produktionscode und letzter Runtimebuild wurden bei diesem Review nicht geaendert.
+
+Offen: wiederholtes altes BATTLE_BEGIN oeffnet abgeschlossenen Transfer erneut
+und blockiert neuen; BATTLE_READY ist nicht an konkrete Ergebnisnummer/Checksum
+gebunden; Sondertrainer-Sieg kann auf nie gesetztes gewoehnliches Trainerflag
+warten; Niederlage ohne WhiteOut (z.B. Kampfturm/Geheimbasis) laesst battleActive
+wahr; volles Boxlager + fertiger Gastfang verweigert gerade den fuer Platz
+benoetigten PC; Grunt-Szene im RusturfTunnel schuetzt Peeko/Briney-Bewegungen
+nicht gegen Host-Snapshots; Trainer-Approach kann nach Wartezeit neue Richtung
+mit alter Entfernung kombinieren (Route102 Tiana).
+
+Details, genaue Ausloeser/Codepfade und Fixansaetze: build/coop-review/RESULT.md.
+Repros/Logs: main-probes.c/.log (fuenf rote Sicherheitsassertions),
+native-assumptions.py/.log (echte Engine-Rueckkehrzweige bestaetigt),
+reviewer/probes.c/.log (zwei rote Sicherheitsassertions), baseline-suite.log.
+Keine Failures als Abnahme markieren. Der Transport selbst ist zuverlaessig/
+geordnet; der alte-BEGIN-Fehler betrifft Wiederholungen des Anwendungsprotokolls.
+Sichtbarer Paseo-Pruefer dfd46672-9030-4926-9b55-a5fe49ea1e03, high/auto-review,
+keine gemeinsamen Codeaenderungen. Emulatorreproduktion und Reparaturen offen.
+
+## Ereignissperre vor Gespraech und Kampfeinstieg (2026-11-13)
+
+Neuer Nutzerbefund: Gast begann den Rivalenkampf zuerst, danach schwarzer
+Host-Bildschirm auf Route 103. Sperre ausdruecklich fuer alle Kaempfe verlangt.
+Patch 0087 beansprucht Feldereignisse vor dem ersten Bytecodebefehl: NPCs
+ueber Karte+lokale Objekt-ID statt starter-/geschlechtsabhaengiger Trainer-ID;
+automatische Szenen als Kartensperre, damit man denselben Ablauf nicht ueber
+einen anderen Einstieg/NPC starten kann. Zwei annaehernde Trainer werden
+atomar beansprucht. Wanderndes legendaeres Pokemon hat eine globale Identitaet.
+Unabhaengige Zufallskaempfe sowie verschiedene einzelne Trainer bleiben moeglich.
+
+Der Host entscheidet verbindlich, bevor der Gast lock/msgbox/bewegen/Kampf
+starten darf. Eine Ablehnung beendet den ungestarteten Kontext und raeumt
+lediglich inaktive Trainer-Approach-Tasks auf; die untere Anzeige nennt den
+anderen Spieler. Bestaetigen startet niemals das abgelehnte Skript. Besitz
+bleibt ueber waitstate/Kampf/Abschlussdialog bestehen; Freigabe erst nach
+Ergebnisbestaetigung und Versand der Storyaenderungen. Anfragen/Freigaben
+werden wiederholt; Token und Objektvergleich verwerfen spaete/fremde Antworten.
+Bei Verbindungsverlust startet ein noch nicht freigegebenes Skript nicht.
+Host-NPC-Snapshots ueberschreiben waehrenddessen nicht die eigenen NPC-Bewegungen
+des Gast-Skripts. Normale Kampfreservierung jetzt zusaetzlich vor der Blende.
+
+Protokoll 14, neue Pakettypen 60..63 (22 Byte); 40..50 bleiben fuer Sprint 6/7
+frei. Beide Spieler brauchen den neuen Build. Bei spaeteren Sprint-Merges die
+Versionsnummer fuer den kombinierten Protokollumfang neu festlegen, nicht die
+alten 12/13 uebernehmen. Eigentlicher Koop-Doppelkampf ist auf main noch nicht
+integriert: der eingeladene Partner startet keinen zweiten NPC-Kontext, LINK
+bleibt vom Einzelkampf-Gate ausgenommen; Emulatorabnahme nach Sprint-6-Merge offen.
+
+Hintergrundpruefungen: verify-coop ohne erwartete Fehler, neue Host/Gast-
+Sitzungsregressionen und echte gestagte Script-/Kampf-/Approach-Funktionskoerper,
+ARM-Syntax aller vier Enginequellen plus Backend, Patch-vorwaerts/rueckwaerts
+gegen gesicherte Baseline, strikter Release-Audit. Belege build/encounter-lock/.
+Release-/PAK-Build bestanden: `1dc8ce521196989d`, Log `E3ID-cdd3d1d6418e037c`,
+ABI `7f6b9151`. Payload-Hashes unter build/encounter-lock/build-hashes.json.
+Manuelle Emulatorabnahme offen; keine Emulatorbedienung, keine Installation
+in laufende Profile und keine SAV-Aenderung.
+
+## Gast bleibt nach Kampf in der sichtbaren Oberwelt stehen (2026-11-13)
+
+Neuer Laufzeitbefund: Gast callback2=001c5890 entspricht im passenden
+Build-Map CB2_InitBattle, obwohl noch das Feldbild angezeigt wird.
+Getesteter Laufzeitbuild E3ID-8696897c762d96cd; beide Emulatoren laufen weiter.
+Der Kampfeinstieg wartete auf vorherige Ergebnis-/Reservierungstransaktionen,
+deren Fortschritt und Freigabe bisher andere Callbacks voraussetzten.
+Ein neuer Hintergrundtest reproduzierte sechs fehlgeschlagene Assertions.
+
+Korrektur: CtrCoop_BattleStart bedient auch im wartenden Kampfeinstieg den
+Kampf-Tick. Der Tick gibt bestaetigte alte Reservierungen ebenfalls frei,
+ohne eine weitere Oberwelt-Iteration vorauszusetzen. Neue Regressionen
+pruefen fehlende ACKs/Retry, Freigabe vor neuer Anfrage, Start nach neuer
+Freigabe sowie Empfang/ACK eines wartenden Fangs vor der naechsten Baseline.
+Der vollstaendige verify-coop-Durchlauf besteht mit null erwarteten Fehlern;
+ARM-Syntaxpruefung und Release-/PAK-Build bestanden. Neuer Build
+`cf712051f18d29ac`, Logkennung `E3ID-b684c40eb8ecd1ec`, ABI `ebf0f1f4`.
+Emulator-Nachtest bleibt beim Nutzer; noch keine laufenden Profile aktualisiert.
+
+Nutzer hatte bereits am Host gespeichert. Vor weiteren Schritten wurden
+beide SAVs/Profile/Logs unter build/coop-observation/blocked-guest-20261113-172849
+gesichert. Die Host-SAV hat zwei vollstaendige, pruefsummengueltige Slots
+(Zaehler 16 und 15), Gast ebenfalls (2 und 1). Das bestaetigt strukturelle
+Lesbarkeit, nicht die fachliche Richtigkeit aller Storyvariablen.
+Originalprofile und laufende Emulatoren bleiben unangetastet. Der neue
+Build muss nach Schliessen beider Instanzen ueber das vorhandene Paseo-Script
+installiert/gestartet werden; F6 allein installiert keine neuen Dateien.
+
+Der damals separate Meike-/Trainer-Konflikt wird durch die spaetere
+Ereignissperre oben adressiert; die manuelle Emulatorabnahme bleibt offen.
+Dieser kleine Fortschrittsfix allein war keine vollstaendige Loesung der
+Szenarioreservierung. Vollstaendige Beobachtungsuebergabe lokal unter
+build/coop-observation/MAIN-TESTSTAND.md.
 
 ## Branch-Pflege
 
@@ -133,7 +538,7 @@ Bauen nicht beendet oder ueberschrieben; danach ueber das Paseo-Script aktualisi
 
 ## Aktueller gemeinsamer Testbuild
 
-Release und PAK erfolgreich gebaut: Build `03ecd34074355974`, ABI `ebf0f1f4`.
+Release und PAK erfolgreich gebaut: Build `cf712051f18d29ac`, ABI `ebf0f1f4`.
 3DSX/SMDH liegen unter `build/upstream/3ds_port/dist`, das zugehoerige PAK
 unter `build/upstream/3ds_port/build`. Dieser Build enthaelt alle neuen
 Kampf-/Fahrradgrafiken fuer 99 Figuren,15 neue Laufboegen und die PC-, Gastnamen- und Beitrittskorrekturen.

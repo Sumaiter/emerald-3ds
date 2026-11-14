@@ -1,0 +1,33 @@
+diff --git a/src/event_object_movement.c b/src/event_object_movement.c
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -8716,6 +8716,29 @@
+     }
+ }
+ 
++#ifdef PLATFORM_3DS
++void CtrCoop_EngineRemoteStepEffects(u8 objectEventId)
++{
++    struct ObjectEvent *object;
++
++    if (objectEventId >= OBJECT_EVENTS_COUNT || gSaveBlock1Ptr == NULL)
++        return;
++    object = &gObjectEvents[objectEventId];
++    if (!object->active || object->localId != LOCALID_COOP_PLAYER
++     || object->mapGroup != gSaveBlock1Ptr->location.mapGroup
++     || object->mapNum != gSaveBlock1Ptr->location.mapNum
++     || object->spriteId >= MAX_SPRITES || !gSprites[object->spriteId].inUse
++     || object->heldMovementActive || !object->triggerGroundEffectsOnMove)
++        return;
++    /* A coalesced snapshot can arrive after its walking action has ended.
++     * Relocation resets field effects; the usual spawn pass then skips the
++     * grass animation. Consume that reset through the native step pass once.
++     * Regular held movements already run this pass and do not call here. */
++    object->disableCoveringGroundEffects = FALSE;
++    DoGroundEffects_OnBeginStep(object, &gSprites[object->spriteId]);
++}
++#endif
++
+ bool8 FreezeObjectEvent(struct ObjectEvent *objectEvent)
+ {
+     if (objectEvent->heldMovementActive || objectEvent->frozen)

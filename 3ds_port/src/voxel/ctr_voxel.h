@@ -207,5 +207,9 @@ typedef struct
     float time;
 } CtrVoxelBattleIntro;
 void CtrVoxel_BattleIntro(CtrVoxelBattleIntro *intro);
+#ifdef CTR_BATTLE_PRESENTATION
+#include "3ds_battle_present.h"
+void CtrVoxel_PresentCapture(CtrPresentWorld *out);
+#endif
 
 #endif

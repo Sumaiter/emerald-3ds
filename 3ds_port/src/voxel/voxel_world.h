@@ -218,4 +218,10 @@ typedef struct {
 bool Voxel_LoadTilesStep(const void *tileset, uint8_t *dest, uint32_t destSize,
                          VoxelTileLoad *load, unsigned bytes);
 
+#ifdef CTR_BATTLE_PRESENTATION
+#include "3ds_battle_present.h"
+void VoxelWorld_PresentCapture(CtrPresentWorld *out);
+bool VoxelWorld_PresentMatches(const CtrPresentWorld *state);
+#endif
+
 #endif

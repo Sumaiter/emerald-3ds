@@ -1,0 +1,408 @@
+--- a/src/money.c
++++ b/src/money.c
+@@ -1,6 +1,7 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
++#include "3ds_coop_money.h"
+ #endif
+ #include "money.h"
+ #include "graphics.h"
+@@ -75,6 +76,9 @@
+ u32 GetMoney(u32 *moneyPtr)
+ {
+ #ifdef PLATFORM_3DS
++    u32 shared;
++    if (moneyPtr == &gSaveBlock1Ptr->money && CtrCoopMoney_HookRead(CTR_COOP_MONEY_CASH, &shared))
++        return shared;
+     // Infinite money (OPTIONS, CHEATS): the player's money is back at the most
+     // whenever it is read; what was spent is gone only until then.
+     if (moneyPtr == &gSaveBlock1Ptr->money && CtrExtras_Get("infinite_money")
+@@ -86,6 +90,10 @@
+ 
+ void SetMoney(u32 *moneyPtr, u32 newValue)
+ {
++#ifdef PLATFORM_3DS
++    if (moneyPtr == &gSaveBlock1Ptr->money && CtrCoopMoney_HookSet(CTR_COOP_MONEY_CASH, newValue) >= 0)
++        return;
++#endif
+     *moneyPtr = gSaveBlock2Ptr->encryptionKey ^ newValue;
+ }
+ 
+@@ -99,6 +107,10 @@
+ 
+ void AddMoney(u32 *moneyPtr, u32 toAdd)
+ {
++#ifdef PLATFORM_3DS
++    if (moneyPtr == &gSaveBlock1Ptr->money && CtrCoopMoney_HookChange(CTR_COOP_MONEY_CASH, true, toAdd) >= 0)
++        return;
++#endif
+     u32 toSet = GetMoney(moneyPtr);
+ 
+     // can't have more money than MAX
+@@ -119,6 +131,10 @@
+ 
+ void RemoveMoney(u32 *moneyPtr, u32 toSub)
+ {
++#ifdef PLATFORM_3DS
++    if (moneyPtr == &gSaveBlock1Ptr->money && CtrCoopMoney_HookChange(CTR_COOP_MONEY_CASH, false, toSub) >= 0)
++        return;
++#endif
+     u32 toSet = GetMoney(moneyPtr);
+ 
+     // can't subtract more than you already have
+@@ -132,6 +148,10 @@
+ 
+ bool8 IsEnoughForCostInVar0x8005(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoopMoney_Active())
++        return CtrCoopMoney_BeginUse(CTR_COOP_MONEY_CASH, gSpecialVar_0x8005);
++#endif
+     return IsEnoughMoney(&gSaveBlock1Ptr->money, gSpecialVar_0x8005);
+ }
+ 
+--- a/src/coins.c
++++ b/src/coins.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_money.h"
++#endif
+ #include "coins.h"
+ #include "text.h"
+ #include "window.h"
+@@ -40,16 +43,29 @@
+ 
+ u16 GetCoins(void)
+ {
++#ifdef PLATFORM_3DS
++    u32 shared;
++    if (CtrCoopMoney_HookRead(CTR_COOP_MONEY_COINS, &shared))
++        return shared;
++#endif
+     return gSaveBlock1Ptr->coins ^ gSaveBlock2Ptr->encryptionKey;
+ }
+ 
+ void SetCoins(u16 coinAmount)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoopMoney_HookSet(CTR_COOP_MONEY_COINS, coinAmount) >= 0)
++        return;
++#endif
+     gSaveBlock1Ptr->coins = coinAmount ^ gSaveBlock2Ptr->encryptionKey;
+ }
+ 
+ bool8 AddCoins(u16 toAdd)
+ {
++#ifdef PLATFORM_3DS
++    int shared = CtrCoopMoney_HookChange(CTR_COOP_MONEY_COINS, true, toAdd);
++    if (shared >= 0) return shared;
++#endif
+     u16 newAmount;
+     u16 ownedCoins = GetCoins();
+     if (ownedCoins >= MAX_COINS)
+@@ -72,6 +88,10 @@
+ 
+ bool8 RemoveCoins(u16 toSub)
+ {
++#ifdef PLATFORM_3DS
++    int shared = CtrCoopMoney_HookChange(CTR_COOP_MONEY_COINS, false, toSub);
++    if (shared >= 0) return shared;
++#endif
+     u16 ownedCoins = GetCoins();
+     if (ownedCoins >= toSub)
+     {
+--- a/src/shop.c
++++ b/src/shop.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_money.h"
++#endif
+ #include "bg.h"
+ #include "data.h"
+ #include "decompress.h"
+@@ -1171,6 +1174,16 @@
+ 
+     PutWindowTilemap(WIN_ITEM_LIST);
+ 
++#ifdef PLATFORM_3DS
++    /* The old display-time balance check is stale after another player buys.
++     * Reserve the complete price before AddBagItem/DecorationAdd has effects. */
++    if (!CtrCoopMoney_BeginUse(CTR_COOP_MONEY_CASH, sShopData->totalCost))
++    {
++        BuyMenuDisplayMessage(taskId, gText_YouDontHaveMoney, BuyMenuReturnToItemList);
++        return;
++    }
++#endif
++
+     if (sMartInfo.martType == MART_TYPE_NORMAL)
+     {
+         if (AddBagItem(tItemId, tItemCount) == TRUE)
+@@ -1180,6 +1193,9 @@
+         }
+         else
+         {
++#ifdef PLATFORM_3DS
++            CtrCoopMoney_RefundUse();
++#endif
+             BuyMenuDisplayMessage(taskId, gText_NoMoreRoomForThis, BuyMenuReturnToItemList);
+         }
+     }
+@@ -1194,6 +1210,9 @@
+         }
+         else
+         {
++#ifdef PLATFORM_3DS
++            CtrCoopMoney_RefundUse();
++#endif
+             BuyMenuDisplayMessage(taskId, gText_SpaceForVar1Full, BuyMenuReturnToItemList);
+         }
+     }
+--- a/src/scrcmd.c
++++ b/src/scrcmd.c
+@@ -2,6 +2,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #include "3ds_coop.h"
++#include "3ds_coop_money.h"
+ #endif
+ #include "frontier_util.h"
+ #include "battle_setup.h"
+@@ -1922,7 +1923,23 @@
+     u8 ignore = ScriptReadByte(ctx);
+ 
+     if (!ignore)
++#ifdef PLATFORM_3DS
++    {
++        if (CtrCoopMoney_Active())
++        {
++            if (!CtrCoopMoney_Spend(CTR_COOP_MONEY_CASH, amount))
++            {
++                ScrCmd_releaseall(ctx);
++                StopScript(ctx);
++                return TRUE;
++            }
++        }
++        else
++            RemoveMoney(&gSaveBlock1Ptr->money, amount);
++    }
++#else
+         RemoveMoney(&gSaveBlock1Ptr->money, amount);
++#endif
+     return FALSE;
+ }
+ 
+@@ -1932,7 +1949,13 @@
+     u8 ignore = ScriptReadByte(ctx);
+ 
+     if (!ignore)
++#ifdef PLATFORM_3DS
++        gSpecialVar_Result = CtrCoopMoney_Active()
++            ? CtrCoopMoney_BeginUse(CTR_COOP_MONEY_CASH, amount)
++            : IsEnoughMoney(&gSaveBlock1Ptr->money, amount);
++#else
+         gSpecialVar_Result = IsEnoughMoney(&gSaveBlock1Ptr->money, amount);
++#endif
+     return FALSE;
+ }
+ 
+@@ -2347,6 +2370,20 @@
+ {
+     u16 coins = VarGet(ScriptReadHalfword(ctx));
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoopMoney_Active())
++    {
++        if (!CtrCoopMoney_Spend(CTR_COOP_MONEY_COINS, coins))
++        {
++            gSpecialVar_Result = TRUE;
++            ScrCmd_releaseall(ctx);
++            StopScript(ctx);
++            return TRUE;
++        }
++        gSpecialVar_Result = FALSE;
++        return FALSE;
++    }
++#endif
+     if (RemoveCoins(coins) == TRUE)
+         gSpecialVar_Result = FALSE;
+     else
+--- a/src/slot_machine.c
++++ b/src/slot_machine.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_money.h"
++#endif
+ #include "overworld.h"
+ #include "field_effect.h"
+ #include "random.h"
+@@ -1356,11 +1359,18 @@
+     // Try to bet the max amount
+     else if (JOY_NEW(R_BUTTON))
+     {
+-        if (sSlotMachine->coins - (MAX_BET - sSlotMachine->bet) >= 0)
++        if (sSlotMachine->coins - (MAX_BET - sSlotMachine->bet) >= 0
++#ifdef PLATFORM_3DS
++            && (!CtrCoopMoney_Active() || RemoveCoins(MAX_BET - sSlotMachine->bet))
++#endif
++            )
+         {
+             for (i = sSlotMachine->bet; i < MAX_BET; i++)
+                 LightenBetTiles(i);
+-            sSlotMachine->coins -= (MAX_BET - sSlotMachine->bet);
++#ifdef PLATFORM_3DS
++            if (CtrCoopMoney_Active()) sSlotMachine->coins = GetCoins(); else
++#endif
++                sSlotMachine->coins -= (MAX_BET - sSlotMachine->bet);
+             sSlotMachine->bet = MAX_BET;
+             sSlotMachine->state = SLOTTASK_START_SPIN;
+             PlaySE(SE_SHOP);
+@@ -1374,11 +1384,18 @@
+     else
+     {
+         // Increase bet
+-        if (JOY_NEW(DPAD_DOWN) && sSlotMachine->coins != 0)
++        if (JOY_NEW(DPAD_DOWN) && sSlotMachine->coins != 0
++#ifdef PLATFORM_3DS
++            && (!CtrCoopMoney_Active() || RemoveCoins(1))
++#endif
++            )
+         {
+             PlaySE(SE_SHOP);
+             LightenBetTiles(sSlotMachine->bet);
+-            sSlotMachine->coins--;
++#ifdef PLATFORM_3DS
++            if (CtrCoopMoney_Active()) sSlotMachine->coins = GetCoins(); else
++#endif
++                sSlotMachine->coins--;
+             sSlotMachine->bet++;
+         }
+ 
+@@ -1679,7 +1696,15 @@
+         DarkenBetTiles(0);
+         DarkenBetTiles(1);
+         DarkenBetTiles(2);
+-        sSlotMachine->coins += sSlotMachine->bet;
++#ifdef PLATFORM_3DS
++        if (CtrCoopMoney_Active())
++        {
++            AddCoins(sSlotMachine->bet);
++            sSlotMachine->coins = GetCoins();
++        }
++        else
++#endif
++            sSlotMachine->coins += sSlotMachine->bet;
+         sSlotMachine->state = SLOTTASK_END;
+     }
+     else if (input == 1 || input == -1) // Chose not to quit
+@@ -1735,6 +1760,9 @@
+ // SLOTTASK_END
+ static bool8 SlotTask_EndGame(struct Task *task)
+ {
++#ifdef PLATFORM_3DS
++    if (!CtrCoopMoney_Active())
++#endif
+     SetCoins(sSlotMachine->coins);
+     TryPutFindThatGamerOnAir(GetCoins());
+     BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+@@ -2136,6 +2164,14 @@
+         if (IsFanfareTaskInactive())
+             PlaySE(SE_PIN);
+         sSlotMachine->payout--;
++#ifdef PLATFORM_3DS
++        if (CtrCoopMoney_Active())
++        {
++            AddCoins(1);
++            sSlotMachine->coins = GetCoins();
++        }
++        else
++#endif
+         if (sSlotMachine->coins < MAX_COINS)
+             sSlotMachine->coins++;
+         task->tTimer = 8;
+@@ -2145,9 +2181,19 @@
+     if (IsFanfareTaskInactive() && JOY_NEW(START_BUTTON))
+     {
+         PlaySE(SE_PIN);
+-        sSlotMachine->coins += sSlotMachine->payout;
+-        if (sSlotMachine->coins > MAX_COINS)
+-            sSlotMachine->coins = MAX_COINS;
++#ifdef PLATFORM_3DS
++        if (CtrCoopMoney_Active())
++        {
++            AddCoins(sSlotMachine->payout);
++            sSlotMachine->coins = GetCoins();
++        }
++        else
++#endif
++        {
++            sSlotMachine->coins += sSlotMachine->payout;
++            if (sSlotMachine->coins > MAX_COINS)
++                sSlotMachine->coins = MAX_COINS;
++        }
+         sSlotMachine->payout = 0;
+     }
+     if (sSlotMachine->payout == 0)
+--- a/src/roulette.c
++++ b/src/roulette.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_money.h"
++#endif
+ #include "malloc.h"
+ #include "bg.h"
+ #include "coins.h"
+@@ -1501,9 +1504,20 @@
+ 
+ static void Task_PlaceBet(u8 taskId)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoopMoney_Active() && !RemoveCoins(sRoulette->minBet))
++    {
++        gTasks[taskId].tCoins = GetCoins();
++        gTasks[taskId].func = Task_AskKeepPlaying;
++        return;
++    }
++#endif
+     sRoulette->betSelection[sRoulette->curBallNum] = gTasks[taskId].tSelectionId;
+     gTasks[taskId].tMultiplier = GetMultiplier(sRoulette->betSelection[sRoulette->curBallNum]);
+     SetMultiplierSprite(sRoulette->betSelection[sRoulette->curBallNum]);
++#ifdef PLATFORM_3DS
++    if (CtrCoopMoney_Active()) gTasks[taskId].tCoins = GetCoins(); else
++#endif
+     if ((gTasks[taskId].tCoins -= sRoulette->minBet) < 0)
+         gTasks[taskId].tCoins = 0;
+     SetCreditDigits(gTasks[taskId].tCoins);
+@@ -1855,7 +1869,15 @@
+     switch (gTasks[taskId].data[7])
+     {
+     case 0:
+-        gTasks[taskId].tCoins++;
++#ifdef PLATFORM_3DS
++        if (CtrCoopMoney_Active())
++        {
++            AddCoins(1);
++            gTasks[taskId].tCoins = GetCoins();
++        }
++        else
++#endif
++            gTasks[taskId].tCoins++;
+         m4aSongNumStart(SE_PIN);
+         SetCreditDigits(gTasks[taskId].tCoins);
+         if (gTasks[taskId].tCoins >= MAX_COINS)
+@@ -1982,7 +2004,10 @@
+ {
+     RouletteFlash_Stop(&sRoulette->flashUtil, 0xFFFF);
+     RouletteFlash_Reset(&sRoulette->flashUtil);
+-    SetCoins(gTasks[taskId].tCoins);
++#ifdef PLATFORM_3DS
++    if (!CtrCoopMoney_Active())
++#endif
++        SetCoins(gTasks[taskId].tCoins);
+     if (GetCoins() < sRoulette->minBet)
+         gSpecialVar_0x8004 = TRUE;
+     else

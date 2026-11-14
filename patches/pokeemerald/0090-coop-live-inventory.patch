@@ -1,0 +1,863 @@
+diff --git a/src/item.c b/src/item.c
+--- a/src/item.c
++++ b/src/item.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
++#endif
+ #include "item.h"
+ #include "berry.h"
+ #include "string_util.h"
+@@ -258,6 +261,15 @@
+     if (GetItemPocket(itemId) == POCKET_NONE)
+         return FALSE;
+ 
++#ifdef PLATFORM_3DS
++    if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE && !FlagGet(FLAG_STORING_ITEMS_IN_PYRAMID_BAG))
++    {
++        int result = CtrCoopInventory_HookChange(CTR_COOP_INVENTORY_BAG, itemId, count);
++        if (result >= 0)
++            return result;
++    }
++#endif
++
+     // check Battle Pyramid Bag
+     if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE || FlagGet(FLAG_STORING_ITEMS_IN_PYRAMID_BAG) == TRUE)
+     {
+@@ -366,6 +378,15 @@
+     if (GetItemPocket(itemId) == POCKET_NONE || itemId == ITEM_NONE)
+         return FALSE;
+ 
++#ifdef PLATFORM_3DS
++    if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE && !FlagGet(FLAG_STORING_ITEMS_IN_PYRAMID_BAG))
++    {
++        int result = CtrCoopInventory_HookChange(CTR_COOP_INVENTORY_BAG, itemId, -(s32)count);
++        if (result >= 0)
++            return result;
++    }
++#endif
++
+     // check Battle Pyramid Bag
+     if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE || FlagGet(FLAG_STORING_ITEMS_IN_PYRAMID_BAG) == TRUE)
+     {
+@@ -506,6 +527,14 @@
+     u16 ownedCount;
+     struct ItemSlot *newItems;
+ 
++#ifdef PLATFORM_3DS
++    {
++        int result = CtrCoopInventory_HookChange(CTR_COOP_INVENTORY_PC, itemId, count);
++        if (result >= 0)
++            return result;
++    }
++#endif
++
+     // Copy PC items
+     newItems = AllocZeroed(sizeof(gSaveBlock1Ptr->pcItems));
+     memcpy(newItems, gSaveBlock1Ptr->pcItems, sizeof(gSaveBlock1Ptr->pcItems));
+@@ -558,6 +587,14 @@
+ 
+ void RemovePCItem(u8 index, u16 count)
+ {
++#ifdef PLATFORM_3DS
++    if (index < PC_ITEMS_COUNT)
++    {
++        int result = CtrCoopInventory_HookChange(CTR_COOP_INVENTORY_PC, gSaveBlock1Ptr->pcItems[index].itemId, -(s32)count);
++        if (result >= 0)
++            return;
++    }
++#endif
+     gSaveBlock1Ptr->pcItems[index].quantity -= count;
+     if (gSaveBlock1Ptr->pcItems[index].quantity == 0)
+     {
+diff --git a/src/item_use.c b/src/item_use.c
+--- a/src/item_use.c
++++ b/src/item_use.c
+@@ -1,5 +1,6 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #include "braille_puzzles.h"
+ #include "fldeff.h"
+@@ -704,7 +705,12 @@
+ 
+ static void ItemUseOnFieldCB_Berry(u8 taskId)
+ {
+-    RemoveBagItem(gSpecialVar_ItemId, 1);
++    if (!RemoveBagItem(gSpecialVar_ItemId, 1))
++    {
++        UnlockPlayerFieldControls();
++        DestroyTask(taskId);
++        return;
++    }
+     LockPlayerFieldControls();
+     ScriptContext_SetupScript(BerryTree_EventScript_ItemUsePlantBerry);
+     DestroyTask(taskId);
+@@ -912,9 +918,10 @@
+     SetUpItemUseCallback(taskId);
+ }
+ 
+-static void RemoveUsedItem(void)
+-{
+-    RemoveBagItem(gSpecialVar_ItemId, 1);
++static bool8 RemoveUsedItem(void)
++{
++    if (!RemoveBagItem(gSpecialVar_ItemId, 1))
++        return FALSE;
+     CopyItemName(gSpecialVar_ItemId, gStringVar2);
+     StringExpandPlaceholders(gStringVar4, gText_PlayerUsedVar2);
+     if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE)
+@@ -927,6 +934,7 @@
+         UpdatePyramidBagList();
+         UpdatePyramidBagCursorPos();
+     }
++    return TRUE;
+ }
+ 
+ void ItemUseOutOfBattle_Repel(u8 taskId)
+@@ -955,6 +963,13 @@
+ {
+     if (!IsSEPlaying())
+     {
++#ifdef PLATFORM_3DS
++        if (!CtrCoopInventory_BeginUse(gSpecialVar_ItemId, 1))
++        {
++            CloseItemMessage(taskId);
++            return;
++        }
++#endif
+         VarSet(VAR_REPEL_STEP_COUNT, GetItemHoldEffectParam(gSpecialVar_ItemId));
+ #ifdef PLATFORM_3DS
+         VarSet(VAR_LAST_REPEL, gSpecialVar_ItemId);
+@@ -1040,8 +1055,13 @@
+ 
+ static void ItemUseOnFieldCB_EscapeRope(u8 taskId)
+ {
++    if (!RemoveUsedItem())
++    {
++        UnlockPlayerFieldControls();
++        DestroyTask(taskId);
++        return;
++    }
+     Overworld_ResetStateAfterDigEscRope();
+-    RemoveUsedItem();
+     gTasks[taskId].data[0] = 0;
+     DisplayItemMessageOnField(taskId, gStringVar4, Task_UseDigEscapeRopeOnField);
+ }
+@@ -1077,7 +1097,11 @@
+ {
+     if (IsPlayerPartyAndPokemonStorageFull() == FALSE) // have room for mon?
+     {
+-        RemoveBagItem(gSpecialVar_ItemId, 1);
++        if (!RemoveBagItem(gSpecialVar_ItemId, 1))
++        {
++            DisplayItemMessage(taskId, FONT_NORMAL, gText_WontHaveEffect, CloseItemMessage);
++            return;
++        }
+         if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE)
+             Task_FadeAndCloseBagMenu(taskId);
+         else
+@@ -1122,8 +1146,19 @@
+ {
+     u16 partyId = gBattlerPartyIndexes[gBattlerInMenuId];
+ 
++#ifdef PLATFORM_3DS
++    if (!CtrCoopInventory_BeginUse(gSpecialVar_ItemId, 1))
++    {
++        DisplayItemMessage(taskId, FONT_NORMAL, gText_WontHaveEffect, CloseItemMessage);
++        return;
++    }
++#endif
++
+     if (ExecuteTableBasedItemEffect(&gPlayerParty[partyId], gSpecialVar_ItemId, partyId, 0) != FALSE)
+     {
++#ifdef PLATFORM_3DS
++        CtrCoopInventory_RefundUse();
++#endif
+         if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE)
+             DisplayItemMessage(taskId, FONT_NORMAL, gText_WontHaveEffect, CloseItemMessage);
+         else
+@@ -1175,7 +1210,11 @@
+ 
+     if((gBattleTypeFlags & BATTLE_TYPE_TRAINER) == FALSE)
+     {
+-        RemoveUsedItem();
++        if (!RemoveUsedItem())
++        {
++            DisplayItemMessage(taskId, FONT_NORMAL, gText_WontHaveEffect, CloseItemMessage);
++            return;
++        }
+         if (CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE)
+             DisplayItemMessage(taskId, FONT_NORMAL, gStringVar4, Task_FadeAndCloseBagMenu);
+         else
+diff --git a/src/party_menu.c b/src/party_menu.c
+--- a/src/party_menu.c
++++ b/src/party_menu.c
+@@ -1,5 +1,6 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #endif
+ #include "malloc.h"
+@@ -435,12 +436,11 @@
+ static void GiveItemOrMailToSelectedMon(u8);
+ static void DisplayItemMustBeRemovedFirstMessage(u8);
+ static void Task_SwitchItemsFromBagYesNo(u8);
+-static void RemoveItemToGiveFromBag(u16);
++static bool8 RemoveItemToGiveFromBag(u16);
+ static void CB2_WriteMailToGiveMonFromBag(void);
+ static void GiveItemToSelectedMon(u8);
+ static void Task_UpdateHeldItemSpriteAndClosePartyMenu(u8);
+ static void CB2_ReturnToPartyOrBagMenuFromWritingMail(void);
+-static bool8 ReturnGiveItemToBagOrPC(u16);
+ static void Task_DisplayGaveMailFromBagMessage(u8);
+ static void Task_HandleSwitchItemsFromBagYesNoInput(u8);
+ static void Task_ValidateChosenHalfParty(u8);
+@@ -3540,7 +3540,11 @@
+         // Give mail
+         else if (ItemIsMail(gSpecialVar_ItemId))
+         {
+-            RemoveBagItem(gSpecialVar_ItemId, 1);
++            if (!RemoveBagItem(gSpecialVar_ItemId, 1))
++            {
++                InitPartyMenu(gPartyMenu.menuType, KEEP_PARTY_LAYOUT, gPartyMenu.action, TRUE, PARTY_MSG_NONE, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
++                return;
++            }
+             GiveItemToMon(&gPlayerParty[gPartyMenu.slotId], gSpecialVar_ItemId);
+             CB2_WriteMailToGiveMon();
+         }
+@@ -3552,6 +3556,24 @@
+     }
+ }
+ 
++static bool8 CtrTrySwitchBagItems(u16 take, u16 give)
++{
++#ifdef PLATFORM_3DS
++    int result = CtrCoopInventory_HookExchange(take, give, 1);
++    if (result >= 0)
++        return result;
++#endif
++    if (take != ITEM_NONE && !RemoveBagItem(take, 1))
++        return FALSE;
++    if (give != ITEM_NONE && !AddBagItem(give, 1))
++    {
++        if (take != ITEM_NONE)
++            AddBagItem(take, 1);
++        return FALSE;
++    }
++    return TRUE;
++}
++
+ static void Task_GiveHoldItem(u8 taskId)
+ {
+     u16 item;
+@@ -3559,9 +3581,13 @@
+     if (!gPaletteFade.active)
+     {
+         item = gSpecialVar_ItemId;
++        if (!RemoveBagItem(item, 1))
++        {
++            gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
++            return;
++        }
+         DisplayGaveHeldItemMessage(&gPlayerParty[gPartyMenu.slotId], item, FALSE, 0);
+         GiveItemToMon(&gPlayerParty[gPartyMenu.slotId], item);
+-        RemoveBagItem(item, 1);
+         gTasks[taskId].func = Task_UpdateHeldItemSprite;
+     }
+ }
+@@ -3589,12 +3615,9 @@
+     switch (Menu_ProcessInputNoWrapClearOnChoose())
+     {
+     case 0: // Yes, switch items
+-        RemoveBagItem(gSpecialVar_ItemId, 1);
+-
+         // No room to return held item to bag
+-        if (AddBagItem(sPartyMenuItemId, 1) == FALSE)
+-        {
+-            AddBagItem(gSpecialVar_ItemId, 1);
++        if (!CtrTrySwitchBagItems(gSpecialVar_ItemId, sPartyMenuItemId))
++        {
+             BufferBagFullCantTakeItemMessage(sPartyMenuItemId);
+             DisplayPartyMenuMessage(gStringVar4, FALSE);
+             gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
+@@ -3650,10 +3673,13 @@
+     // Canceled writing mail
+     if (gSpecialVar_Result == FALSE)
+     {
++        if (!CtrTrySwitchBagItems(sPartyMenuItemId, item))
++        {
++            InitPartyMenu(gPartyMenu.menuType, KEEP_PARTY_LAYOUT, gPartyMenu.action, TRUE, PARTY_MSG_CHOOSE_MON, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
++            return;
++        }
+         TakeMailFromMon(mon);
+         SetMonData(mon, MON_DATA_HELD_ITEM, &sPartyMenuItemId);
+-        RemoveBagItem(sPartyMenuItemId, 1);
+-        AddBagItem(item, 1);
+         InitPartyMenu(gPartyMenu.menuType, KEEP_PARTY_LAYOUT, gPartyMenu.action, TRUE, PARTY_MSG_CHOOSE_MON, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
+     }
+     // Wrote mail
+@@ -4817,10 +4843,21 @@
+ 
+ static bool8 ExecuteTableBasedItemEffect_(u8 partyMonIndex, u16 item, u8 monMoveIndex)
+ {
++    bool8 result;
++#ifdef PLATFORM_3DS
++    bool8 consumes = !IsItemFlute(item) && gPartyMenu.action != PARTY_ACTION_REUSABLE_ITEM && item != ITEM_SACRED_ASH;
++    if (consumes && !CtrCoopInventory_BeginUse(item, 1))
++        return TRUE;
++#endif
+     if (gMain.inBattle)
+-        return ExecuteTableBasedItemEffect(&gPlayerParty[partyMonIndex], item, GetPartyIdFromBattleSlot(partyMonIndex), monMoveIndex);
+-    else
+-        return ExecuteTableBasedItemEffect(&gPlayerParty[partyMonIndex], item, partyMonIndex, monMoveIndex);
++        result = ExecuteTableBasedItemEffect(&gPlayerParty[partyMonIndex], item, GetPartyIdFromBattleSlot(partyMonIndex), monMoveIndex);
++    else
++        result = ExecuteTableBasedItemEffect(&gPlayerParty[partyMonIndex], item, partyMonIndex, monMoveIndex);
++#ifdef PLATFORM_3DS
++    if (consumes && result)
++        CtrCoopInventory_RefundUse();
++#endif
++    return result;
+ }
+ 
+ void ItemUseCB_Medicine(u8 taskId, TaskFunc task)
+@@ -4922,6 +4959,9 @@
+ 
+     if (cannotUseEffect || (friendship == newFriendship && ev == newEv))
+     {
++#ifdef PLATFORM_3DS
++        CtrCoopInventory_RefundUse();
++#endif
+         gPartyMenuUseExitCallback = FALSE;
+         PlaySE(SE_SELECT);
+         DisplayPartyMenuMessage(gText_WontHaveEffect, TRUE);
+@@ -5192,6 +5232,13 @@
+         return;
+     }
+ 
++#ifdef PLATFORM_3DS
++    if (item < ITEM_HM01 && !CtrExtras_Get("infinite_tms") && !CtrCoopInventory_BeginUse(item, 1))
++    {
++        DisplayLearnMoveMessageAndClose(taskId, gText_WontHaveEffect);
++        return;
++    }
++#endif
+     if (GiveMoveToMon(mon, move[0]) != MON_HAS_MAX_MOVES)
+     {
+         gTasks[taskId].func = Task_LearnedMove;
+@@ -5361,6 +5408,10 @@
+     switch (Menu_ProcessInputNoWrapClearOnChoose())
+     {
+     case 0:
++#ifdef PLATFORM_3DS
++        if (gPartyMenu.learnMoveState != 1)
++            CtrCoopInventory_RefundUse();
++#endif
+         GetMonNickname(mon, gStringVar1);
+         StringCopy(gStringVar2, gMoveNames[gPartyMenu.data1]);
+         StringExpandPlaceholders(gStringVar4, gText_MoveNotLearned);
+@@ -5590,6 +5641,15 @@
+ 
+ void ItemUseCB_SacredAsh(u8 taskId, TaskFunc task)
+ {
++#ifdef PLATFORM_3DS
++    if (!CtrCoopInventory_BeginUse(gSpecialVar_ItemId, 1))
++    {
++        gPartyMenuUseExitCallback = FALSE;
++        DisplayPartyMenuMessage(gText_WontHaveEffect, TRUE);
++        gTasks[taskId].func = task;
++        return;
++    }
++#endif
+     sPartyMenuInternal->tUsedOnSlot = FALSE;
+     sPartyMenuInternal->tHadEffect = FALSE;
+     sPartyMenuInternal->tLastSlotUsed = gPartyMenu.slotId;
+@@ -5639,6 +5699,9 @@
+         {
+             if (sPartyMenuInternal->tHadEffect == FALSE)
+             {
++#ifdef PLATFORM_3DS
++                CtrCoopInventory_RefundUse();
++#endif
+                 gPartyMenuUseExitCallback = FALSE;
+                 DisplayPartyMenuMessage(gText_WontHaveEffect, TRUE);
+                 ScheduleBgCopyTilemapToVram(2);
+@@ -5827,7 +5890,11 @@
+ {
+     if (ItemIsMail(gPartyMenu.bagItem))
+     {
+-        RemoveItemToGiveFromBag(gPartyMenu.bagItem);
++        if (!RemoveItemToGiveFromBag(gPartyMenu.bagItem))
++        {
++            gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
++            return;
++        }
+         sPartyMenuInternal->exitCallback = CB2_WriteMailToGiveMonFromBag;
+         Task_ClosePartyMenu(taskId);
+     }
+@@ -5844,9 +5911,13 @@
+     if (!gPaletteFade.active)
+     {
+         item = gPartyMenu.bagItem;
++        if (!RemoveItemToGiveFromBag(item))
++        {
++            gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
++            return;
++        }
+         DisplayGaveHeldItemMessage(&gPlayerParty[gPartyMenu.slotId], item, FALSE, 1);
+         GiveItemToMon(&gPlayerParty[gPartyMenu.slotId], item);
+-        RemoveItemToGiveFromBag(item);
+         gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
+     }
+ }
+@@ -5883,10 +5954,13 @@
+     // Canceled writing mail
+     if (gSpecialVar_Result == FALSE)
+     {
++        if (!CtrTrySwitchBagItems(sPartyMenuItemId, item))
++        {
++            SetMainCallback2(gPartyMenu.exitCallback);
++            return;
++        }
+         TakeMailFromMon(mon);
+         SetMonData(mon, MON_DATA_HELD_ITEM, &sPartyMenuItemId);
+-        RemoveBagItem(sPartyMenuItemId, 1);
+-        ReturnGiveItemToBagOrPC(item);
+         SetMainCallback2(gPartyMenu.exitCallback);
+     }
+     // Wrote mail
+@@ -5925,10 +5999,8 @@
+     {
+     case 0: // Yes, switch items
+         item = gPartyMenu.bagItem;
+-        RemoveItemToGiveFromBag(item);
+-        if (AddBagItem(sPartyMenuItemId, 1) == FALSE)
+-        {
+-            ReturnGiveItemToBagOrPC(item);
++        if (!CtrTrySwitchBagItems(item, sPartyMenuItemId))
++        {
+             BufferBagFullCantTakeItemMessage(sPartyMenuItemId);
+             DisplayPartyMenuMessage(gStringVar4, FALSE);
+             gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
+@@ -5961,22 +6033,15 @@
+     gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
+ }
+ 
+-static void RemoveItemToGiveFromBag(u16 item)
++static bool8 RemoveItemToGiveFromBag(u16 item)
+ {
+     if (gPartyMenu.action == PARTY_ACTION_GIVE_PC_ITEM) // Unused, never occurs
++    {
+         RemovePCItem(item, 1);
+-    else
+-        RemoveBagItem(item, 1);
+-}
+-
+-// Returns FALSE if there was no space to return the item
+-// but there always should be, and the return is ignored in all uses
+-static bool8 ReturnGiveItemToBagOrPC(u16 item)
+-{
+-    if (gPartyMenu.action == PARTY_ACTION_GIVE_ITEM)
+-        return AddBagItem(item, 1);
+-    else
+-        return AddPCItem(item, 1);
++        return TRUE;
++    }
++    else
++        return RemoveBagItem(item, 1);
+ }
+ 
+ void ChooseMonToGiveMailFromMailbox(void)
+diff --git a/src/item_menu.c b/src/item_menu.c
+--- a/src/item_menu.c
++++ b/src/item_menu.c
+@@ -1,4 +1,14 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
++static EWRAM_DATA bool8 sCtrSharedBagDirty;
++void CtrPC_SharedInventoryDirty(void);
++void CtrCoop_EngineInventoryChanged(void)
++{
++    sCtrSharedBagDirty = TRUE;
++    CtrPC_SharedInventoryDirty();
++}
++#endif
+ #include "item_menu.h"
+ #include "battle.h"
+ #include "battle_controllers.h"
+@@ -1275,6 +1285,24 @@
+     u16 *cursorPos = &gBagPosition.cursorPosition[gBagPosition.pocket];
+     s32 listPosition;
+ 
++#ifdef PLATFORM_3DS
++    if (sCtrSharedBagDirty && !gPaletteFade.active)
++    {
++        /* Network callbacks only flag this work. Rebuild before input so a
++         * removed last stack cannot leave a stale selected list entry. */
++        BagDestroyPocketScrollArrowPair();
++        DestroyListMenuTask(tListTaskId, scrollPos, cursorPos);
++        UpdatePocketItemLists();
++        InitPocketListPositions();
++        LoadBagItemListBuffers(gBagPosition.pocket);
++        tListTaskId = ListMenuInit(&gMultiuseListMenuTemplate, *scrollPos, *cursorPos);
++        CreatePocketScrollArrowPair();
++        ScheduleBgCopyTilemapToVram(0);
++        sCtrSharedBagDirty = FALSE;
++        return;
++    }
++#endif
++
+     if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE && !gPaletteFade.active)
+     {
+         switch (GetSwitchBagPocketDirection())
+@@ -1986,7 +2014,10 @@
+     if (BAG_ACK(A_BUTTON | B_BUTTON))
+     {
+         PlaySE(SE_SELECT);
+-        RemoveBagItem(gSpecialVar_ItemId, tItemCount);
++        if (tItemCount >= 0)
++            RemoveBagItem(gSpecialVar_ItemId, tItemCount);
++        else
++            tItemCount = -tItemCount; /* live deposit already removed source */
+         DestroyListMenuTask(tListTaskId, scrollPos, cursorPos);
+         UpdatePocketItemList(gBagPosition.pocket);
+         UpdatePocketListPosition(gBagPosition.pocket);
+@@ -2265,7 +2296,12 @@
+     u16 *cursorPos = &gBagPosition.cursorPosition[gBagPosition.pocket];
+ 
+     PlaySE(SE_SHOP);
+-    RemoveBagItem(gSpecialVar_ItemId, tItemCount);
++    if (!RemoveBagItem(gSpecialVar_ItemId, tItemCount))
++    {
++        RemoveMoneyWindow();
++        CloseItemMessage(taskId);
++        return;
++    }
+     AddMoney(&gSaveBlock1Ptr->money, (GetItemPrice(gSpecialVar_ItemId) / 2) * tItemCount);
+     DestroyListMenuTask(tListTaskId, scrollPos, cursorPos);
+     UpdatePocketItemList(gBagPosition.pocket);
+@@ -2337,6 +2373,9 @@
+ static void TryDepositItem(u8 taskId)
+ {
+     s16 *data = gTasks[taskId].data;
++#ifdef PLATFORM_3DS
++    int liveTransfer = -1;
++#endif
+ 
+     FillWindowPixelBuffer(WIN_DESCRIPTION, PIXEL_FILL(0));
+     if (GetItemImportance(gSpecialVar_ItemId))
+@@ -2345,12 +2384,21 @@
+         BagMenu_Print(WIN_DESCRIPTION, FONT_NORMAL, gText_CantStoreImportantItems, 3, 1, 0, 0, 0, COLORID_NORMAL);
+         gTasks[taskId].func = WaitDepositErrorMessage;
+     }
+-    else if (AddPCItem(gSpecialVar_ItemId, tItemCount) == TRUE)
++    else if (
++#ifdef PLATFORM_3DS
++        ((liveTransfer = CtrCoopInventory_HookTransfer(CTR_COOP_INVENTORY_BAG, gSpecialVar_ItemId, tItemCount)) >= 0)
++        ? liveTransfer == 1 :
++#endif
++        AddPCItem(gSpecialVar_ItemId, tItemCount) == TRUE)
+     {
+         // Successfully deposited
+         CopyItemName(gSpecialVar_ItemId, gStringVar1);
+         ConvertIntToDecimalStringN(gStringVar2, tItemCount, STR_CONV_MODE_LEFT_ALIGN, MAX_ITEM_DIGITS);
+         StringExpandPlaceholders(gStringVar4, gText_DepositedVar2Var1s);
++#ifdef PLATFORM_3DS
++        if (liveTransfer == 1)
++            tItemCount = -tItemCount;
++#endif
+         BagMenu_Print(WIN_DESCRIPTION, FONT_NORMAL, gStringVar4, 3, 1, 0, 0, 0, COLORID_NORMAL);
+         gTasks[taskId].func = Task_RemoveItemFromBag;
+     }
+@@ -2384,6 +2432,9 @@
+ 
+ static void PrepareBagForWallyTutorial(void)
+ {
++#ifdef PLATFORM_3DS
++    CtrCoopInventory_TemporaryBag(TRUE);
++#endif
+     u32 i;
+ 
+     sTempWallyBag = AllocZeroed(sizeof(*sTempWallyBag));
+@@ -2406,6 +2457,9 @@
+ 
+     memcpy(gSaveBlock1Ptr->bagPocket_Items, sTempWallyBag->bagPocket_Items, sizeof(sTempWallyBag->bagPocket_Items));
+     memcpy(gSaveBlock1Ptr->bagPocket_PokeBalls, sTempWallyBag->bagPocket_PokeBalls, sizeof(sTempWallyBag->bagPocket_PokeBalls));
++#ifdef PLATFORM_3DS
++    CtrCoopInventory_TemporaryBag(FALSE);
++#endif
+     gBagPosition.pocket = sTempWallyBag->pocket;
+     for (i = 0; i < POCKETS_COUNT; i++)
+     {
+@@ -2480,8 +2534,7 @@
+ 
+ static void ItemMenu_GiveFavorLady(u8 taskId)
+ {
+-    RemoveBagItem(gSpecialVar_ItemId, 1);
+-    gSpecialVar_Result = TRUE;
++    gSpecialVar_Result = RemoveBagItem(gSpecialVar_ItemId, 1);
+     RemoveContextWindow();
+     Task_FadeAndCloseBagMenu(taskId);
+ }
+diff --git a/src/player_pc.c b/src/player_pc.c
+--- a/src/player_pc.c
++++ b/src/player_pc.c
+@@ -1,4 +1,10 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
++static EWRAM_DATA bool8 sCtrSharedPCDirty;
++static EWRAM_DATA u16 sCtrSelectedPCItem;
++void CtrPC_SharedInventoryDirty(void) { sCtrSharedPCDirty = TRUE; }
++#endif
+ #include "constants/songs.h"
+ #include "bg.h"
+ #include "decoration.h"
+@@ -1240,6 +1246,21 @@
+ static void ItemStorage_ProcessInput(u8 taskId)
+ {
+     s16 *data = gTasks[taskId].data;
++#ifdef PLATFORM_3DS
++    if (sCtrSharedPCDirty)
++    {
++        ItemStorage_RemoveScrollIndicator();
++        DestroyListMenuTask(tListTaskId, &gPlayerPCItemPageInfo.itemsAbove, &gPlayerPCItemPageInfo.cursorPos);
++        ItemStorage_CompactList();
++        ItemStorage_CompactCursor();
++        ItemStorage_RefreshListMenu();
++        tListTaskId = ListMenuInit(&gMultiuseListMenuTemplate, gPlayerPCItemPageInfo.itemsAbove, gPlayerPCItemPageInfo.cursorPos);
++        ItemStorage_AddScrollIndicator();
++        ScheduleBgCopyTilemapToVram(0);
++        sCtrSharedPCDirty = FALSE;
++        return;
++    }
++#endif
+     if (JOY_NEW(SELECT_BUTTON))
+     {
+         // 'Select' starts input for swapping items if not on Cancel
+@@ -1380,6 +1401,9 @@
+ {
+     s16 *data = gTasks[taskId].data;
+     u16 pos = gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove;
++#ifdef PLATFORM_3DS
++    sCtrSelectedPCItem = gSaveBlock1Ptr->pcItems[pos].itemId;
++#endif
+     ItemStorage_RemoveScrollIndicator();
+     tQuantity = 1;
+ 
+@@ -1451,13 +1475,33 @@
+ {
+     s16 *data = gTasks[taskId].data;
+     u16 pos = gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove;
+-
+-    if (AddBagItem(gSaveBlock1Ptr->pcItems[pos].itemId, tQuantity) == TRUE)
++    u16 item = gSaveBlock1Ptr->pcItems[pos].itemId;
++#ifdef PLATFORM_3DS
++    int liveTransfer;
++    if (!item || item != sCtrSelectedPCItem)
++    {
++        tQuantity = 0;
++        sCtrSharedPCDirty = TRUE;
++        ItemStorage_ReturnToListInput(taskId);
++        return;
++    }
++    liveTransfer = CtrCoopInventory_HookTransfer(CTR_COOP_INVENTORY_PC, item, tQuantity);
++#endif
++
++    if (
++#ifdef PLATFORM_3DS
++        liveTransfer >= 0 ? liveTransfer == 1 :
++#endif
++        AddBagItem(item, tQuantity) == TRUE)
+     {
+         // Item withdrawn
+-        CopyItemName(gSaveBlock1Ptr->pcItems[pos].itemId, gStringVar1);
++        CopyItemName(item, gStringVar1);
+         ConvertIntToDecimalStringN(gStringVar2, tQuantity, STR_CONV_MODE_LEFT_ALIGN, 3);
+         ItemStorage_PrintMessage(ItemStorage_GetMessage(MSG_WITHDREW_ITEM));
++#ifdef PLATFORM_3DS
++        if (liveTransfer == 1)
++            tQuantity = -tQuantity;
++#endif
+         gTasks[taskId].func = ItemStorage_HandleRemoveItem;
+     }
+     else
+@@ -1473,6 +1517,14 @@
+ {
+     s16 *data = gTasks[taskId].data;
+     u16 pos = gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove;
++#ifdef PLATFORM_3DS
++    if (!sCtrSelectedPCItem || gSaveBlock1Ptr->pcItems[pos].itemId != sCtrSelectedPCItem)
++    {
++        sCtrSharedPCDirty = TRUE;
++        ItemStorage_ReturnToListInput(taskId);
++        return;
++    }
++#endif
+ 
+     if (!GetItemImportance(gSaveBlock1Ptr->pcItems[pos].itemId))
+     {
+@@ -1509,7 +1561,14 @@
+     s16 *data = gTasks[taskId].data;
+     if (JOY_NEW(A_BUTTON | B_BUTTON))
+     {
+-        RemovePCItem(gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove, tQuantity);
++        if (tQuantity >= 0
++#ifdef PLATFORM_3DS
++         && gSaveBlock1Ptr->pcItems[gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove].itemId == sCtrSelectedPCItem
++#endif
++        )
++            RemovePCItem(gPlayerPCItemPageInfo.cursorPos + gPlayerPCItemPageInfo.itemsAbove, tQuantity);
++        else if (tQuantity < 0)
++            tQuantity = -tQuantity; /* atomic live transfer already removed it */
+         DestroyListMenuTask(tListTaskId, &gPlayerPCItemPageInfo.itemsAbove, &gPlayerPCItemPageInfo.cursorPos);
+         ItemStorage_CompactList();
+         ItemStorage_CompactCursor();
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -3912,12 +3912,13 @@
+     if (itemId != ITEM_NONE)
+     {
+         u8 pos = GetCursorPosition();
++        if (!RemoveBagItem(itemId, 1))
++            return;
+         if (sInPartyMenu)
+             SetMonData(&gPlayerParty[pos], MON_DATA_HELD_ITEM, &itemId);
+         else
+             SetCurrentBoxMonData(pos, MON_DATA_HELD_ITEM, &itemId);
+ 
+-        RemoveBagItem(itemId, 1);
+     }
+ }
+ 
+diff --git a/src/berry_blender.c b/src/berry_blender.c
+--- a/src/berry_blender.c
++++ b/src/berry_blender.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_inventory.h"
++#endif
+ #include "overworld.h"
+ #include "berry_blender.h"
+ #include "bg.h"
+@@ -1286,6 +1289,16 @@
+ {
+     s32 i;
+ 
++#ifdef PLATFORM_3DS
++    /* Claim the berry before minigame effects. A concurrent player may have
++     * consumed the final one while this menu was open. */
++    if (gSpecialVar_0x8004 != 0 && !CtrCoopInventory_BeginUse(gSpecialVar_ItemId, 1))
++    {
++        ChooseBerryForMachine(StartBlender);
++        return;
++    }
++#endif
++
+     SetGpuReg(REG_OFFSET_DISPCNT, 0);
+     if (sBerryBlender == NULL)
+         sBerryBlender = AllocZeroed(sizeof(*sBerryBlender));
+@@ -2926,6 +2939,9 @@
+                 FreeAllWindowBuffers();
+                 UnsetBgTilemapBuffer(2);
+                 UnsetBgTilemapBuffer(1);
++#ifdef PLATFORM_3DS
++                CtrCoopInventory_RefundUse();
++#endif
+                 FREE_AND_SET_NULL(sBerryBlender);
+                 SetMainCallback2(DoBerryBlending);
+             }
+@@ -2946,6 +2962,9 @@
+     case 12:
+         if (!gReceivedRemoteLinkPlayers)
+         {
++#ifdef PLATFORM_3DS
++            CtrCoopInventory_RefundUse();
++#endif
+             FREE_AND_SET_NULL(sBerryBlender);
+             SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
+         }
+@@ -3004,6 +3023,9 @@
+             FreeAllWindowBuffers();
+             UnsetBgTilemapBuffer(2);
+             UnsetBgTilemapBuffer(1);
++#ifdef PLATFORM_3DS
++            CtrCoopInventory_RefundUse();
++#endif
+             FREE_AND_SET_NULL(sBerryBlender);
+         }
+         break;
+@@ -3609,8 +3631,8 @@
+         CreateTask(Task_PlayPokeblockFanfare, 6);
+         IncrementDailyBerryBlender();
+ 
+-        RemoveBagItem(gSpecialVar_ItemId, 1);
+-        AddPokeblock(&pokeblock);
++        if (RemoveBagItem(gSpecialVar_ItemId, 1))
++            AddPokeblock(&pokeblock);
+ 
+         sBerryBlender->textState = 0;
+         sBerryBlender->mainState++;
+diff --git a/src/lilycove_lady.c b/src/lilycove_lady.c
+--- a/src/lilycove_lady.c
++++ b/src/lilycove_lady.c
+@@ -1,4 +1,8 @@
+ #include "global.h"
++
++/* The prize is paid before publishing the question. A co-op peer may have
++ * consumed the last selected prize while the question editor was open. */
++static EWRAM_DATA bool8 sQuizPrizePaid;
+ #include "main.h"
+ #include "overworld.h"
+ #include "fldeff.h"
+@@ -548,12 +552,15 @@
+ 
+ void QuizLadyTakePrizeForCustomQuiz(void)
+ {
+-    RemoveBagItem(gSpecialVar_ItemId, 1);
++    sQuizPrizePaid = RemoveBagItem(gSpecialVar_ItemId, 1);
+ }
+ 
+ void QuizLadyRecordCustomQuizData(void)
+ {
+     u8 i;
++
++    if (!sQuizPrizePaid)
++        return;
+ 
+     sQuizLadyPtr = &gSaveBlock1Ptr->lilycoveLady.quiz;
+     sQuizLadyPtr->prize = gSpecialVar_ItemId;
+@@ -565,6 +572,9 @@
+ 
+ void QuizLadySetWaitingForChallenger(void)
+ {
++    if (!sQuizPrizePaid)
++        return;
++    sQuizPrizePaid = FALSE;
+     sQuizLadyPtr = &gSaveBlock1Ptr->lilycoveLady.quiz;
+     sQuizLadyPtr->waitingForChallenger = TRUE;
+ }
+diff --git a/src/battle_controller_player.c b/src/battle_controller_player.c
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -455,7 +455,12 @@
+             {
+                 // Add item to bag if it is a ball
+                 if (itemId <= LAST_BALL)
+-                    AddBagItem(itemId, 1);
++                {
++                    /* Do not cancel the paid ball action unless its refund
++                     * succeeded. The player can retry B or use that action. */
++                    if (!AddBagItem(itemId, 1))
++                        return;
++                }
+                 else
+                     return;
+             }

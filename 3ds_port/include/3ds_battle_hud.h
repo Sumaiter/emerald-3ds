@@ -17,6 +17,11 @@
  */
 #include <stdbool.h>
 #include <stdint.h>
+#ifdef CTR_BATTLE_PRESENTATION
+#include "3ds_battle_present.h"
+void CtrBattleHud_PresentCapture(CtrPresentHud out[CTR_PRESENT_HUDS]);
+void CtrBattleHud_PresentReset(void);
+#endif
 
 /* One box a battler can have: singles, doubles and the Safari Zone's. */
 enum

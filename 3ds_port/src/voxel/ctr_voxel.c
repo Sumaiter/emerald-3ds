@@ -5252,10 +5252,55 @@ static float Smoother(float t)
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
 
+#ifdef CTR_BATTLE_PRESENTATION
+void CtrVoxel_PresentCapture(CtrPresentWorld *out)
+{
+    _Static_assert(sizeof(sCamera)==sizeof(out->camera), "presentation camera ABI");
+    _Static_assert(sizeof(sBattle.intro)==sizeof(out->intro), "presentation intro ABI");
+    memcpy(out->camera,&sCamera,sizeof(out->camera));
+    memcpy(out->intro,&sBattle.intro,sizeof(out->intro));
+    memcpy(out->light,CtrDayNight_Get(),sizeof(out->light));
+    const CtrDayNightSun *sun=CtrDayNight_GetSun();
+    out->sun[0]=sun->dx;out->sun[1]=sun->dz;out->sun[2]=sun->strength;out->sunKey=sun->key;
+    out->shadowCount=VoxelBattle_Shadows((VoxelBattleShadow *)out->shadows,4);
+    out->ready=sBattle.on && sViewReady;
+    out->outdoor=CtrGame_IsOutdoor();
+    out->bloom=sBloomStrength;
+    VoxelWorld_PresentCapture(out);
+}
+static const CtrDayNightLight *PresentLight(void)
+{
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    static CtrDayNightLight light;
+    if(!p) return CtrDayNight_Get();
+    memcpy(&light,p->world.light,sizeof(light));return &light;
+}
+static const CtrDayNightSun *PresentSun(void)
+{
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    static CtrDayNightSun sun;
+    if(!p) return CtrDayNight_GetSun();
+    sun.dx=p->world.sun[0];sun.dz=p->world.sun[1];sun.strength=p->world.sun[2];sun.key=p->world.sunKey;
+    return &sun;
+}
+#define CtrDayNight_Get PresentLight
+#define CtrDayNight_GetSun PresentSun
+static bool PresentOutdoor(void)
+{
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    return p?p->world.outdoor!=0:CtrGame_IsOutdoor();
+}
+#define CtrGame_IsOutdoor PresentOutdoor
+#endif
+
 void CtrVoxel_BattleIntro(CtrVoxelBattleIntro *intro)
 {
     static const CtrVoxelBattleIntro none;
 
+#ifdef CTR_BATTLE_PRESENTATION
+    const CtrBattlePresentFrame *p=CtrBattlePresent_Current();
+    if(p) { memcpy(intro,p->world.intro,sizeof(*intro));return; }
+#endif
     *intro = sBattle.on ? sBattle.intro : none;
 }
 
@@ -5834,6 +5879,9 @@ bool CtrVoxel_Update(void)
          * by another way; one that does is logged and taken as a change.
          */
         uint32_t version = CtrMap_Version(), signature = InstanceSignature();
+#ifdef CTR_BATTLE_PRESENTATION
+        if(CtrBattlePresent_Current()) version=CtrBattlePresent_Current()->world.mapHash;
+#endif
         /* The buildings came or went (CtrVoxel_UnparkVram): the lighting's
          * casters with them. */
         bool changed = version != sMapVersion || signature != sInstanceSignature || sBuildingsChanged;
@@ -5861,7 +5909,11 @@ bool CtrVoxel_Update(void)
             sInstanceSignature = signature;
             /* the belt past the map at its edge's level, or at the base
              * (settings.txt voxel_border_edge=0), read with each new map */
-            VoxelMesh_SetBorderFollowsEdge(CtrSettings_GetInt("voxel_border_edge", 1) != 0);
+            VoxelMesh_SetBorderFollowsEdge(
+#ifdef CTR_BATTLE_PRESENTATION
+                CtrBattlePresent_Current()?CtrBattlePresent_Current()->borderFollowsEdge!=0:
+#endif
+                CtrSettings_GetInt("voxel_border_edge", 1) != 0);
             VoxelBuildings_MapChanged();
             ++sEpoch;
 #if CTR_VOXEL_LIGHTING
@@ -5879,6 +5931,10 @@ bool CtrVoxel_Update(void)
         sMeasureRead = sFrame + 64u;
     }
     sGlowWanted = sMeasureGlow && CtrDayNight_Get()->glow > 0.0f;
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current())
+        sGlowWanted=CtrBattlePresent_Current()->measureGlow && CtrDayNight_Get()->glow>0.0f;
+#endif
     NotePart(PART_CHECK, &partStart);
 
 #if CTR_VOXEL_LIGHTING
@@ -5932,6 +5988,14 @@ bool CtrVoxel_Update(void)
         VoxelCamera_Swoop(&sCamera, sSwoop);
     if (sBattle.on)
     {
+#ifdef CTR_BATTLE_PRESENTATION
+        const CtrBattlePresentFrame *present=CtrBattlePresent_Current();
+        if(present) {
+            memcpy(&sCamera,present->world.camera,sizeof(sCamera));
+            memcpy(&sBattle.intro,present->world.intro,sizeof(sBattle.intro));
+            sBattle.chosen=sBattle.begun=true;
+        }
+#endif
         if (!sBattle.chosen)
         {
             uint64_t searchStart = svcGetSystemTick();
@@ -5952,6 +6016,9 @@ bool CtrVoxel_Update(void)
                              "(worst frame %.1f)", (unsigned)sBattle.searchFrames, sBattle.searchMs,
                              sBattle.searchWorstMs);
         }
+#ifdef CTR_BATTLE_PRESENTATION
+        if(!present)
+#endif
         BattleCamera();
         /* Nobody moves in a battle, and nothing is led towards. */
         TrackMotion(sLastX, sLastZ, true);
@@ -6321,6 +6388,8 @@ void CtrVoxel_ParkVram(void)
     sHaveBuildings = false;
     /* Back as for a map never seen: HandleMapChange builds it again. */
     sMeshMapGroup = sMeshMapNum = -1;
+    sPreviousOriginCount = 0;
+    sViewReady = false;
     sParked = true;
     CtrLog_Write(CTR_LOG_VIDEO, "VOXEL: VRAM parked while the world is off (VRAM free=%lu)",
                  (unsigned long)vramSpaceFree());
@@ -7516,6 +7585,9 @@ static bool sBrightWhite;
 
 float CtrVoxel_Bloom(void)
 {
+#ifdef CTR_BATTLE_PRESENTATION
+    if(CtrBattlePresent_Current()) return CtrBattlePresent_Current()->world.bloom;
+#endif
     return sReady ? sBloomStrength : 0.0f;
 }
 

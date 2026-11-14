@@ -102,6 +102,26 @@ bool CtrVideo_Init(void);
 void CtrVideo_Shutdown(void);
 void CtrVideo_Bind(CtrVideoMemory memory);
 void CtrVideo_Present(void);
+#ifdef CTR_BATTLE_PRESENTATION
+#include "3ds_battle_present.h"
+bool CtrVideo_PresentRequestCapture(void);
+const uint8_t *CtrVideo_PresentTakeCapture(void);
+void CtrVideo_PresentCancelCapture(void);
+/* Copies a validated state. NULL cancels immediately; GPU ownership is
+ * retired at the next existing frame fence, never in the packet callback. */
+bool CtrVideo_PresentDisplay(const uint8_t *state);
+#endif
+/* Main-thread presentation-only co-op video. Request/Take captures the last
+ * completed left-eye battle framebuffer as 400x240 top-down RGB332 indices.
+ * Take's pointer stays valid until the next request/cancel/shutdown. Captures
+ * happen after the existing FrameBegin wait, before any target is cleared.
+ * Display borrows a complete RGB332 frame until replaced/cleared (NULL);
+ * texture uploads happen only after that same GPU fence. No engine memory
+ * is read or restored by this stream. Stop never waits for/deletes a texture. */
+bool CtrVideo_SpectatorRequestCapture(void);
+const uint8_t *CtrVideo_SpectatorTakeCapture(void);
+void CtrVideo_SpectatorCancelCapture(void);
+bool CtrVideo_SpectatorDisplay(const uint8_t *pixels);
 /* Keep showing the last top-screen frame instead of the game's screen. */
 void CtrVideo_HoldTop(bool hold);
 bool CtrVideo_TopHeld(void);

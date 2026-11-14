@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include "global.h"
 #include "main.h"
@@ -9,12 +10,18 @@
 #include "constants/map_groups.h"
 #include "local_link.h"
 
+/* Script-special entry points, exported through the engine's special table. */
+u16 LocalSession_Start(void);
+u16 LocalSession_CanEnter(void);
+
 static int sFailures;
 static uint8_t sState;
 static uint8_t sKind;
 static int sLeaves;
 static bool8 sLocked;
 static bool8 sScript;
+static bool sNativeReady=true;
+static unsigned sStarts;
 
 #define CHECK(cond, ...) do { if (!(cond)) { sFailures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
@@ -27,7 +34,8 @@ void CB2_Overworld(void) {}
 
 uint8_t LocalLink_GetSession(void) { return sState; }
 uint8_t LocalLink_GetSessionKind(void) { return sKind; }
-void LocalLink_StartSession(uint8_t kind) { (void)kind; }
+void LocalLink_StartSession(uint8_t kind) { (void)kind; ++sStarts; }
+bool CtrCoop_PrepareNativeLink(void) { return sNativeReady; }
 void LocalLink_LeaveSession(void) { sLeaves++; }
 bool8 ArePlayerFieldControlsLocked(void) { return sLocked; }
 bool8 ScriptContext_IsEnabled(void) { return sScript; }
@@ -103,6 +111,13 @@ static void TestLockedAndScripted(void)
 
 int main(void)
 {
+    sState=LOCAL_SESSION_IN;sKind=LOCAL_KIND_COOP;
+    gSpecialVar_0x800A=LOCAL_KIND_UNION_ROOM;
+    sNativeReady=false;
+    CHECK(!LocalSession_Start() && !sStarts, "unresolved co-op cannot start a native session");
+    CHECK(!LocalSession_CanEnter(), "wrong transport cannot enter the counter");
+    sNativeReady=true;
+    CHECK(!LocalSession_Start() && sStarts==1, "settled co-op may start the native session");
     TestCoopOutsideLinkRoom();
     TestCounterOutsideLinkRoom();
     TestCounterInsideLinkRoom();

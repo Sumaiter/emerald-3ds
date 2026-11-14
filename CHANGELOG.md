@@ -2,6 +2,9 @@
 
 ## Unreleased (co-op fork)
 
+- Visible wild Pokemon keep their IV rolls adjacent to their original
+  personality, including shiny rolls (upstream PR #266). Existing catches
+  are unchanged.
 - Fly map: choose destinations with the D-Pad or Circle Pad, including held
   repeat and zoom following. Adapted from ZallaxDev/emerald-3ds PR #267; our
   existing co-op fly/cancel path is preserved.

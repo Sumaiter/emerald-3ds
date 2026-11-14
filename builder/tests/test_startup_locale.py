@@ -2,11 +2,12 @@
 
 3ds_data.c is copied verbatim into a temporary mirror (its relative constants
 include normally comes from the bootstrapped game). Only SDK/platform edges
-and the unused GNU cookie-stream API on macOS are stubbed. Real stdio/stat,
+and the unused GNU cookie-stream API on macOS/Windows are stubbed. Real stdio/stat,
 CtrData_Init, error getters, and 3ds_pak.c run in a fresh process per case.
 The START check compiles only the actual production printf expression, not
 its compositor, input loop, or hardware console rendering.
 """
+import os
 import re
 import shutil
 import struct
@@ -17,6 +18,7 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+SD_ROOT = "sdmc_" if os.name == "nt" else "sdmc:"
 CC = shutil.which("cc") or shutil.which("gcc")
 CLANG = bool(CC) and b"clang" in subprocess.run(
     [CC, "--version"], capture_output=True).stdout.lower()
@@ -190,7 +192,7 @@ static inline Result FSFILE_Close(Handle handle)
     fsFiles[handle - 1] = NULL;
     return closed == 0 ? 0 : 1;
 }
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(_WIN32)
 /* Unused by startup; fail loudly if a test ever reaches a data stream. */
 typedef struct {
     ssize_t (*read)(void *, char *, size_t);
@@ -200,6 +202,29 @@ typedef struct {
 } cookie_io_functions_t;
 static inline FILE *fopencookie(void *cookie, const char *mode, cookie_io_functions_t io)
 { (void)cookie; (void)mode; (void)io; abort(); }
+#endif
+#ifdef _WIN32
+/* Windows cannot create a colon in a directory name. Map just the device
+ * prefix; real stdio/stat still read the unmodified synthetic pack bytes. */
+#include <direct.h>
+#include <sys/stat.h>
+static inline const char *test_sd_path(const char *path, char mapped[1024])
+{
+    if (strncmp(path, "sdmc:", 5) != 0) return path;
+    if (strlen(path) >= 1024) abort();
+    strcpy(mapped, path);
+    mapped[4] = '_';
+    return mapped;
+}
+static inline FILE *test_fopen(const char *path, const char *mode)
+{ char mapped[1024]; return fopen(test_sd_path(path, mapped), mode); }
+static inline int test_stat(const char *path, struct stat *info)
+{ char mapped[1024]; return stat(test_sd_path(path, mapped), info); }
+static inline int test_mkdir(const char *path)
+{ char mapped[1024]; return _mkdir(test_sd_path(path, mapped)); }
+#define fopen(path, mode) test_fopen(path, mode)
+#define stat(path, info) test_stat(path, info)
+#define mkdir(path, mode) test_mkdir(path)
 #endif
 '''
 
@@ -325,15 +350,17 @@ class StartupLocaleTests(unittest.TestCase):
         for language in LANGUAGES:
             for case in (*CASES, "valid"):
                 cwd = cls.root / (language + "-" + case)
-                (cwd / "sdmc:/3ds/emerald3ds").mkdir(parents=True)
+                (cwd / SD_ROOT / "3ds/emerald3ds").mkdir(parents=True)
                 (cwd / "engine-abi.bin").write_bytes(struct.pack("<I", ENGINE_ABI))
                 if case not in ("missing", "no_embedded"):
-                    (cwd / "sdmc:/3ds/emerald3ds/emerald3ds.pak").write_bytes(
+                    (cwd / SD_ROOT / "3ds/emerald3ds/emerald3ds.pak").write_bytes(
                         synthetic_pack(language, case))
                 result = subprocess.run(
                     [str(cls.executables[language, int(case == "no_embedded")])],
                     cwd=cwd, check=True, capture_output=True)
-                fields = result.stdout.decode("ascii").split("\0")
+                # Windows text streams expand LF to CRLF; the console on
+                # the device does not. Preserve every other output byte.
+                fields = result.stdout.decode("ascii").replace("\r\n", "\n").split("\0")
                 if len(fields) != 6 or fields[-1] != "":
                     raise AssertionError("invalid harness output: " + repr(result.stdout))
                 cls.output[language, case] = fields[:-1]
@@ -409,7 +436,7 @@ class StartupLocaleTests(unittest.TestCase):
                 executable = self.root / ("start-" + language)
                 compile_c(source, executable, self.root, language)
                 text = subprocess.run([str(executable)], check=True,
-                                      capture_output=True).stdout.decode("ascii")
+                                      capture_output=True).stdout.decode("ascii").replace("\r\n", "\n")
                 if language == "fr":
                     self.assertRegex(text, r"Appuie.*START.*quitter")
                 elif language == "it":

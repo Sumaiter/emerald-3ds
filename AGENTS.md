@@ -9,3 +9,9 @@
 - Ohne ausdrückliche Vorgabe des Nutzers darf die Denkstufe eines Subagenten höchstens der des Hauptagenten entsprechen. Verlangt der Nutzer ausdrücklich eine bestimmte Stufe, gilt diese Vorgabe auch dann, wenn sie höher ist.
 - Modell und Denkstufe anhand der jeweiligen Aufgabe selbstständig passend auswählen. Bestehende Agenten bei Bedarf prüfen und umstellen; konkrete Modell- oder Denkstufenvorgaben des Nutzers haben Vorrang.
 - Die Arbeit eines Subagenten nicht unnötig parallel im Hauptagenten wiederholen und nicht fortlaufend abfragen; auf die Abschlussmeldung warten.
+
+## Upstream-PRs merken
+
+- Vor dem Abgleich mit ZallaxDev/emerald-3ds zuerst `tools/upstream_pr_decisions.json` und `docs/UPSTREAM_PR_REVIEW.md` lesen.
+- Bereits uebernommene und bewusst ausgelassene PRs bei unveraendertem `reviewed_head` ueberspringen; nicht wegen weiterhin offenem Status erneut pruefen.
+- Neue PRs und geaenderte Heads pruefen und die Entscheidung mit Head, Integrationscommit oder Begruendung fortschreiben. Unveraenderte Entscheidungen nur bei ausdruecklichem Auftrag oder konkret neuem Integrationsbedarf wieder oeffnen und den Anlass notieren.

@@ -199,15 +199,53 @@ def check_map_generator(up):
     print('mapjson: fresh/missing/unchanged/edited map includes passed with the real compiler')
 
 
+def check_map_rules(up):
+    """Execute the actual Make recipes from a port subdirectory: generated
+    assembly is consumed from the native root, so it must not contain ../data.
+    """
+    mk = (Path(__file__).resolve().parents[1]/'full.mk').read_text(encoding='utf-8')
+    rules = []
+    for name in ('map_groups', 'layouts'):
+        match = re.search(r'^\$\(ROOT\)/include/constants/'+name+r'\.h\b', mk, re.M)
+        assert match, name
+        rules.append(mk[match.start():].split('\n\n', 1)[0]+'\n')
+    tool = up/'tools/mapjson'/('mapjson.exe' if os.name == 'nt' else 'mapjson')
+    with tempfile.TemporaryDirectory(prefix='map-rules-') as tmp:
+        root = Path(tmp)
+        port = root/'3ds_port';port.mkdir()
+        (root/'include/constants').mkdir(parents=True)
+        for source in (up/'data/maps').glob('*/map.json'):
+            target = root/'data/maps'/source.parent.name/'map.json'
+            target.parent.mkdir(parents=True);shutil.copyfile(source, target)
+        shutil.copyfile(up/'data/maps/map_groups.json', root/'data/maps/map_groups.json')
+        (root/'data/layouts').mkdir()
+        shutil.copyfile(up/'data/layouts/layouts.json', root/'data/layouts/layouts.json')
+        (port/'full.mk').write_text('ROOT := ..\nMAPJSON := '+tool.as_posix()+'\n'
+                                  'all: ../include/constants/map_groups.h ../include/constants/layouts.h '
+                                  '../data/maps/headers.inc ../data/maps/groups.inc ../data/maps/events.inc '
+                                  '../data/maps/connections.inc ../data/layouts/layouts.inc ../data/layouts/layouts_table.inc\n'
+                                  + '\n'.join(rules), encoding='utf-8')
+        result = subprocess.run(['make', '-j8', '-f', 'full.mk', 'all'], cwd=port,
+                                check=True, capture_output=True, text=True)
+        assert result.stdout.count('groups emerald') == 1, result.stdout
+        assert result.stdout.count('layouts emerald') == 1, result.stdout
+        for path in [*(root/'data/maps').glob('*.inc'), *(root/'data/layouts').glob('*.inc')]:
+            text = path.read_text(encoding='utf-8')
+            assert '../data/' not in text, path
+        assert '.include "data/maps/Route101/header.inc"' in (root/'data/maps/headers.inc').read_text()
+    print('actual map/layout Make recipes emit native-root paths from a port subdirectory')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', type=Path, default=UPSTREAM/'src')
     parser.add_argument('--cc', default=os.environ.get('HOSTCC', 'gcc'))
     parser.add_argument('--built', action='store_true', help='also check the actual generated map includes')
     args = parser.parse_args()
-    up = args.source.parent
+    up = args.source.resolve().parent
     check_map_and_scripts(up)
     check_map_generator(up)
+    check_map_rules(up)
     if args.built:
         events = (up/'data/maps/Route101/events.inc').read_text()
         assert events.count('object_event ') == 8

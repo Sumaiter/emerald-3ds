@@ -6,6 +6,7 @@ requested build/coop-live directory. Run with Python and MinGW gcc on PATH.
 from pathlib import Path
 import argparse
 import subprocess
+from test_coop_bike_hooks import UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -28,7 +29,7 @@ def main():
     args = argparse.ArgumentParser()
     args.add_argument("--cc", default="gcc")
     cc = args.parse_args().cc
-    engine = ROOT / "build/upstream/src"
+    engine = UPSTREAM / "src"
     bodies = []
     for filename, names in {
         "party_menu.c": ["ExecuteTableBasedItemEffect_"],

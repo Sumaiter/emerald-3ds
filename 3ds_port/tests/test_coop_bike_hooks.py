@@ -10,6 +10,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 UPSTREAM = ROOT if (ROOT / "src/event_object_movement.c").is_file() else ROOT / "build/upstream"
+# Patch resources belong to the co-op checkout, even when tests are staged
+# inside the bootstrapped native tree.
+REPO = next((p for p in (ROOT, *ROOT.parents)
+             if (p / "patches/pokeemerald/0083-local-coop.patch").is_file()), ROOT)
 
 
 def function(text, name):

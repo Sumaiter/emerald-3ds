@@ -350,6 +350,11 @@ build/battle_speed_test$(EXESUFFIX): tests/battle_speed_test.c src/3ds_settings.
 verify-rng-seeding:
 	"$(PYTHON)" tests/rng_seeding_test.py --cc "$(HOSTCC)"
 
+.PHONY: verify-upstream-fixes
+verify: verify-upstream-fixes
+verify-upstream-fixes:
+	"$(PYTHON)" tests/upstream_fixes_test.py --cc "$(HOSTCC)"
+
 .PHONY: verify-bottom-taps
 verify: verify-bottom-taps
 verify-bottom-taps:

@@ -105,6 +105,25 @@ class RecipeTests(unittest.TestCase):
 
 
 class RomTests(unittest.TestCase):
+    def test_pinball_header_is_rejected_in_gba_and_zip(self):
+        # Synthetic bytes only; a recognized header must never bypass Emerald's
+        # fingerprint checks, for either an uploaded ROM or a ZIP member.
+        with tempfile.TemporaryDirectory() as tmp:
+            for code in (b"BPPE", b"BPPJ", b"BPPP"):
+                data = bytearray(b"\xff" * romlib.ROM_SIZE)
+                data[0xAC:0xB0] = code
+                raw = self._write(tmp, data, "pinball.gba")
+                zipped = Path(tmp) / "pinball.zip"
+                with zipfile.ZipFile(zipped, "w", zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("folder/pinball.gba", data)
+                for path in (raw, zipped):
+                    with self.subTest(code=code, suffix=path.suffix):
+                        with self.assertRaises(BuilderError) as ctx:
+                            romlib.load_rom(path)
+                        self.assertEqual(ctx.exception.code, "rom_wrong_game")
+                        self.assertIn("You were close!", ctx.exception.message)
+                        self.assertIn("Pinball", ctx.exception.message)
+
     def _write(self, tmp, data, name="game.gba"):
         path = Path(tmp) / name
         path.write_bytes(data)

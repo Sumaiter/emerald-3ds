@@ -2,7 +2,7 @@
 import argparse
 from pathlib import Path
 import subprocess
-from test_coop_bike_hooks import function
+from test_coop_bike_hooks import function, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -66,7 +66,7 @@ int main(void) {
     exe = out / 'transport-native.exe'
     c.write_text(preamble + bodies + harness, encoding='utf-8')
     subprocess.run([args.cc,'-std=c99','-O2','-Wall','-Wextra','-Werror',
-                    '-I'+str(ROOT/'3ds_port/include'),'-I'+str(ROOT/'build/upstream/include'),str(c),'-o',str(exe)], check=True)
+                    '-I'+str(ROOT/'3ds_port/include'),'-I'+str(UPSTREAM/'include'),str(c),'-o',str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
 
 if __name__ == '__main__':

@@ -1,5 +1,56 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Upstream-PR-Abgleich und Merkliste (2026-11-14)
+
+Build **7e5dc28033a62d97**, Boot **E3ID-58cdf81623cdba8b**, ABI **bcdc1bb8**, Protokoll 20.
+12 offene Upstream-PRs integriert, zwei hier nicht anwendbar, fuenf bewusst
+ausgelassen. Die Entscheidungen mit vollem Head-Commit und Integrationscommit
+stehen in [docs/UPSTREAM_PR_REVIEW.md](docs/UPSTREAM_PR_REVIEW.md) und
+[tools/upstream_pr_decisions.json](tools/upstream_pr_decisions.json).
+AGENTS.md verlangt, unveraenderte Heads beim naechsten Abgleich zu ueberspringen.
+Der abschliessende API-Abgleich bestaetigt dieselben 19 Heads; Upstream/main
+bleibt bcae4b70dac61419fc933084084469f6cfbe344b.
+
+Neu: D-Pad auf der Fliegenkarte, zusammengehoerige PID/IVs fuer neue sichtbare
+Wild-Pokemon, transparente leere Untergrund-Raender, vier gestapelte
+Innenraumkorrekturen, optionale Boot-Seed-Einstellung, franzoesisch/italienische
+Starttexte, Pinball-ROM-Hinweis, Linux/macOS-Anleitung und optionale macOS-
+Paketierung. Koop-/Zuschauerpfade und sieben Sprachen bleiben erhalten.
+Die zwei Route101-Doppeltests und alle Folgegruppenregeln gelten weiter.
+
+Zusaetzliche direkt gefundene Build-/Testfehler repariert: mapjson schreibt
+Meta-Includes aus dem nativen Root statt mit falschem ../data-Praefix;
+zusammengehoerige Ausgaben sind gruppierte Makeziele und muessen vor beiden
+Kartenobjekten fertig sein. Echte -j8-Makeregeln auf isolierten JSON-Kopien
+geprueft. Relative Testpfade funktionieren auch im gestagten Port. Der englische
+Locale-Hashpruefer erkennt jetzt auch echte deutsche/japanische/PT-BR-Marker;
+seine englischen Hash-/Manipulationschecks bleiben unveraendert.
+
+Validierung: vollstaendiges Verify im deutschen gestagten Baum bestanden
+(ein erwarteter Skip der nur vor Lokalisierung sinnvollen englischen
+Source-Hash-/Stagerklasse), Koop-Suite auch im Quelloverlay bestanden;
+neue reale Fly/IV-Funktionskoerper, Seed-, sieben Startup-Sprachen-, Builder-
+und Paketplattform-Tests bestanden. 188 Raumkompositionen/Innenraum-Lint ohne
+Fehler,77 begruendete bestehende Lint-Ausnahmen. Alle 101 Patches auf frisch
+extrahierter gepinnter Quelle angewandt, 0100 bytegleich vorwaerts/rueckwaerts
+und mit dem Build verglichen. ARM-Release+PAK bestanden. Verlinkte Route101-
+Events im tatsaechlichen Datenimage haben [8,0,9,1]; gMapGroups ist vorhanden.
+Strenges Source-Release-Audit separat dokumentiert. Emulatoren/SAVs wurden
+nicht bedient oder installiert; manuelle Abnahme ist offen.
+
+Zum Laden beide Fenster schliessen und Paseo **Host und Gast starten** manuell
+ausfuehren. F6 installiert keinen Build. Neue manuelle Smokechecks:
+Fliegenkarte mit D-Pad/Zoom/A/B, neuer sichtbarer Wildfang und die zwei
+Route101-Tests solo/als Folgegruppe mit beiden Anfuehrerrollen. Bekannte
+Gras#1-/Zuschauer#2-Issues und Sprint 6-EP-/Preisgeldluecken bleiben offen.
+Sprint 9 enthaelt dauerhafte VM-Feldaktionen ab Erhalt ohne Lernpflicht;
+das ist weiterhin Planung.
+
+Belege: build/upstream-pr-review/verify-retry.log,verify-coop.log,
+verify-coop-staged.log,startup-tests.log,builder-tests.log,platform-tests.log,
+imported-bodies.log,rng-tests.log,patch-chain.log,release-final.log,
+build-hashes.json und audit.log. Fuer die Hostwerkzeuge HOSTCC=gcc exportieren.
+
 ## Route101: zwei wiederholbare Doppelkampf-Tests (2026-11-14)
 
 Build **092f6412820bb8d8**, Boot **E3ID-ab63e7ce08e9de5c**, ABI **786f1e4c**, Protokoll20.

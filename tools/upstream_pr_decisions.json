@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "repository": "ZallaxDev/emerald-3ds",
+  "reviewed_on": "2026-11-14",
+  "upstream_main_at_review": "bcae4b70dac61419fc933084084469f6cfbe344b",
+  "policy": "Skip unchanged reviewed_head for every decision. Review new PRs and changed heads only. Reopen an unchanged decision only on explicit request or a concrete new compatibility need, and record why.",
+  "pull_requests": [
+    {
+      "number": 267,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/267",
+      "title": "Fly map: choose the destination with the +Control Pad",
+      "reviewed_head": "c41675cccb1668edf47213ed4a8e97183eca5470",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Steuerkreuz auf der Fliegenkarte; nur Topic-Aenderung, bestehende Koop-/Fly-Pfade erhalten, Wiederholung beim Oeffnen zurueckgesetzt.",
+      "integration_commit": "f09ad7acbab05aa7cb0715b8ad9b4f697e3bfc2d"
+    },
+    {
+      "number": 266,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/266",
+      "title": "Visible wild: roll the IVs right after the personality (PID/IV legality)",
+      "reviewed_head": "89885a594c19f5c3134224cbd274149f1edab806",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Sichtbare Wild-Pokemon behalten zusammengehoerige PID und IVs; als neuer Patch 0100 hinter unseren Koop-Patches portiert. Bereits gefangene Pokemon bleiben unveraendert.",
+      "integration_commit": "42118a16d33d732ecbfb80d80a644810d2888f9e"
+    },
+    {
+      "number": 263,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/263",
+      "title": "Tests: fix voxel runtime harness compilation in build-3ds",
+      "reviewed_head": "1f1d2791c4240d1316ac80e55dafe56eded7a96a",
+      "base_ref_at_review": "integration",
+      "decision": "not_applicable",
+      "reason_de": "Nicht anwendbar: unsere Runtime benutzt weder req.fill/sWideView noch JobSortParts/Boxes/SiteReach oder treeCrowns. Unsere reale Runtime-Suite bestand bereits vor der Integration. Keine neueren Renderer-Fixtures in aelteren Produktionscode kopieren."
+    },
+    {
+      "number": 262,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/262",
+      "title": "Tests: update the voxel draft chunk fixture",
+      "reviewed_head": "286269615a5b40df3ca66d6cebd81cff14ff98a1",
+      "base_ref_at_review": "integration",
+      "decision": "not_applicable",
+      "reason_de": "Nicht anwendbar: unsere VoxelChunk-/DraftChunk-Version besitzt die angesprochenen treeShadow/treeCrowns/parts.on-Felder nicht; unsere Draft-Suite bestand bereits. Kein Produktionsfehler dieses Forks."
+    },
+    {
+      "number": 261,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/261",
+      "title": "Builder: say “You were close!” for Pokémon Pinball ROMs",
+      "reviewed_head": "4ca7726d28d266eed815d314a01d4d3a9b73bcb7",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Verstaendlicher Pinball-ROM-Fehler fuer BPPE/BPPJ/BPPP. Emerald-Fingerprints bleiben verbindlich; zusaetzlich synthetische GBA-/ZIP-Regression.",
+      "integration_commit": "80b079c22c7ffd5787010bee05f31298d5b5993b"
+    },
+    {
+      "number": 210,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/210",
+      "title": "Voxel: console review fixes, part 4 (Museum 2F stands, Union Room, Bike Shop, Factory rooms, Mystery Events chairs)",
+      "reviewed_head": "c3136d2f4a00b8cccfcae72757c49639172c2083",
+      "base_ref_at_review": "feature/deunnis-review-fixes-3",
+      "decision": "integrated",
+      "reason_de": "Konsolen-Kartenkorrekturen Teil 4, zusammen mit den gestapelten Teilen 1..3; eigene vollstaendige Kartenreview-Historie erhalten.",
+      "integration_commit": "3fb2097318aa28284024fadeb34deed3804a0e09"
+    },
+    {
+      "number": 209,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/209",
+      "title": "Startup: the data pack errors and the START hint in French and Italian",
+      "reviewed_head": "22f99174b9b68d40ec8029178ec2a99b6b8c2df9",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Franzoesische/italienische Startup-Fehler und START-Hinweis. Unser stdio-Backend erhalten; echte Quelltests fuer sieben Sprachen mit Windows-Adapter.",
+      "integration_commit": "2642da28394841000d85c0539614dc93964c5386"
+    },
+    {
+      "number": 208,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/208",
+      "title": "Voxel: console review fixes, part 3 (cabin partitions, beds, Frontier rooms, Institute, Herb Shop)",
+      "reviewed_head": "a9ec8a9a725db0a5c12f29e19f23038ae8b54c9d",
+      "base_ref_at_review": "feature/deunnis-review-fixes-2",
+      "decision": "integrated",
+      "reason_de": "Konsolen-Kartenkorrekturen Teil 3; im Stack von PR 210 uebernommen.",
+      "integration_commit": "3fb2097318aa28284024fadeb34deed3804a0e09"
+    },
+    {
+      "number": 207,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/207",
+      "title": "Voxel: console review fixes, part 2 (Elite Four, Trick House, Record Corner, Fan Club, Day Care)",
+      "reviewed_head": "9c22debd1741a45928f77387606a5a9ad532cad5",
+      "base_ref_at_review": "feature/deunnis-review-fixes",
+      "decision": "integrated",
+      "reason_de": "Konsolen-Kartenkorrekturen Teil 2; im Stack von PR 210 uebernommen.",
+      "integration_commit": "3fb2097318aa28284024fadeb34deed3804a0e09"
+    },
+    {
+      "number": 206,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/206",
+      "title": "Voxel: console review fixes, part 1 (link rooms, Pike, Tower, ship doors, walls' ends)",
+      "reviewed_head": "e1c56f26e27bc1fc38de405a9b10399934de6676",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Konsolen-Kartenkorrekturen Teil 1; im Stack von PR 210 uebernommen.",
+      "integration_commit": "3fb2097318aa28284024fadeb34deed3804a0e09"
+    },
+    {
+      "number": 199,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/199",
+      "title": "Voxel: no black wall round underground rooms (the Abandoned Ship, the Sky Pillar floors)",
+      "reviewed_head": "b7b1b340545d03e593cefe14599b08f0ee7afddd",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Leere Untergrund-Kartenraender bleiben transparent statt als schwarze Wand vor der Figur zu stehen.",
+      "integration_commit": "ba6f6dc71f558f2f527e6894c188ffb749f52619"
+    },
+    {
+      "number": 190,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/190",
+      "title": "Installation: step-by-step builder for Linux and macOS (#147)",
+      "reviewed_head": "69945262e3978654e3f6338012a06e37a97ef2f5",
+      "base_ref_at_review": "dev",
+      "decision": "integrated",
+      "reason_de": "Linux/macOS-Builder-Anleitung. Auf passenden Koop-Quellstand und Payload eingeschraenkt; Original-Webbuilder ist kein Koop-Installer.",
+      "integration_commit": "6fd9349ff7106fd3aef84885d4249647b276ea36"
+    },
+    {
+      "number": 148,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/148",
+      "title": "Bottom screen: touch-enabled intro gender selection, naming keyboard, and name confirmation with D-Pad navigation",
+      "reviewed_head": "2ec0dc9bf6280bd23ea0648b381909b7d29bc4a9",
+      "base_ref_at_review": "main",
+      "decision": "deferred",
+      "reason_de": "Bewusst zurueckgestellt: breite neue Intro-/Namenseingabe aus alter UI-Basis (Hit-ID-Umbau, 32-Byte-Namensfeld, alter Patch 0057 und eigene Sprachlokalisierung). Kein gezielter Koop-Fix und keine Hostregression fuer unsere aktuelle UI/Sprachen; benoetigt eigenstaendige Portierung statt Mitmerge."
+    },
+    {
+      "number": 140,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/140",
+      "title": "OPTIONS: RANDOM BOOT SEED switch for #116's boot/soft-reset seed",
+      "reviewed_head": "98ce55264f599b8d6d536dd717a182fb55f96109",
+      "base_ref_at_review": "integration",
+      "decision": "integrated",
+      "reason_de": "Optionale zufaellige Boot-Seed-Einstellung; Standard folgt GBA-Fallback, neue Trainer-ID bleibt zeitbasiert. Alle sieben Sprachen und eigener Koop-/longjmp-Reset erhalten.",
+      "integration_commit": "d639773c328385ebb2a36f10ac669a33d797acab"
+    },
+    {
+      "number": 122,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/122",
+      "title": "Battle at an exact 2x: pixel-perfect field, glass text pane, fading feet (opt-in)",
+      "reviewed_head": "5a17510e4a5cb8714e63bf7cf4c1fa96c039fce1",
+      "base_ref_at_review": "dev",
+      "decision": "deferred",
+      "reason_de": "Bewusst ausgelassen: exakter 2x-Kampfausschnitt schneidet aeussere Kaempfer im Doppelkampf ab (auch im PR beschrieben). Passt nicht zu unserem Sprint-6-Doppel-/Zuschauerpfad; kein geeigneter Standard."
+    },
+    {
+      "number": 111,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/111",
+      "title": "Close water border gaps with a coherent perimeter plane",
+      "reviewed_head": "4d06aff21ad636e32784dddb20234a65b9b43e16",
+      "base_ref_at_review": "integration",
+      "decision": "deferred",
+      "reason_de": "Bewusst zurueckgestellt: globale tiefste Wasser-Randebene ersetzt neuere lokale EdgeFill-Hoehen/Sea-Search unseres Renderers. Cache schluesselt nur Instance-Zeiger/Map-ID/Abmessungen, nicht wechselndes privates Zuschauer-Raster. Unveraendert koennte dies vorhandene Kartenkorrekturen oder Zuschauer-Karten falsch darstellen; benoetigt angepasste Cache-Invalidierung und gemeinsame Geometriepruefung."
+    },
+    {
+      "number": 70,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/70",
+      "title": "Voxel buildings dev does not have yet",
+      "reviewed_head": "7ca86c680cee89e6acff3e2d367578b9234fc781",
+      "base_ref_at_review": "dev",
+      "decision": "deferred",
+      "reason_de": "Bewusst nicht pauschal uebernommen: alte Zusatz-Specs ueberlappen aktuelle Landmark-Modelle (u.a. Fortree-Treehouse, Safari-Tor, Space Center und Stadtgebaeude) und eigene vollstaendige Innenraeume. Doppelte Platzierungen/uebermalte Grundflaechen vermeiden. Einzelne noch fehlende Props waeren ein separater, auf Luecken begrenzter Modellauftrag."
+    },
+    {
+      "number": 68,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/68",
+      "title": "Stereoscopic Pokémon and trainers in battle, and a gallery of their planes",
+      "reviewed_head": "d188bc72ae1028d6be399bec1d11df47af09d0c6",
+      "base_ref_at_review": "dev",
+      "decision": "deferred",
+      "reason_de": "Bewusst zurueckgestellt: umfangreiche Stereo-Renderpipeline mit optionalen externen Mon-/Back-Planes, keine Abdeckung unserer 99 Figuren und kein privater Zuschauer-PresentContext. Offene Performance-/Reviewpunkte (Old3DS-P99 39..50ms laut PR); unpassend waehrend bekannter Zuschauer-Ruckler."
+    },
+    {
+      "number": 39,
+      "url": "https://github.com/ZallaxDev/emerald-3ds/pull/39",
+      "title": "Add macOS standalone builder support and instructions",
+      "reviewed_head": "0378e966bd891662ae25ecc1becc7538c2ffd538",
+      "base_ref_at_review": "dev",
+      "decision": "integrated",
+      "reason_de": "Optionale macOS-Release-Paketierung; sieben Sprachen erhalten, Hostpruefung gegen falsch gelabelte PyInstaller-Binaerdateien ergaenzt. Kein nativer macOS-Build auf Windows behauptet.",
+      "integration_commit": "d620bd383d5dbc7dca24432a8a964d13ff08e683"
+    }
+  ]
+}

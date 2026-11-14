@@ -1,4 +1,15 @@
-# Aktueller Sprint-6-Ausbau: aktive Folgegruppe
+# Upstream-PR-Integration auf Main und Sprint 6
+
+Build **7e5dc28033a62d97**, Boot **E3ID-58cdf81623cdba8b**, ABI **bcdc1bb8**, Protokoll 20.
+12 PRs uebernommen, 7 bewusst ausgelassen/nicht anwendbar. Dauerhafte Merkliste:
+docs/UPSTREAM_PR_REVIEW.md und tools/upstream_pr_decisions.json.
+Hintergrundchecks, 101-Patchkette, 188 Raumpruefungen und ARM-Release/PAK bestanden;
+manuelle Abnahme offen. Eigene Entwicklungsbranches werden regulaer weitergefuehrt.
+Sprint 9-Planung umfasst jetzt VM-Feldaktionen dauerhaft ab Erhalt ohne Lernpflicht.
+
+Die folgende Sektion beschreibt den vorausgehenden Build; ihre Spielregeln gelten weiter.
+
+## Sprint-6-Ausbau: aktive Folgegruppe
 
 Version20, Build 092f6412820bb8d8, Boot E3ID-ab63e7ce08e9de5c, ABI 786f1e4c.
 A auf freien Mitspieler schliesst sich ihm an; B beendet das Folgen. Nur ein

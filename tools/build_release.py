@@ -295,7 +295,14 @@ def main() -> None:
             cwd=ROOT / "builder")
         shutil.copytree(build / "dist" / "Emerald3DS-Builder", release, dirs_exist_ok=True)
 
-    shutil.copy2(ROOT / "builder" / "README-release.txt", release / "README.txt")
+    readme = ROOT / "builder" / "README-release.txt"
+    if args.platform == "macOS":
+        text = readme.read_text(encoding="utf-8")
+        for name in ("Emerald3DS-Builder", "emerald3ds-builder-cli"):
+            text = text.replace(name + ".exe", name)
+        (release / "README.txt").write_text(text, encoding="utf-8")
+    else:
+        shutil.copy2(readme, release / "README.txt")
     licenses = release / "LICENSES"
     licenses.mkdir()
     for rel in ("LICENSE-PORT.md", "NOTICE.md", "AI_DISCLOSURE.md"):

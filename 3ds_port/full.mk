@@ -370,7 +370,8 @@ build/map_includes.stamp: $(wildcard $(ROOT)/data/maps/*/map.json) $(ROOT)/data/
 	"$(PYTHON)" $(SCRIPTS)/gen_missing_map_includes.py
 	@mkdir -p build
 	@touch $@
-build/root/data/map_events.o build/root/data/maps.o: build/map_includes.stamp
+build/root/data/map_events.o build/root/data/maps.o: build/map_includes.stamp \
+		$(ROOT)/include/constants/map_groups.h $(ROOT)/include/constants/layouts.h
 
 # Sample conversion, with the flags the root audio_rules.mk uses.
 $(WAV2AGB): $(wildcard $(ROOT)/tools/wav2agb/*.cpp $(ROOT)/tools/wav2agb/*.h)
@@ -453,11 +454,16 @@ $(ROMFS_GAMEDATA_OUTS) &: build/gamedata_image.elf $(TARGET).elf scripts/gen_gam
 $(MAPJSON): $(wildcard $(ROOT)/tools/mapjson/*.cpp $(ROOT)/tools/mapjson/*.h)
 	$(MAKE) -C $(ROOT)/tools/mapjson
 
-$(ROOT)/include/constants/map_groups.h: $(ROOT)/data/maps/map_groups.json $(wildcard $(ROOT)/data/maps/*/map.json) | $(MAPJSON)
-	"$(MAPJSON)" groups emerald $< $(ROOT)/data/maps $(ROOT)/include/constants
+# mapjson writes each complete group together. Declare all outputs so a
+# parallel build cannot consume an old table while the header regenerates it.
+$(ROOT)/include/constants/map_groups.h $(ROOT)/data/maps/groups.inc \
+		$(ROOT)/data/maps/headers.inc $(ROOT)/data/maps/connections.inc \
+		$(ROOT)/data/maps/events.inc &: $(ROOT)/data/maps/map_groups.json $(wildcard $(ROOT)/data/maps/*/map.json) full.mk $(MAPJSON)
+	cd $(ROOT) && "$(abspath $(MAPJSON))" groups emerald data/maps/map_groups.json data/maps include/constants
 
-$(ROOT)/include/constants/layouts.h: $(ROOT)/data/layouts/layouts.json | $(MAPJSON)
-	"$(MAPJSON)" layouts emerald $< $(ROOT)/data/layouts $(ROOT)/include/constants
+$(ROOT)/include/constants/layouts.h $(ROOT)/data/layouts/layouts.inc \
+		$(ROOT)/data/layouts/layouts_table.inc &: $(ROOT)/data/layouts/layouts.json full.mk $(MAPJSON)
+	cd $(ROOT) && "$(abspath $(MAPJSON))" layouts emerald data/layouts/layouts.json data/layouts include/constants
 
 HOST_MAP_HEADERS := $(ROOT)/include/constants/map_groups.h $(ROOT)/include/constants/layouts.h
 

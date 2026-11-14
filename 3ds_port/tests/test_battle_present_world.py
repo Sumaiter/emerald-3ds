@@ -1,12 +1,12 @@
 """Execute actual private-world, read-only map export and worker retirement bodies."""
 import argparse, os, shlex, subprocess, tempfile
 from pathlib import Path
-from test_coop_bike_hooks import function
+from test_coop_bike_hooks import function, UPSTREAM
 ROOT=Path(__file__).resolve().parents[2]
 def main():
  p=argparse.ArgumentParser();p.add_argument('--cc',default='gcc');a=p.parse_args();cc=shlex.split(a.cc)
  world=(ROOT/'3ds_port/src/voxel/voxel_world.c').read_text(encoding='utf-8')
- engine=(ROOT/'build/upstream/src/fieldmap.c').read_text(encoding='utf-8')
+ engine=(UPSTREAM/'src/fieldmap.c').read_text(encoding='utf-8')
  with tempfile.TemporaryDirectory(prefix='present-world-',dir=os.environ.get('TMPDIR')) as d:
   d=Path(d)
   initial=world[world.index('static VoxelMapInstance sInstances'):world.index('/*\n * Memo for')]

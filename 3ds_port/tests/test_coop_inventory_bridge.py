@@ -7,6 +7,7 @@ from pathlib import Path
 import argparse
 import re
 import subprocess
+from test_coop_bike_hooks import UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,7 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cc", default="gcc")
     cc = parser.parse_args().cc
-    data = (ROOT / "build/upstream/src/data/items.h").read_text(encoding="utf-8")
+    data = (UPSTREAM / "src/data/items.h").read_text(encoding="utf-8")
     pockets = re.findall(r"\[(ITEM_\w+)\]\s*=\s*\{.*?\.pocket\s*=\s*(POCKET_\w+)", data, re.S)
     metadata = "static const u8 pockets[ITEMS_COUNT]={\n" + "\n".join(
         f"[{item}]={pocket}," for item, pocket in pockets) + "\n};\n"
@@ -242,7 +243,7 @@ int main(void)
     exe = build / "inventory_bridge_test.exe"
     flags = ["-std=gnu99", "-O2", "-Wall", "-Wextra", "-Werror", "-Wno-pointer-to-int-cast",
              "-Wno-int-to-pointer-cast", "-D__APPLE__", "-DPORTABLE", "-DPLATFORM_3DS", "-DPORT_BRIDGE"]
-    includes = [".", "3ds_port/include", "build/upstream/include", "build/upstream/include/constants", "build/upstream", "3ds_port/compat"]
+    includes = [".", "3ds_port/include", str(UPSTREAM / "include"), str(UPSTREAM / "include/constants"), str(UPSTREAM), "3ds_port/compat"]
     command = [cc, *flags, *[f"-iquote{x}" for x in includes], str(cfile),
                "3ds_port/src/3ds_coop_inventory.c", "-o", str(exe)]
     subprocess.run(command, cwd=ROOT, check=True)

@@ -2,10 +2,16 @@
 
 Stand: 2026-11-14
 
+Upstream-PR-Pruefung abgeschlossen: 12 uebernommen, 7 bewusst ausgelassen oder hier
+nicht anwendbar. Entscheidungen mit Commit-IDs stehen dauerhaft in
+[docs/UPSTREAM_PR_REVIEW.md](docs/UPSTREAM_PR_REVIEW.md); unveraenderte PR-Heads
+werden nicht erneut geprueft. Neue Hintergrundtests und ARM-Release/PAK bestanden,
+manuelle Abnahme offen. Neueste Buildkennung und Grenzen in HANDOFF.md.
+
 Neuester Ausbau: explizite Folgegruppe mit A/B, gemeinsame Kaempfe nur beim
 Hinterherlaufen, erste drei pro Spieler, Partner spielt nach drei KO weiter,
 Trainerergaenzungen bis sechs und steuerbarer Story-NPC-Partner. Protokoll20;
-Hintergrundtests/100Patchkette/Release bestanden, Emulatorabnahme offen.
+Hintergrundtests/101Patchkette/Release bestanden, Emulatorabnahme offen.
 
 Neu fuer die manuelle Sprint6-Abnahme: zwei wiederholbare Level5-Doppelkaempfe
 auf Route101, links Junge ohne NPC-Partner und rechts Troy mit NPC-Partner.

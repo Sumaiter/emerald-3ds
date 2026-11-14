@@ -68,6 +68,15 @@ Eine eigene deutsche ROM außerhalb von Git ablegen, beispielsweise unter `C:/Sp
 
 Alle folgenden Build-Kommandos in der devkitPro-/MSYS2-Shell ausführen:
 
+Den nativen Hostcompiler auch fuer Python-Unterprozesse exportieren:
+
+```sh
+export HOSTCC=gcc
+command -v "$HOSTCC"
+```
+
+So verwenden die Voxel-Hostpruefungen den Compiler aus dem aktuellen PATH.
+
 ```sh
 python tools/bootstrap.py --make --german-rom "C:/Spiele/Pokemon Smaragd-Edition.gba"
 ```

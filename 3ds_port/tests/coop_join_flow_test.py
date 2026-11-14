@@ -2,7 +2,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
-UPSTREAM = REPO / 'build/upstream'
+# This suite runs both in the source overlay and the bootstrapped port.
+UPSTREAM = REPO if (REPO / 'src/main_menu.c').is_file() else REPO / 'build/upstream'
 
 failures = []
 

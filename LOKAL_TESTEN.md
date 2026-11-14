@@ -1,10 +1,19 @@
 # Host und Gast auf diesem PC starten
 
-**Neuester Entwicklungsstand: Sprint 6 mit aktiver Folgegruppe**, Protokoll20,
-Build **092f6412820bb8d8**, Boot **E3ID-ab63e7ce08e9de5c**, ABI **786f1e4c**.
+**Neuester Entwicklungsstand: Sprint 6 mit aktiver Folgegruppe**, Protokoll 20,
+Build **7e5dc28033a62d97**, Boot **E3ID-58cdf81623cdba8b**, ABI **bcdc1bb8**.
 Hintergrundtests und ARM-Release/PAK bestanden. Noch kein Emulatornachtest.
 Beide Fenster schliessen, dann **Host und Gast starten** manuell ausfuehren.
 F6 installiert keinen Build.
+
+## Neue Upstream-Smokechecks
+
+Die [PR-Merkliste](docs/UPSTREAM_PR_REVIEW.md) erfasst 12 uebernommene und 7 nicht
+uebernommene PRs; unveraenderte Heads werden kuenftig uebersprungen.
+Fliegenkarte einmal mit D-Pad, gehaltenem Wiederholen, Zoom sowie A/B pruefen.
+Neue sichtbare Wild-Pokemon behalten die bei ihrem Erscheinen erzeugten IVs.
+Die Hintergrundtests sind bestanden; die Emulatorabnahme der neuen PRs ist offen.
+Die untenstehenden Route101-Tests bleiben fuer Sprint 6 erforderlich.
 
 ## Neue Testtrainer auf Route101
 

@@ -1,12 +1,13 @@
 """Reverse/apply patch 0097 in an isolated copy of the patched engine."""
 from pathlib import Path
 import shutil, subprocess, tempfile
-root=Path(__file__).resolve().parents[2]
+from test_coop_bike_hooks import UPSTREAM, REPO
+root=REPO
 git=shutil.which('git')
 if not git: raise SystemExit('git must be available on PATH for the presentation patch roundtrip')
 with tempfile.TemporaryDirectory(prefix='present-patch-') as d:
     d=Path(d);(d/'src').mkdir()
-    current=(root/'build/upstream/src/fieldmap.c').read_text(encoding='utf-8')
+    current=(UPSTREAM/'src/fieldmap.c').read_text(encoding='utf-8')
     (d/'src/fieldmap.c').write_text(current,encoding='utf-8',newline='\n')
     patch=str(root/'patches/pokeemerald/0097-coop-battle-presentation.patch')
     subprocess.run([git,'apply','--check','--reverse',patch],cwd=d,check=True)

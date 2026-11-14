@@ -35,6 +35,7 @@ def already_localized(tree):
         return False
     return marker.read_text(encoding="utf-8").strip() in {
         "BPES experimental", "BPEF experimental", "BPEI experimental",
+        "BPED experimental", "BPEJ experimental", "PT-BR",
     }
 
 
@@ -44,11 +45,13 @@ class LocaleTreeSelectionTests(unittest.TestCase):
             tree = Path(temporary)
             marker = tree / ".emerald3ds-locale"
             self.assertFalse(already_localized(tree))
-            for value in ("BPES experimental", "BPEF experimental", "BPEI experimental"):
+            for value in ("BPES experimental", "BPEF experimental", "BPEI experimental",
+                          "BPED experimental", "BPEJ experimental", "PT-BR"):
                 with self.subTest(marker=value):
                     marker.write_text(value + "\n")
                     self.assertTrue(already_localized(tree))
-            for value in ("", "BPEE experimental", "BPES", "unrecognized"):
+            for value in ("", "BPEE experimental", "BPES", "unrecognized", "BPED",
+                          "BPEJ experimental modified", "PT-BR extra"):
                 with self.subTest(marker=value):
                     marker.write_text(value + "\n")
                     self.assertFalse(already_localized(tree))

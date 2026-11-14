@@ -66,7 +66,7 @@ Festgelegte Grenzen: maximal zehn gespeicherte Gastnamen pro Host-Spielstand, oh
 | 6 | Gemeinsame Doppelkämpfe | In Arbeit: integriert, EP/Preisgeld und Emulatorabnahme offen |
 | 7 | Abmeldung, Verbindungsabbrüche und sicheres Speichern | Offen |
 | 8 | Hardwaretests, Stabilisierung und spielbare Alpha | Offen |
-| 9 | Vollständiges Solospiel: Entwicklungen und frühere Event-Inhalte | Offen |
+| 9 | Vollständiges Solospiel: Entwicklungen, frühere Event-Inhalte und VM-Feldaktionen ab Erhalt | Offen |
 
 ## Multiplayer-Review vom 2026-11-12
 
@@ -374,6 +374,9 @@ die laufenden Fehlerkorrekturen aus Sprint 5 werden dadurch nicht ersetzt.
   etwa über Aufgaben, NPCs oder Funde mit passendem Storyfortschritt.
 - [ ] Verbleibende externe Erwerbshürden für die im Projekt vorgesehenen Arten
   durch nachvollziehbare Solo-Fundorte oder alternative Erwerbswege schließen.
+- [ ] Jede VM ab ihrem Erhalt dauerhaft als Feldaktion freischalten. Der
+  VM-Besitz genügt; die Attacke muss keinem Pokémon beigebracht werden und
+  setzt kein bestimmtes Team-Pokémon voraus. Alle acht VM-Feldaktionen abdecken.
 - [ ] Jede Änderung mit ursprünglicher Voraussetzung, neuer Bedingung sowie
   Fundort/Freischaltpunkt dokumentieren und im Spiel verständlich vermitteln.
 - [ ] Story- und Nachspiel-Durchlauf ohne Netzwerk prüfen; Entwicklungen,
@@ -389,6 +392,9 @@ die laufenden Fehlerkorrekturen aus Sprint 5 werden dadurch nicht ersetzt.
   dokumentierten Solo-Weg, einschließlich der Varianten mit getragenem Item.
 - [ ] Jedes zuvor ausschließlich an frühere Events gebundene vorgesehene
   Pokémon und der notwendige Zugang sind regulär im Spiel erreichbar.
+- [ ] Jede erhaltene VM lässt sich ohne erlernte Attacke im passenden Feldkontext
+  verwenden und bleibt nach Speichern/Neuladen freigeschaltet. Nicht erhaltene
+  VMs werden dadurch nicht vorzeitig freigeschaltet.
 - [ ] Die Erwerbs-/Entwicklungsliste enthält für jede erfasste externe Hürde
   eine getestete Alternative; keine Art bleibt nur wegen eines nötigen zweiten
   Spielers oder einer vergangenen Verteilung unerreichbar.

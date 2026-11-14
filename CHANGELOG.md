@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (co-op fork)
+
+- Fly map: choose destinations with the D-Pad or Circle Pad, including held
+  repeat and zoom following. Adapted from ZallaxDev/emerald-3ds PR #267; our
+  existing co-op fly/cancel path is preserved.
+
 ## 0.5.0 — 2026-10-29
 
 The first beta.

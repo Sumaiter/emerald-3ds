@@ -102,6 +102,11 @@ static struct
     uint8_t doubleState;
     bool doubleInitiator;
     bool doublePartyRestored;
+    bool doubleStoryPartner;
+    bool doubleBorrowedPartner;
+    bool doublePeerAccepted;
+    uint32_t doublePeerPartyChecksum;
+    uint32_t doubleLocalPartyChecksum;
     uint16_t doubleRetry;
     uint16_t doubleTrainerId;
     uint32_t doubleSendOffset;
@@ -217,6 +222,8 @@ static void UpdateInventorySession(void);
 static void HandleEncounter(const uint8_t *data, uint16_t len);
 static bool OwnsEncounterNpc(uint8_t group, uint8_t num, uint8_t localId);
 static bool StoryNpcAvailable(uint8_t group, uint8_t num, uint8_t localId);
+static bool PartyPeerReady(void);
+static void FollowReset(void);
 
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
@@ -237,6 +244,7 @@ static void ClearRemote(void)
     CtrCoopInventoryBridge_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
     CtrCoopMoney_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
     CtrCoopNpcMotion_Reset();
+    FollowReset();
     CtrCoop_ResetStory();
     CtrCoopSpectator_Reset();
     if (!sCoop.guest && sCoop.peerAuthenticated && sCoop.peerSaveReady)
@@ -1292,6 +1300,13 @@ static uint32_t ReadDouble32(const uint8_t *data, uint32_t offset)
         | ((uint32_t)data[offset + 2] << 16) | ((uint32_t)data[offset + 3] << 24);
 }
 
+#include "3ds_coop_follow.inc"
+
+bool CtrCoop_UsesNpcPartner(void)
+{
+    return CtrCoop_IsDoubleBattle() && sCoop.doubleBorrowedPartner;
+}
+
 static void SendDoubleRequest(void)
 {
     struct LocalPeer peers[1];
@@ -1299,6 +1314,8 @@ static void SendDoubleRequest(void)
         CTR_COOP_DOUBLE_REQUEST_PACKET, CTR_COOP_PROTOCOL_VERSION,
         sCoop.battleTrainerId & 0xFF, sCoop.battleTrainerId >> 8
     };
+
+    WriteDouble32(packet, 4, sFollow.token);
 
     if (LocalLink_GetPeers(peers, 1) != 0)
         LocalLink_Send(peers[0].id, packet, sizeof(packet));
@@ -1344,6 +1361,14 @@ static void BuildDoubleParty(uint8_t *out)
     }
     memcpy(out, hostParty, sizeof(struct Pokemon) * MULTI_PARTY_SIZE);
     memcpy(out + sizeof(struct Pokemon) * MULTI_PARTY_SIZE, guestParty, sizeof(struct Pokemon) * MULTI_PARTY_SIZE);
+    if (sCoop.doubleStoryPartner)
+    {
+        /* The leader already has the original NPC partner in slots 3..5.
+         * Give that exact team to the follower, not its own saved party. */
+        uint8_t followerStart = sCoop.guest ? 0 : MULTI_PARTY_SIZE;
+        memcpy(out + sizeof(struct Pokemon) * followerStart,
+            sDoubleLocalParty + MULTI_PARTY_SIZE, sizeof(struct Pokemon) * MULTI_PARTY_SIZE);
+    }
 }
 
 static void ReturnFromRemoteDoubleBattle(void)
@@ -1351,7 +1376,8 @@ static void ReturnFromRemoteDoubleBattle(void)
     /* Only the initiator has the encounter's suspended field script. The
      * invited player returns to its own field without resuming that script. */
     CtrCoop_PrepareDoubleReturn();
-    if (gBattleOutcome == B_OUTCOME_LOST || gBattleOutcome == B_OUTCOME_DREW)
+    if (!sCoop.doubleBorrowedPartner
+     && (gBattleOutcome == B_OUTCOME_LOST || gBattleOutcome == B_OUTCOME_DREW))
         SetMainCallback2(CB2_WhiteOut);
     else
     {
@@ -1364,7 +1390,9 @@ static void ConfigureDoubleBattle(const uint8_t *data)
 {
     uint32_t flags = ReadDouble32(data, 0);
 
-    sDoubleOriginalFlags = flags & ~(BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI | BATTLE_TYPE_IS_MASTER | BATTLE_TYPE_LINK_IN_BATTLE);
+    sDoubleOriginalFlags = ReadDouble32(data, 20);
+    sCoop.doubleStoryPartner = data[17] != 0;
+    sCoop.doubleBorrowedPartner = sCoop.doubleStoryPartner && !sCoop.doubleInitiator;
     memcpy(gEnemyParty, data + DOUBLE_HEADER_SIZE, sizeof(gEnemyParty));
     memcpy(gPlayerParty, data + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty), sizeof(gPlayerParty));
     gPlayerPartyCount = CalculatePlayerPartyCount();
@@ -1384,8 +1412,12 @@ static void ConfigureDoubleBattle(const uint8_t *data)
     memset(gLinkPlayers, 0, sizeof(gLinkPlayers));
     gLinkPlayers[0].id = 0;
     gLinkPlayers[0].version = VERSION_EMERALD;
-    gLinkPlayers[1].id = 1;
+    gLinkPlayers[1].id = 2; /* player-right, not opponent-left */
     gLinkPlayers[1].version = VERSION_EMERALD;
+    memset(gLinkPlayers[0].name, EOS, sizeof(gLinkPlayers[0].name));
+    memset(gLinkPlayers[1].name, EOS, sizeof(gLinkPlayers[1].name));
+    memcpy(gLinkPlayers[sCoop.guest ? 1 : 0].name, gSaveBlock2Ptr->playerName, CTR_COOP_PLAYER_NAME_SIZE);
+    memcpy(gLinkPlayers[sCoop.guest ? 0 : 1].name, CtrCoop_WatchingName(), CTR_COOP_PLAYER_NAME_SIZE);
     sCoop.doubleState = DOUBLE_STATE_ACTIVE;
     sCoop.doublePartyRestored = false;
     SetMainCallback2(CB2_InitBattle);
@@ -1393,9 +1425,20 @@ static void ConfigureDoubleBattle(const uint8_t *data)
 
 static void PrepareDoubleSetup(void)
 {
-    uint32_t flags = gBattleTypeFlags | BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI;
+    uint32_t originalFlags = gBattleTypeFlags;
+    if (!CtrCoop_EnginePrepareFollowBattle())
+    {
+        uint8_t cancel[CTR_COOP_DOUBLE_CONTROL_SIZE] = {CTR_COOP_DOUBLE_DECLINE_PACKET, CTR_COOP_PROTOCOL_VERSION};
+        WriteDouble32(cancel, 2, sFollow.token);
+        LocalLink_Send(sCoop.peerId, cancel, sizeof(cancel));
+        sCoop.doubleState = DOUBLE_STATE_LOCAL;
+        return;
+    }
+    uint32_t flags = (originalFlags | BATTLE_TYPE_DOUBLE | BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI)
+        & ~BATTLE_TYPE_INGAME_PARTNER;
 
-    sDoubleOriginalFlags = gBattleTypeFlags;
+    sDoubleOriginalFlags = originalFlags;
+    sCoop.doubleStoryPartner = (originalFlags & BATTLE_TYPE_INGAME_PARTNER) != 0;
     if (!sCoop.guest)
         flags |= BATTLE_TYPE_IS_MASTER;
     else
@@ -1409,6 +1452,10 @@ static void PrepareDoubleSetup(void)
     WriteDouble32(sDoubleSendData, 12, 0); /* reserved, never transmit a callback pointer */
     sDoubleSendData[16] = gBattleEnvironment;
     memset(sDoubleSendData + 17, 0, DOUBLE_HEADER_SIZE - 17);
+    sDoubleSendData[17] = sCoop.doubleStoryPartner;
+    sDoubleSendData[18] = sCoop.guest;
+    WriteDouble32(sDoubleSendData, 20, originalFlags);
+    WriteDouble32(sDoubleSendData, 24, sFollow.token);
     memcpy(sDoubleSendData + DOUBLE_HEADER_SIZE, gEnemyParty, sizeof(gEnemyParty));
     BuildDoubleParty(sDoubleSendData + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty));
     sCoop.doubleSendOffset = 0;
@@ -1440,26 +1487,31 @@ static void SendDoubleChunk(uint16_t to, uint32_t offset)
         LocalLink_Send(to, packet, CTR_COOP_SAVE_CHUNK_HEADER + size);
 }
 
-static void HandleDoubleRequest(uint16_t from, uint16_t trainerId)
+static void HandleDoubleRequest(uint16_t from, uint16_t trainerId, uint32_t token)
 {
     bool repeated = !sCoop.doubleInitiator && trainerId == sCoop.doubleTrainerId
         && (sCoop.doubleState == DOUBLE_STATE_WAIT_START || sCoop.doubleState == DOUBLE_STATE_RECEIVING);
-    bool available = repeated || (DoublePeerAvailable() && !gMain.inBattle
+    bool available = token == sFollow.token && sFollow.state == FOLLOW_FOLLOWER
+        && (repeated || (DoublePeerAvailable() && !gMain.inBattle
         && gMain.callback2 == CB2_Overworld && !CtrCoop_IsWatching()
         && !ArePlayerFieldControlsLocked() && !ScriptContext_IsEnabled()
-        && !sCoop.eventStarting && sCoop.eventState == EVENT_IDLE);
+        && !sCoop.eventStarting && sCoop.eventState == EVENT_IDLE));
     uint8_t packet[CTR_COOP_DOUBLE_CONTROL_SIZE] = {
         available ? CTR_COOP_DOUBLE_ACCEPT_PACKET : CTR_COOP_DOUBLE_DECLINE_PACKET,
         CTR_COOP_PROTOCOL_VERSION
     };
+    WriteDouble32(packet, 2, token);
 
     if (packet[0] == CTR_COOP_DOUBLE_ACCEPT_PACKET && !repeated)
     {
+        sCoop.doubleLocalPartyChecksum = CtrCoopProtocol_Checksum((const uint8_t *)gPlayerParty, sizeof(gPlayerParty));
         sCoop.doubleTrainerId = trainerId;
         sCoop.doubleInitiator = false;
         sCoop.doubleState = DOUBLE_STATE_WAIT_START;
         sCoop.doubleRetry = 0;
     }
+    if (available)
+        WriteDouble32(packet, 6, sCoop.doubleLocalPartyChecksum);
     LocalLink_Send(from, packet, sizeof(packet));
 }
 
@@ -1481,6 +1533,7 @@ static void HandleDoubleChunk(uint16_t from, const uint8_t *data, uint16_t len)
 {
     uint16_t got, expected;
     uint8_t ready[CTR_COOP_DOUBLE_CONTROL_SIZE] = {CTR_COOP_DOUBLE_READY_PACKET, CTR_COOP_PROTOCOL_VERSION};
+    WriteDouble32(ready, 2, sFollow.token);
 
     if (sCoop.doubleState != DOUBLE_STATE_RECEIVING || sCoop.doubleReceiveOffset >= DOUBLE_SETUP_SIZE)
         return;
@@ -1502,6 +1555,21 @@ static void HandleDoubleChunk(uint16_t from, const uint8_t *data, uint16_t len)
     {
         sCoop.doubleReceiveOffset = 0;
         SendDoubleRequestData(from, 0);
+        return;
+    }
+    if (ReadDouble32(sDoubleReceiveData, 24) != sFollow.token
+     || sFollow.state != FOLLOW_FOLLOWER || sDoubleReceiveData[17] > 1
+     || sDoubleReceiveData[18] != !sCoop.guest)
+        return;
+    /* Acceptance must not overwrite a PC/menu opened during the transfer,
+     * or an updated local party. Leave the initiator its solo encounter. */
+    if (gMain.callback2 != CB2_Overworld || gMain.inBattle || ArePlayerFieldControlsLocked()
+     || ScriptContext_IsEnabled() || sCoop.pcOpen || sCoop.pcPending || sCoop.pcOwner != PC_OWNER_NONE
+     || CtrCoopProtocol_Checksum((const uint8_t *)gPlayerParty, sizeof(gPlayerParty)) != sCoop.doubleLocalPartyChecksum)
+    {
+        ready[0] = CTR_COOP_DOUBLE_DECLINE_PACKET;
+        LocalLink_Send(from, ready, sizeof(ready));
+        sCoop.doubleState = DOUBLE_STATE_IDLE;
         return;
     }
     memcpy(sDoubleLocalParty, gPlayerParty, sizeof(sDoubleLocalParty));
@@ -1624,7 +1692,12 @@ static void HandlePartyChunk(uint16_t from, const uint8_t *data, uint16_t len)
     }
     StorePartyRow(sCoop.guest ? CTR_COOP_STORAGE_HOST_ROW : CTR_COOP_STORAGE_GUEST_ROW,
         (const struct Pokemon *)sPartyReceive);
+    memcpy(sRemoteParty, sPartyReceive, sizeof(sRemoteParty));
+    sRemotePartyValid = true;
     SendPartyResult(from, true);
+    if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT && sCoop.doublePeerAccepted
+     && sCoop.doublePeerPartyChecksum == sCoop.partyReceiveChecksum)
+        PrepareDoubleSetup();
     CtrLog_Write(CTR_LOG_GAME, "coop: party row updated (%s)", sCoop.guest ? "host" : "guest");
 }
 
@@ -1727,8 +1800,6 @@ static bool BeginLocalBattle(void)
 
 static bool BeginBattleOrDouble(void)
 {
-    if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE))
-        return BeginLocalBattle();
     if (sCoop.doubleState == DOUBLE_STATE_ACTIVE)
         return BeginLocalBattle();
     if (sCoop.doubleState == DOUBLE_STATE_LOCAL)
@@ -1743,10 +1814,14 @@ static bool BeginBattleOrDouble(void)
             sCoop.doubleRetry--;
         return false;
     }
-    if (!DoublePeerAvailable())
+    if (!FollowBattlePartner() || !DoublePeerAvailable()
+     || (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_TRAINER_HILL
+        | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_SECRET_BASE | BATTLE_TYPE_SAFARI
+        | BATTLE_TYPE_WALLY_TUTORIAL | BATTLE_TYPE_RECORDED)))
         return BeginLocalBattle();
     sCoop.doubleInitiator = true;
     sCoop.doubleState = DOUBLE_STATE_WAIT_ACCEPT;
+    sCoop.doublePeerAccepted = false;
     sCoop.doubleRetry = 0;
     SendDoubleRequest();
     return false;
@@ -1854,8 +1929,10 @@ static void RestoreDoubleParty(void)
         return;
     for (uint8_t i = 0; i < MULTI_PARTY_SIZE; i++)
     {
-        sDoubleLocalParty[i] = gPlayerParty[ownStart + i];
-        sRemoteParty[i] = gPlayerParty[remoteStart + i];
+        if (!sCoop.doubleBorrowedPartner)
+            sDoubleLocalParty[i] = gPlayerParty[ownStart + i];
+        if (!sCoop.doubleStoryPartner || sCoop.doubleBorrowedPartner)
+            sRemoteParty[i] = gPlayerParty[remoteStart + i];
     }
     memcpy(gPlayerParty, sDoubleLocalParty, sizeof(gPlayerParty));
     gPlayerPartyCount = CalculatePlayerPartyCount();
@@ -1866,6 +1943,23 @@ static void RestoreDoubleParty(void)
 void CtrCoop_PrepareDoubleReturn(void)
 {
     RestoreDoubleParty();
+}
+
+void CtrCoop_FinishDoubleTransport(void)
+{
+    if (!CtrCoop_IsDoubleBattle()) return;
+    gBattleTypeFlags = sDoubleOriginalFlags;
+    if (sCoop.doubleBorrowedPartner)
+        gBattleTypeFlags &= ~(BATTLE_TYPE_INGAME_PARTNER | BATTLE_TYPE_MULTI);
+    gWirelessCommType = 0;
+    gReceivedRemoteLinkPlayers = 0;
+}
+
+bool CtrCoop_ApplyBlackoutMoney(void)
+{
+    /* One encounter debits the shared wallet once. Both real player parties
+     * may still follow native healing; a borrowed NPC party never does. */
+    return !CtrCoop_IsDoubleBattle() || sCoop.doubleInitiator;
 }
 
 void CtrCoop_BattleEnd(void)
@@ -1883,9 +1977,9 @@ void CtrCoop_BattleEnd(void)
     SendBattleResult();
     if (sCoop.doubleState == DOUBLE_STATE_ACTIVE)
     {
+        CtrCoop_FinishDoubleTransport();
         sCoop.doubleState = DOUBLE_STATE_IDLE;
         sCoop.doubleInitiator = false;
-        gBattleTypeFlags = sDoubleOriginalFlags;
         gWirelessCommType = 0;
         gReceivedRemoteLinkPlayers = 0;
     }
@@ -3490,6 +3584,7 @@ void CtrCoop_OverworldFrame(void)
     CtrCoop_CheckHostConnection();
     TickSpectator();
     UpdateInventorySession();
+    FollowTick();
     CtrCoop_StoryTick();
     TickDisconnectSave();
 
@@ -3601,7 +3696,8 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
      && (data[0] < CTR_SPECTATOR_CONTROL || data[0] > CTR_SPECTATOR_ACK)
      && data[0] != 75 && data[0] != CTR_COOP_NPC_MOTION_PACKET && data[0] != CTR_COOP_NPC_MOTION_END_PACKET
      && (data[0]<CTR_COOP_INVENTORY_REQUEST || data[0]>CTR_COOP_INVENTORY_CONTROL)
-     && (data[0]<CTR_COOP_MONEY_FIRST_PACKET || data[0]>CTR_COOP_MONEY_LAST_PACKET))
+     && (data[0]<CTR_COOP_MONEY_FIRST_PACKET || data[0]>CTR_COOP_MONEY_LAST_PACKET)
+     && data[0] != CTR_COOP_FOLLOW_PACKET)
         return false;
     if (len < 2)
         return true;
@@ -3648,6 +3744,8 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (from != sCoop.peerId || (sCoop.guest ? !sCoop.authenticated : !sCoop.peerAuthenticated))
         return true;
+    if (data[0] == CTR_COOP_FOLLOW_PACKET)
+        return HandleFollow(data, len);
     if (data[0] >= CTR_SPECTATOR_CONTROL && data[0] <= CTR_SPECTATOR_ACK)
         return CtrCoopSpectator_HandlePacket(from, data, len);
     if (data[0]>=CTR_COOP_INVENTORY_REQUEST && data[0]<=CTR_COOP_INVENTORY_CONTROL)
@@ -4000,22 +4098,32 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     if (data[0] == CTR_COOP_DOUBLE_REQUEST_PACKET)
     {
         if (len == CTR_COOP_DOUBLE_REQUEST_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION)
-            HandleDoubleRequest(from, data[2] | ((uint16_t)data[3] << 8));
+            HandleDoubleRequest(from, data[2] | ((uint16_t)data[3] << 8), ReadDouble32(data, 4));
         return true;
     }
     if (data[0] == CTR_COOP_DOUBLE_ACCEPT_PACKET)
     {
         if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && ReadDouble32(data, 2) == sFollow.token
          && data[1] == CTR_COOP_PROTOCOL_VERSION)
-            PrepareDoubleSetup();
+        {
+            sCoop.doublePeerPartyChecksum = ReadDouble32(data, 6);
+            sCoop.doublePeerAccepted = true;
+            if (sRemotePartyValid && sCoop.doublePeerPartyChecksum
+                == CtrCoopProtocol_Checksum((const uint8_t *)sRemoteParty, sizeof(sRemoteParty)))
+                PrepareDoubleSetup();
+        }
         return true;
     }
     if (data[0] == CTR_COOP_DOUBLE_DECLINE_PACKET)
     {
-        if (sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+        if ((sCoop.doubleState == DOUBLE_STATE_WAIT_ACCEPT || sCoop.doubleState == DOUBLE_STATE_WAIT_START
+          || sCoop.doubleState == DOUBLE_STATE_SENDING)
+         && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && ReadDouble32(data, 2) == sFollow.token
          && data[1] == CTR_COOP_PROTOCOL_VERSION)
         {
-            sCoop.doubleState = DOUBLE_STATE_LOCAL;
+            sCoop.doubleState = sCoop.doubleInitiator ? DOUBLE_STATE_LOCAL : DOUBLE_STATE_IDLE;
             sCoop.doubleRetry = 0;
         }
         return true;
@@ -4042,6 +4150,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     if (data[0] == CTR_COOP_DOUBLE_READY_PACKET)
     {
         if (sCoop.doubleState == DOUBLE_STATE_SENDING && len == CTR_COOP_DOUBLE_CONTROL_SIZE
+         && ReadDouble32(data, 2) == sFollow.token
          && data[1] == CTR_COOP_PROTOCOL_VERSION)
             ConfigureDoubleBattle(sDoubleSendData);
         return true;

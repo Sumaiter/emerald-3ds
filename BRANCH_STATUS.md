@@ -1,3 +1,18 @@
+# Aktueller Sprint-6-Ausbau: aktive Folgegruppe
+
+Version20, Build 0133a0e39c629df1, Boot E3ID-865a9244741eeebf, ABI 97c8f051.
+A auf freien Mitspieler schliesst sich ihm an; B beendet das Folgen. Nur ein
+aktiver Anfuehrer holt seinen verfuegbaren Folgespieler in den Kampf. Ohne
+Folgegruppe bleiben Kaempfe solo. Normale Einzel-Trainer werden zu Doppel-
+gegnern mit individuellen Ergaenzungen bis maximal sechs; Storyteams bleiben
+erhalten. Beide nutzen nur ihre ersten drei, nach einem erschoepften Dreierteam
+kaempft der Partner weiter. Story-NPC-Partner wird vom Folgespieler gesteuert,
+ohne dessen eigenes Team zu veraendern. Details und manuelle Testliste in
+HANDOFF.md/LOKAL_TESTEN.md. Hintergrundtests,99Patchkette und Release gruen;
+Emulatorabnahme sowie die bekannte EP-/Preisgeldanbindung noch offen.
+
+Die folgenden Angaben beschreiben die vorherige Sprint-6-Integration.
+
 # Entwicklungsstand: Sprint 6 in Main
 
 Basis: aktueller Koop-Main612a28d; Sprint6ea3d332 ist integriert.

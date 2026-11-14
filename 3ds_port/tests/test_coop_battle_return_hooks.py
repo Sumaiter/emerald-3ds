@@ -51,6 +51,8 @@ static u32 gBattleTypeFlags, gTrainerBattleOpponent_A, gBattleOutcome, gSpecialV
 static bool gReceivedRemoteLinkPlayers;
 static u8 gPlayerPartyCount;
 static unsigned pyramid, hill, pike, ends, checks, frozenCount, frozenMoney, trainerFlags;
+static bool applyBlackoutMoney=true;
+static bool CtrCoop_ApplyBlackoutMoney(void) { return applyBlackoutMoney; }
 static void CB2_WhiteOut(void);
 static void CtrCoop_ResetBattleReturn(void);
 static void CB2_Overworld(void) {}
@@ -130,6 +132,7 @@ static void Reset(unsigned outcome, unsigned flags) {
     CtrCoop_ResetBattleReturn();sCoop.battleActive=true;
     gBattleOutcome=outcome;gBattleTypeFlags=flags;gTrainerBattleOpponent_A=7;
     pyramid=hill=pike=ends=0;save1.money=1000;gPlayerPartyCount=save1.playerPartyCount=6;
+    applyBlackoutMoney=true;
     for(unsigned i=0;i<PARTY_SIZE;i++){
         gPlayerParty[i]=(struct Pokemon){100+i,200+i,300+i,10+i,100};
         save1.playerParty[i]=gPlayerParty[i];
@@ -175,6 +178,13 @@ static void RestoreAndFinish(void) {
     CtrCoop_TryFinishBattleReturn();CHECK(ends==1);
 }
 int main(void) {
+    Reset(B_OUTCOME_LOST,BATTLE_TYPE_TRAINER);
+    applyBlackoutMoney=false;gPlayerParty[0].hp=0;DoWhiteOut();
+    CHECK(save1.money==1000 && gPlayerParty[0].hp==100); /* partner doesn't debit the wallet twice */
+    Reset(B_OUTCOME_WON,BATTLE_TYPE_TRAINER);
+    gPlayerParty[0].hp=17;gPlayerParty[5].hp=23;SavePlayerParty();
+    memset(gPlayerParty,0,sizeof(gPlayerParty));LoadPlayerParty();
+    CHECK(gPlayerPartyCount==6 && gPlayerParty[0].hp==17 && gPlayerParty[5].hp==23);
     const unsigned specialTypes[]={SPECIAL_BATTLE_TOWER,SPECIAL_BATTLE_DOME,SPECIAL_BATTLE_PALACE,
         SPECIAL_BATTLE_ARENA,SPECIAL_BATTLE_FACTORY,SPECIAL_BATTLE_PIKE_SINGLE,
         SPECIAL_BATTLE_PIKE_DOUBLE,SPECIAL_BATTLE_PYRAMID};
@@ -274,7 +284,7 @@ def main():
         'battle_setup.c': ('CB2_EndWildBattle', 'CB2_EndScriptedWildBattle',
                            'CB2_EndTrainerBattle', 'CB2_EndRematchBattle', 'CB2_EndFirstBattle'),
         'battle_tower.c': ('HandleSpecialTrainerBattleEnd',),
-        'load_save.c': ('LoadPlayerParty',),
+        'load_save.c': ('SavePlayerParty', 'LoadPlayerParty'),
         'overworld.c': ('DoWhiteOut', 'CB2_WhiteOut'),
     }.items():
         text = (args.source / file).read_text()

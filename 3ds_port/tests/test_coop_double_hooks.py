@@ -23,7 +23,6 @@ static unsigned restores,ends,closes,standbys,opens,tasks,buffers,wireless;
 static void SetLinkBattleEndCallbacks(void) {}
 static bool CtrCoop_IsDoubleBattle(void) { return cooperative; }
 static void CtrCoop_PrepareDoubleReturn(void) { ++restores; }
-static void CtrCoop_BattleEnd(void) { if(!restores)abort();++ends; }
 static bool IsLinkTaskFinished(void) { return linkReady; }
 static void SetCloseLinkCallback(void) { ++closes; }
 static void SetLinkStandbyCallback(void) { ++standbys; }
@@ -44,7 +43,7 @@ int main(void) {
     for(unsigned i=0;i<sizeof(outcomes)/sizeof(outcomes[0]);++i) {
         restores=ends=closes=standbys=0;gBattleOutcome=outcomes[i];
         SetBattleEndCallbacks();
-        CHECK(restores==1 && ends==(outcomes[i]!=B_OUTCOME_LOST && outcomes[i]!=B_OUTCOME_DREW));
+        CHECK(restores==1 && ends==0); /* native callback finalizes after flags/party restore */
         CHECK(!closes && !standbys && gBattlerControllerFuncs[0]==SetLinkBattleEndCallbacks);
     }
     restores=ends=0;gPaletteFade.active=true;SetBattleEndCallbacks();CHECK(!restores && !ends);

@@ -1,0 +1,581 @@
+diff --git a/src/battle_controller_player.c b/src/battle_controller_player.c
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -1045,8 +1045,8 @@
+                 if (CtrCoop_IsDoubleBattle())
+                 {
+                     CtrCoop_PrepareDoubleReturn();
+-                    if (gBattleOutcome != B_OUTCOME_LOST && gBattleOutcome != B_OUTCOME_DREW)
+-                        CtrCoop_BattleEnd();
++                    /* The native encounter callback owns victory flags,
++                     * loss healing, and (Steven) full-party restoration. */
+                 }
+                 else if (gWirelessCommType == 0)
+                 {
+diff --git a/src/battle_controllers.c b/src/battle_controllers.c
+--- a/src/battle_controllers.c
++++ b/src/battle_controllers.c
+@@ -629,6 +629,28 @@
+ {
+     s32 i, j;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        for (i = 0; i < gBattlersCount; ++i)
++        {
++            struct Pokemon *party = (i & BIT_SIDE) ? gEnemyParty : gPlayerParty;
++            u8 first = 0, last = PARTY_SIZE;
++            if (!(i & BIT_SIDE) || (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS))
++            {
++                first = (i & BIT_FLANK) ? MULTI_PARTY_SIZE : 0;
++                last = first + MULTI_PARTY_SIZE;
++            }
++            for (j = first; j < last; ++j)
++                if (GetMonData(&party[j], MON_DATA_HP) && GetMonData(&party[j], MON_DATA_SPECIES)
++                 && !GetMonData(&party[j], MON_DATA_IS_EGG)
++                 && (i != B_POSITION_OPPONENT_RIGHT || j != gBattlerPartyIndexes[B_POSITION_OPPONENT_LEFT]))
++                    break;
++            gBattlerPartyIndexes[i] = j < last ? j : first;
++        }
++        return;
++    }
++#endif
+     if (!(gBattleTypeFlags & BATTLE_TYPE_MULTI))
+     {
+         for (i = 0; i < gBattlersCount; i++)
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -2,6 +2,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_coop.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
++extern bool CtrCoop_EngineCreateWildPartner(void);
+ #endif
+ #include "battle.h"
+ #include "battle_anim.h"
+@@ -2119,6 +2120,55 @@
+     return gTrainers[trainerNum].partySize;
+ }
+ 
++#ifdef PLATFORM_3DS
++#include "3ds_coop_trainer_teams.h"
++bool CtrCoop_EnginePrepareFollowBattle(void)
++{
++    u8 count, target, i;
++    u8 level = 1;
++    if (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_TRAINER_HILL
++        | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_SECRET_BASE | BATTLE_TYPE_SAFARI
++        | BATTLE_TYPE_WALLY_TUTORIAL | BATTLE_TYPE_RECORDED))
++        return false;
++    if (!(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
++    {
++        /* The original encounter stays slot zero. A second ordinary wild is
++         * created from the actual land/water table, never cloned. */
++        return CtrCoop_EngineCreateWildPartner();
++    }
++    if (!gTrainerBattleOpponent_A || gTrainerBattleOpponent_A >= TRAINERS_COUNT)
++        return false;
++    CreateNPCTrainerParty(gEnemyParty, gTrainerBattleOpponent_A, TRUE);
++    if (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS)
++    {
++        if (!gTrainerBattleOpponent_B || gTrainerBattleOpponent_B >= TRAINERS_COUNT)
++            return false;
++        CreateNPCTrainerParty(gEnemyParty + MULTI_PARTY_SIZE, gTrainerBattleOpponent_B, FALSE);
++        return true;
++    }
++    /* Existing authored double/story teams stay exactly as authored. */
++    if (gBattleTypeFlags & BATTLE_TYPE_DOUBLE)
++        return true;
++    count = gTrainers[gTrainerBattleOpponent_A].partySize;
++    target = count * 2;
++    if (target < 2) target = 2;
++    if (target > PARTY_SIZE) target = PARTY_SIZE;
++    for (i = 0; i < count; ++i)
++    {
++        u8 monLevel = GetMonData(&gEnemyParty[i], MON_DATA_LEVEL);
++        if (monLevel > level) level = monLevel;
++    }
++    for (i = 0; count < target && i < 3; ++i)
++    {
++        u16 species = sCoopTrainerAdditions[gTrainerBattleOpponent_A][i];
++        if (!species) break;
++        CreateMon(&gEnemyParty[count++], TRAINER_MON_SPECIES(species), level,
++            GetMonData(&gEnemyParty[0], MON_DATA_HP_IV), FALSE, 0, OT_ID_RANDOM_NO_SHINY, 0);
++    }
++    return count >= 2;
++}
++#endif
++
+ static void UNUSED HBlankCB_Battle(void)
+ {
+     if (REG_VCOUNT < DISPLAY_HEIGHT && REG_VCOUNT >= 111)
+@@ -2227,8 +2277,9 @@
+     SetVBlankCallback(NULL);
+     gBattleTypeFlags &= ~BATTLE_TYPE_LINK_IN_BATTLE;
+ 
+-    if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
+-    {
++    if ((gBattleTypeFlags & BATTLE_TYPE_FRONTIER) || CtrCoop_IsDoubleBattle())
++    {
++        CtrCoop_FinishDoubleTransport();
+         SetMainCallback2(gMain.savedCallback);
+         FreeBattleResources();
+         FreeBattleSpritesData();
+diff --git a/src/battle_script_commands.c b/src/battle_script_commands.c
+--- a/src/battle_script_commands.c
++++ b/src/battle_script_commands.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #ifdef PLATFORM_3DS
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #endif
+@@ -3445,7 +3448,7 @@
+ 
+                     if (IsTradedMon(&gPlayerParty[gBattleStruct->expGetterMonId]))
+                     {
+-                        // check if the Pokémon doesn't belong to the player
++                        // check if the PokÃ©mon doesn't belong to the player
+                         if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gBattleStruct->expGetterMonId >= 3)
+                         {
+                             i = STRINGID_EMPTYSTRING4;
+@@ -3622,7 +3625,7 @@
+     // Get total HP for the player's party to determine if the player has lost
+     if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gPartnerTrainerId == TRAINER_STEVEN_PARTNER)
+     {
+-        // In multi battle with Steven, skip his Pokémon
++        // In multi battle with Steven, skip his PokÃ©mon
+         for (i = 0; i < MULTI_PARTY_SIZE; i++)
+         {
+             if (GetMonData(&gPlayerParty[i], MON_DATA_SPECIES) && !GetMonData(&gPlayerParty[i], MON_DATA_IS_EGG))
+@@ -4565,7 +4568,7 @@
+             }
+             gBattleScripting.moveendState++;
+             break;
+-        case MOVEEND_NEXT_TARGET: // For moves hitting two opposing Pokémon.
++        case MOVEEND_NEXT_TARGET: // For moves hitting two opposing PokÃ©mon.
+             if (!(gHitMarker & HITMARKER_UNABLE_TO_USE_MOVE) && gBattleTypeFlags & BATTLE_TYPE_DOUBLE
+                 && !gProtectStructs[gBattlerAttacker].chargingTurn && gBattleMoves[gCurrentMove].target == MOVE_TARGET_BOTH
+                 && !(gHitMarker & HITMARKER_NO_ATTACKSTRING))
+@@ -4842,7 +4845,11 @@
+         else
+             gBattlescriptCurrInstr += 6;
+     }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_MULTI)
++    else if ((gBattleTypeFlags & BATTLE_TYPE_MULTI)
++#ifdef PLATFORM_3DS
++          && (!CtrCoop_IsDoubleBattle() || GetBattlerSide(gActiveBattler) == B_SIDE_PLAYER)
++#endif
++    )
+     {
+         if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
+         {
+@@ -4874,6 +4881,10 @@
+             lastMonId = 0;
+             if (GetLinkTrainerFlankId(GetBattlerMultiplayerId(gActiveBattler)) == TRUE)
+                 lastMonId = MULTI_PARTY_SIZE;
++#ifdef PLATFORM_3DS
++            if (CtrCoop_IsDoubleBattle())
++                lastMonId = (gActiveBattler & BIT_FLANK) ? MULTI_PARTY_SIZE : 0;
++#endif
+         }
+ 
+         for (i = lastMonId; i < lastMonId + MULTI_PARTY_SIZE; i++)
+@@ -4955,9 +4966,9 @@
+     }
+ }
+ 
+-// Opens the party screen to choose a new Pokémon to send out.
+-// slotId is the Pokémon to replace.
+-// Note that this is not used by the Switch action, only replacing fainted Pokémon or Baton Pass
++// Opens the party screen to choose a new PokÃ©mon to send out.
++// slotId is the PokÃ©mon to replace.
++// Note that this is not used by the Switch action, only replacing fainted PokÃ©mon or Baton Pass
+ static void ChooseMonToSendOut(u8 slotId)
+ {
+     *(gBattleStruct->battlerPartyIndexes + gActiveBattler) = gBattlerPartyIndexes[gActiveBattler];
+@@ -6031,7 +6042,7 @@
+ {
+     if (gBattleScripting.drawlvlupboxState == 0)
+     {
+-        // If the Pokémon getting exp is not in-battle then
++        // If the PokÃ©mon getting exp is not in-battle then
+         // slide out a banner with their name and icon on it.
+         // Otherwise skip ahead.
+         if (IsMonGettingExpSentOut())
+@@ -7335,8 +7346,12 @@
+             battler2PartyId = gBattlerPartyIndexes[gBattlerTarget];
+             battler1PartyId = gBattlerPartyIndexes[BATTLE_PARTNER(gBattlerTarget)];
+         }
+-        else if ((gBattleTypeFlags & BATTLE_TYPE_MULTI && gBattleTypeFlags & BATTLE_TYPE_LINK)
++        else if (((gBattleTypeFlags & BATTLE_TYPE_MULTI && gBattleTypeFlags & BATTLE_TYPE_LINK)
+                  || (gBattleTypeFlags & BATTLE_TYPE_MULTI && gBattleTypeFlags & BATTLE_TYPE_RECORDED_LINK))
++#ifdef PLATFORM_3DS
++                 && (!CtrCoop_IsDoubleBattle() || GetBattlerSide(gBattlerTarget) == B_SIDE_PLAYER)
++#endif
++        )
+         {
+             if (GetLinkTrainerFlankId(GetBattlerMultiplayerId(gBattlerTarget)) == B_FLANK_RIGHT)
+             {
+@@ -7423,10 +7438,17 @@
+             #endif
+             monsCount = PARTY_SIZE;
+             minNeeded = 1;
+-            battler2PartyId = gBattlerPartyIndexes[gBattlerTarget]; // there is only one Pokémon out in single battles
++            battler2PartyId = gBattlerPartyIndexes[gBattlerTarget]; // there is only one PokÃ©mon out in single battles
+             battler1PartyId = gBattlerPartyIndexes[gBattlerTarget];
+         }
+ 
++#ifdef PLATFORM_3DS
++        if (CtrCoop_IsDoubleBattle() && GetBattlerSide(gBattlerTarget) == B_SIDE_PLAYER)
++        {
++            firstMonId = (gBattlerTarget & BIT_FLANK) ? MULTI_PARTY_SIZE : 0;
++            lastMonId = firstMonId + MULTI_PARTY_SIZE - 1;
++        }
++#endif
+         for (i = firstMonId; i < lastMonId; i++)
+         {
+             if (GetMonData(&party[i], MON_DATA_SPECIES) != SPECIES_NONE
+@@ -7924,7 +7946,7 @@
+     }
+     else
+     {
+-        gBattleMoveDamage = gBattleMons[gBattlerAttacker].maxHP / 4; // one bit value will only work for Pokémon which max hp can go to 1020(which is more than possible in games)
++        gBattleMoveDamage = gBattleMons[gBattlerAttacker].maxHP / 4; // one bit value will only work for PokÃ©mon which max hp can go to 1020(which is more than possible in games)
+         if (gBattleMoveDamage == 0)
+             gBattleMoveDamage = 1;
+ 
+@@ -9321,7 +9343,7 @@
+         {
+             gBattlescriptCurrInstr = T1_READ_PTR(gBattlescriptCurrInstr + 1);
+         }
+-        // can't swap if two Pokémon don't have an item
++        // can't swap if two PokÃ©mon don't have an item
+         // or if either of them is an enigma berry or a mail
+         else if ((gBattleMons[gBattlerAttacker].item == ITEM_NONE && gBattleMons[gBattlerTarget].item == ITEM_NONE)
+                  || gBattleMons[gBattlerAttacker].item == ITEM_ENIGMA_BERRY
+diff --git a/src/battle_util.c b/src/battle_util.c
+--- a/src/battle_util.c
++++ b/src/battle_util.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "battle.h"
+ #include "battle_anim.h"
+ #include "battle_arena.h"
+@@ -1562,7 +1565,7 @@
+                 if ((gBattleMons[gActiveBattler].status2 & STATUS2_NIGHTMARE) && gBattleMons[gActiveBattler].hp != 0)
+                 {
+                     // R/S does not perform this sleep check, which causes the nightmare effect to
+-                    // persist even after the affected Pokémon has been awakened by Shed Skin.
++                    // persist even after the affected PokÃ©mon has been awakened by Shed Skin.
+                     if (gBattleMons[gActiveBattler].status1 & STATUS1_SLEEP)
+                     {
+                         gBattleMoveDamage = gBattleMons[gActiveBattler].maxHP / 4;
+@@ -1642,7 +1645,7 @@
+                     }
+                     if (gBattlerAttacker != gBattlersCount)
+                     {
+-                        effect = 2;  // a Pokémon was awaken
++                        effect = 2;  // a PokÃ©mon was awaken
+                         break;
+                     }
+                     else
+@@ -1702,7 +1705,7 @@
+                         if (gDisableStructs[gActiveBattler].disabledMove == gBattleMons[gActiveBattler].moves[i])
+                             break;
+                     }
+-                    if (i == MAX_MON_MOVES)  // Pokémon does not have the disabled move anymore
++                    if (i == MAX_MON_MOVES)  // PokÃ©mon does not have the disabled move anymore
+                     {
+                         gDisableStructs[gActiveBattler].disabledMove = MOVE_NONE;
+                         gDisableStructs[gActiveBattler].disableTimer = 0;
+@@ -1719,7 +1722,7 @@
+             case ENDTURN_ENCORE:  // encore
+                 if (gDisableStructs[gActiveBattler].encoreTimer != 0)
+                 {
+-                    if (gBattleMons[gActiveBattler].moves[gDisableStructs[gActiveBattler].encoredMovePos] != gDisableStructs[gActiveBattler].encoredMove)  // Pokémon does not have the encored move anymore
++                    if (gBattleMons[gActiveBattler].moves[gDisableStructs[gActiveBattler].encoredMovePos] != gDisableStructs[gActiveBattler].encoredMove)  // PokÃ©mon does not have the encored move anymore
+                     {
+                         gDisableStructs[gActiveBattler].encoredMove = MOVE_NONE;
+                         gDisableStructs[gActiveBattler].encoreTimer = 0;
+@@ -2285,6 +2288,18 @@
+     if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE))
+         return FALSE;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle() && GetBattlerSide(battler) == B_SIDE_PLAYER)
++    {
++        playerId = (battler & BIT_FLANK) ? MULTI_PARTY_SIZE : 0;
++        for (i = playerId; i < playerId + MULTI_PARTY_SIZE; ++i)
++            if (GetMonData(&gPlayerParty[i], MON_DATA_HP)
++             && GetMonData(&gPlayerParty[i], MON_DATA_SPECIES)
++             && !GetMonData(&gPlayerParty[i], MON_DATA_IS_EGG))
++                return FALSE;
++        return TRUE;
++    }
++#endif
+     if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER)
+     {
+         if (GetBattlerSide(battler) == B_SIDE_PLAYER)
+@@ -2302,7 +2317,11 @@
+         }
+         return (i == playerId * MULTI_PARTY_SIZE + MULTI_PARTY_SIZE);
+     }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_MULTI)
++    else if ((gBattleTypeFlags & BATTLE_TYPE_MULTI)
++#ifdef PLATFORM_3DS
++          && !CtrCoop_IsDoubleBattle()
++#endif
++    )
+     {
+         if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
+         {
+@@ -3020,7 +3039,7 @@
+                 if (gBattleMons[i].ability == ABILITY_TRACE && (gStatuses3[i] & STATUS3_TRACE))
+                 {
+                     u8 target2;
+-                    side = BATTLE_OPPOSITE(GetBattlerPosition(i)) & BIT_SIDE; // side of the opposing Pokémon
++                    side = BATTLE_OPPOSITE(GetBattlerPosition(i)) & BIT_SIDE; // side of the opposing PokÃ©mon
+                     target1 = GetBattlerAtPosition(side);
+                     target2 = GetBattlerAtPosition(side + BIT_FLANK);
+                     if (gBattleTypeFlags & BATTLE_TYPE_DOUBLE)
+diff --git a/src/field_control_avatar.c b/src/field_control_avatar.c
+--- a/src/field_control_avatar.c
++++ b/src/field_control_avatar.c
+@@ -152,9 +152,15 @@
+     GetPlayerPosition(&position);
+     metatileBehavior = MapGridGetMetatileBehaviorAt(position.x, position.y);
+ 
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_IsFollowing())
++#endif
+     if (CheckForTrainersWantingBattle() == TRUE)
+         return TRUE;
+ 
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_IsFollowing())
++#endif
+     if (TryRunOnFrameMapScript() == TRUE)
+         return TRUE;
+ 
+@@ -167,6 +173,9 @@
+         if (TryStartStepBasedScript(&position, metatileBehavior, playerDirection) == TRUE)
+             return TRUE;
+     }
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_IsFollowing())
++#endif
+     if (input->checkStandardWildEncounter && CheckStandardWildEncounter(metatileBehavior) == TRUE)
+         return TRUE;
+     if (input->heldDirection && input->dpadDirection == playerDirection)
+@@ -180,6 +189,8 @@
+ #ifdef PLATFORM_3DS
+     if (input->pressedAButton && CtrCoop_TryWatchAt(position.x, position.y))
+         return FALSE; /* DoCB1_Overworld observes the new spectator, no lock. */
++    if (input->pressedAButton && CtrCoop_TryFollowAt(position.x, position.y))
++        return FALSE;
+ #endif
+     if (input->pressedAButton && TryStartInteractionScript(&position, metatileBehavior, playerDirection) == TRUE)
+         return TRUE;
+@@ -508,6 +519,9 @@
+ 
+ static bool8 TryStartStepBasedScript(struct MapPosition *position, u16 metatileBehavior, u16 direction)
+ {
++#ifdef PLATFORM_3DS
++    if (!CtrCoop_IsFollowing())
++#endif
+     if (TryStartCoordEventScript(position) == TRUE)
+         return TRUE;
+     if (TryStartWarpEventScript(position, metatileBehavior) == TRUE)
+diff --git a/src/load_save.c b/src/load_save.c
+--- a/src/load_save.c
++++ b/src/load_save.c
+@@ -190,10 +190,9 @@
+ {
+     int i;
+ 
+-#ifdef PLATFORM_3DS
+-    if (CtrCoop_GuestSaveBlocked())
+-        return;
+-#endif
++    /* This is a RAM backup used by native temporary-party scripts, not a
++     * flash save. Guests need their own full team restored after Steven or
++     * the tutorial too; the actual guest save writers remain blocked. */
+     gSaveBlock1Ptr->playerPartyCount = gPlayerPartyCount;
+ 
+     for (i = 0; i < PARTY_SIZE; i++)
+diff --git a/src/overworld.c b/src/overworld.c
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -388,6 +388,9 @@
+ void DoWhiteOut(void)
+ {
+     RunScriptImmediately(EventScript_WhiteOut);
++#ifdef PLATFORM_3DS
++    if (CtrCoop_ApplyBlackoutMoney())
++#endif
+     SetMoney(&gSaveBlock1Ptr->money, GetMoney(&gSaveBlock1Ptr->money) / 2);
+     HealPlayerParty();
+     Overworld_ResetStateAfterWhiteOut();
+@@ -1591,6 +1594,11 @@
+         return;
+ #endif
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_FollowKeys(&newKeys, &heldKeys);
++    if (gMain.callback2 != CB2_Overworld)
++        return;
++#endif
+     UpdatePlayerAvatarTransitionState();
+     FieldClearPlayerInput(&inputStruct);
+     FieldGetPlayerInput(&inputStruct, newKeys, heldKeys);
+@@ -1612,6 +1620,31 @@
+         }
+     }
+ }
++
++#ifdef PLATFORM_3DS
++bool CtrCoop_EngineFollowWarp(u8 group, u8 num, u16 layout, s16 x, s16 y)
++{
++    static const u8 groupSizes[] = {57,5,5,6,7,8,9,7,7,14,8,17,10,23,13,15,15,2,2,2,3,1,1,1,108,61,89,2,1,13,1,1,3,1};
++    const struct MapHeader *dest;
++    if (gMain.callback2 != CB2_Overworld || gMain.inBattle || gPaletteFade.active
++     || ArePlayerFieldControlsLocked() || ScriptContext_IsEnabled()
++     || group >= ARRAY_COUNT(groupSizes) || num >= groupSizes[group])
++        return false;
++    dest = gMapGroups[group][num];
++    x -= MAP_OFFSET; y -= MAP_OFFSET;
++    if (!dest || !dest->mapLayout || dest->mapLayoutId != layout || x < 0 || y < 0
++     || (u32)x >= dest->mapLayout->width || (u32)y >= dest->mapLayout->height)
++        return false;
++    SetWarpDestination(group, num, WARP_ID_NONE, 0, 0);
++    WarpIntoMap();
++    /* WarpData has signed-byte coordinates; the real field position is
++     * sixteen-bit and also supports the large routes past tile 127. */
++    gSaveBlock1Ptr->pos.x = x;
++    gSaveBlock1Ptr->pos.y = y;
++    SetMainCallback2(CB2_LoadMap);
++    return true;
++}
++#endif
+ 
+ #ifdef PLATFORM_3DS
+ bool CtrCoop_EngineAutoSave(void)
+diff --git a/src/party_menu.c b/src/party_menu.c
+--- a/src/party_menu.c
++++ b/src/party_menu.c
+@@ -1,5 +1,6 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop.h"
+ #include "3ds_coop_inventory.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #endif
+@@ -1270,7 +1271,8 @@
+ 
+ bool8 IsMultiBattle(void)
+ {
+-    if (gBattleTypeFlags & BATTLE_TYPE_MULTI && gBattleTypeFlags & BATTLE_TYPE_DOUBLE && gBattleTypeFlags & BATTLE_TYPE_TRAINER && gMain.inBattle)
++    if (gBattleTypeFlags & BATTLE_TYPE_MULTI && gBattleTypeFlags & BATTLE_TYPE_DOUBLE
++     && ((gBattleTypeFlags & BATTLE_TYPE_TRAINER) || CtrCoop_IsDoubleBattle()) && gMain.inBattle)
+         return TRUE;
+     else
+         return FALSE;
+@@ -6096,6 +6098,12 @@
+     u16 i = 0;
+     u16 species;
+ 
++#ifdef PLATFORM_3DS
++    if (VarGet(VAR_FRONTIER_FACILITY) == FACILITY_MULTI_OR_EREADER
++     && CtrCoop_RestrictStoryParty() && mon >= gPlayerParty + MULTI_PARTY_SIZE && mon < gPlayerParty + PARTY_SIZE)
++        return FALSE;
++#endif
++
+     if (GetMonData(mon, MON_DATA_IS_EGG)
+         || GetMonData(mon, MON_DATA_LEVEL) > GetBattleEntryLevelCap()
+         || (gSaveBlock1Ptr->location.mapGroup == MAP_GROUP(MAP_BATTLE_FRONTIER_BATTLE_PYRAMID_LOBBY)
+@@ -6446,7 +6454,11 @@
+         rightBattler = GetBattlerAtPosition(B_POSITION_OPPONENT_RIGHT);
+     }
+ 
+-    if (IsMultiBattle() == TRUE)
++    if (IsMultiBattle() == TRUE
++#ifdef PLATFORM_3DS
++     && (!CtrCoop_IsDoubleBattle() || GetBattlerSide(battler) == B_SIDE_PLAYER)
++#endif
++    )
+     {
+         if (flankId != 0)
+         {
+diff --git a/src/pokemon.c b/src/pokemon.c
+--- a/src/pokemon.c
++++ b/src/pokemon.c
+@@ -5959,6 +5959,10 @@
+ s32 GetBattlerMultiplayerId(u16 id)
+ {
+     s32 multiplayerId;
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++        return id == B_POSITION_PLAYER_RIGHT ? 1 : 0;
++#endif
+     for (multiplayerId = 0; multiplayerId < MAX_LINK_PLAYERS; multiplayerId++)
+         if (gLinkPlayers[multiplayerId].id == id)
+             break;
+diff --git a/src/wild_encounter.c b/src/wild_encounter.c
+--- a/src/wild_encounter.c
++++ b/src/wild_encounter.c
+@@ -1,5 +1,6 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
++#include "3ds_coop.h"
+ #include "3ds_extras.h" // optional settings (OPTIONS pages)
+ #include "3ds_encounters.h"
+ #endif
+@@ -490,6 +491,31 @@
+     CreateWildMon(WILD_SPECIES(wildMonInfo->wildPokemon[wildMonIndex].species), level);
+     return TRUE;
+ }
++
++#ifdef PLATFORM_3DS
++bool CtrCoop_EngineCreateWildPartner(void)
++{
++    u16 header = GetCurrentMapWildMonHeaderId();
++    const struct WildPokemonInfo *info;
++    u8 index;
++    if (GetMonData(&gEnemyParty[1], MON_DATA_SPECIES)) return true;
++    if (header == HEADER_NONE) return false;
++    if (gPlayerAvatar.flags & PLAYER_AVATAR_FLAG_SURFING)
++    {
++        info = gWildMonHeaders[header].waterMonsInfo;
++        index = ChooseWildMonIndex_WaterRock();
++    }
++    else
++    {
++        info = GetLandMonsInfo(header);
++        index = ChooseWildMonIndex_Land();
++    }
++    if (!info) return false;
++    CreateMon(&gEnemyParty[1], WILD_SPECIES(info->wildPokemon[index].species),
++        ChooseWildMonLevel(&info->wildPokemon[index]), USE_RANDOM_IVS, FALSE, 0, OT_ID_PLAYER_ID, 0);
++    return true;
++}
++#endif
+ 
+ static u16 GenerateFishingWildMon(const struct WildPokemonInfo *wildMonInfo, u8 rod)
+ {
+@@ -1247,7 +1273,7 @@
+     s16 px = player->currentCoords.x, py = player->currentCoords.y;
+     u32 i;
+ 
+-    if (sWildEncountersDisabled == TRUE)
++    if (sWildEncountersDisabled == TRUE || CtrCoop_IsFollowing())
+         return FALSE;
+     for (i = 0; i < VW_MAX; i++)
+     {

@@ -73,6 +73,9 @@ static u8 saveResult=SAVE_STATUS_OK,lastSaveType;
 static void CB2_Overworld(void) {}
 static void OtherCallback(void) {}
 static bool CtrCoop_IsWatching(void) { return watching; }
+static bool CtrCoop_IsFollowing(void) { return false; }
+static bool CtrCoop_TryFollowAt(s16 x,s16 y) { (void)x;(void)y;return false; }
+static void CtrCoop_FollowKeys(u16 *pressed,u16 *held) { (void)pressed;(void)held; }
 static bool ArePlayerFieldControlsLocked(void) { return controls; }
 static bool ScriptContext_IsEnabled(void) { return script; }
 static void LockPlayerFieldControls(void) { ++locks;controls=true; }

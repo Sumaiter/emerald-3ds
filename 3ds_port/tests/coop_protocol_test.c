@@ -450,7 +450,7 @@ static void TestBattleProtocol(void)
 
 static void TestBattleBeginIdentity(void)
 {
-    static const uint8_t expected[] = {36, 19, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
+    static const uint8_t expected[] = {36, 20, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
     uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE + 1];
     uint32_t totalSize = 7, checksum = 9;
     uint16_t sequence = 11;
@@ -514,7 +514,7 @@ static void TestResultIdentityPackets(void)
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
         uint8_t packet[9];
-        uint8_t expected[] = {codecs[c].type, 19, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, 20, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
         uint16_t sequence = 7;
         uint32_t checksum = 9;
 
@@ -570,7 +570,7 @@ static void TestUnchangedTransferBeginLayouts(void)
 
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
-        uint8_t expected[] = {codecs[c].type, 19, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, 20, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
         CHECK(sizeof(packet) == sizeof(expected) && codecs[c].encode(0x12345678, 0x89ABCDEF, packet, sizeof(packet))
             && memcmp(packet, expected, sizeof(expected)) == 0, "transfer %u retains its original ten-byte layout", codecs[c].type);
     }

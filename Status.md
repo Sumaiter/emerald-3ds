@@ -2,7 +2,12 @@
 
 Stand: 2026-11-14
 
-Neuester Integrationsstand: Upstream/main erneut geprueft, keine fehlenden
+Neuester Ausbau: explizite Folgegruppe mit A/B, gemeinsame Kaempfe nur beim
+Hinterherlaufen, erste drei pro Spieler, Partner spielt nach drei KO weiter,
+Trainerergaenzungen bis sechs und steuerbarer Story-NPC-Partner. Protokoll20;
+Hintergrundtests/99Patchkette/Release bestanden, Emulatorabnahme offen.
+
+Vorheriger Integrationsstand: Upstream/main erneut geprueft, keine fehlenden
 neuen Commits. Sprint6 in Main integriert und direkt erkannte Fallback-/
 Team-/Callback-/Ledgerprobleme repariert; Hintergrundtests und ARM-Build gruen.
 Sprint6 bleibt IN ARBEIT: native Linkpfade ueberspringen bisher EP und normales
@@ -76,8 +81,9 @@ Zwei isolierte Azahar-Instanzen bestätigen Host-Snapshot, Starter auf Level 5, 
 - Die Boxenreihe eines eingeloggten Spielers ist gegen Entnahme und Verschieben gesperrt.
 - Die aktuelle Gruppe wird laufend in die eigene Boxenreihe gespiegelt und bei Änderungen übertragen. Der Gast beendet seine Sitzung durch Ausschalten. Nach erkanntem Verbindungsende wird seine zuletzt vollständig übernommene Reihe entsperrt; ein Abmeldepaket ist dafür nicht erforderlich. Der Host speichert den gemeinsamen Stand auf der SD-Karte.
 - Der Gast kann wilde Pokémon und Trainerkämpfe selbst auslösen.
-- Einzelkämpfe bestreitet der auslösende Spieler allein mit seiner Gruppe. Der andere Spieler kann währenddessen weiterspielen.
-- Bei einem Doppelkampf kämpfen beide Spieler gemeinsam, wenn der Partner auf derselben Karte, in unmittelbarer Nähe und verfügbar ist. Andernfalls bestreitet der auslösende Spieler den Doppelkampf nach den Originalregeln allein.
+- Ohne aktive Folgegruppe bestreitet der ausloesende Spieler seinen Kampf allein; der andere spielt unabhaengig weiter.
+- A auf einen freien Mitspieler startet das automatische Folgen; B loest es. Nur ein aktiver Anfuehrer mit verfuegbarem Folgespieler startet gemeinsame Kaempfe. Normale Einzel-Trainer werden dabei zu Doppelkaempfen mit passenden Ergaenzungen bis sechs Gegnern.
+- In gemeinsamen Kaempfen nutzt jeder nur seine ersten drei Pokemon. Der Partner kaempft nach drei KO alleine weiter; Niederlage erst bei beiden Dreierteams. Bei Story mit NPC-Partner steuert der Folgespieler dessen Pokemon, sein eigenes Team bleibt unveraendert.
 - Nur der Host schreibt den gemeinsamen Spielstand. Änderungen werden vollständig und in konsistenter Reihenfolge übernommen.
 
 ## Sprint 0: Projekt einrichten und Ausgangsbasis prüfen
@@ -273,26 +279,29 @@ stehen in `LOKAL_TESTEN.md`.
 - [x] Derselbe Trainer kann nicht gleichzeitig zweimal herausgefordert werden.
 - [x] Kampfergebnisse sind nach einem Speichern und Neuladen auf beiden Seiten konsistent.
 
-## Sprint 6: Gemeinsame Doppelkämpfe
+## Sprint 6: Folgegruppe und gemeinsame Doppelkaempfe
 
-**Status: In Arbeit. Integration/erste Korrekturen und Hintergrundbuild bestanden; EP/Preisgeld und Emulatorabnahme offen.**
+**Status: In Arbeit. Neue Gruppenregeln implementiert und im Hintergrund geprueft; EP/Preisgeld und Emulatorabnahme offen.**
 
 ### Aufgaben
 
-- [x] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen (Hintergrundtests).
-- [ ] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern.
-- [ ] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben.
-- [ ] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen.
-- [x] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen (inklusive Partner-Ablehnung regressionsgeprueft).
-- [ ] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende korrekt synchronisieren.
-- [ ] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen.
+- [x] Explizites Folgen mit A und Aufloesen mit B statt automatischem Naehe-Beitritt (Hintergrundtests).
+- [x] Gruppenberechtigung, Karte, Naehe und aktuelle Verfuegbarkeit vor gemeinsamem Einstieg pruefen; Abbruch und Teamhash absichern.
+- [x] Nur erste drei Pokemon pro Spieler; getrennte Ersatzpools, Reserve unveraendert, Partner spielt nach drei KO weiter (Hintergrundtests).
+- [x] Normale Einzel-Trainer fuer Folgegruppen in Doppelkaempfe umwandeln; verschiedene passende Ergaenzungen, maximal sechs.
+- [x] Bestehende Story-Gegnerteams erhalten; Folgespieler uebernimmt das NPC-Partnerteam, ohne eigene Pokemon zu verlieren (Hintergrundtests).
+- [x] Ohne Gruppe/verfuegbaren Folgespieler auf den Original-Solokampf zurueckfallen.
+- [ ] Eingaben, Attackenziele, Wechsel, KO, Fang/Flucht und Kampfende auf beiden Emulatoren abnehmen.
+- [ ] EP/EV/Levelup/Attackenlernen und regulaeres Preisgeld fuer gemeinsame Kaempfe integrieren.
 
 ### Akzeptanzkriterien
 
-- [ ] Ein benachbarter, verfügbarer Partner kann einem Doppelkampf von beiden Seiten beitreten.
-- [ ] Jeder Spieler kontrolliert ausschließlich seine vorgesehenen Pokémon.
-- [ ] Ohne Partner bleibt der originale Einzelspieler-Doppelkampf spielbar.
-- [ ] Nach dem Kampf besitzen beide Konsolen denselben Team- und Weltzustand.
+- [ ] A/B und automatisches Nachlaufen funktionieren mit beiden Rollen einschliesslich Kartenwechsel.
+- [ ] Nur Folgegruppen kaempfen gemeinsam; beide steuern ihre eigenen ersten drei.
+- [ ] Ein erschoepfter Spieler kann den Partner weiterkaempfen lassen, ohne fremde/reservierte Pokemon zu benutzen.
+- [ ] Einzel-Trainer erhalten passende verschiedene Ergaenzungen bis sechs; vorhandene Storyteams bleiben erhalten.
+- [ ] Der Folgespieler steuert den Story-NPC-Partner; sein eigenes Team bleibt nach Sieg/Niederlage unveraendert.
+- [ ] Nach Kampf und Save/Rejoin stimmen Team- und Weltfortschritt, ohne doppelte Belohnungen.
 
 ## Sprint 7: Abmeldung, Verbindungsabbrüche und sicheres Speichern
 

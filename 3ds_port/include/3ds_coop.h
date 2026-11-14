@@ -53,6 +53,16 @@ void CtrCoop_ResetBattleReturn(void);
 void CtrCoop_BattleTick(void);
 /* A on the other avatar or its current opponent, without starting a script. */
 bool CtrCoop_TryWatchAt(int16_t x, int16_t y);
+/* A on a free peer joins its travelling group. B releases the follower. */
+bool CtrCoop_TryFollowAt(int16_t x, int16_t y);
+bool CtrCoop_IsFollowing(void);
+void CtrCoop_StopFollowing(void);
+void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held);
+/* Native helper receives only bounded map coordinates, never a save pointer. */
+bool CtrCoop_EngineFollowWarp(uint8_t group, uint8_t num, uint16_t layout, int16_t x, int16_t y);
+bool CtrCoop_EnginePrepareFollowBattle(void);
+bool CtrCoop_UsesNpcPartner(void);
+bool CtrCoop_RestrictStoryParty(void);
 bool CtrCoop_IsWatching(void);
 const uint8_t *CtrCoop_WatchingName(void);
 struct BoxPokemon;
@@ -81,6 +91,8 @@ bool CtrCoop_IsDoubleBattle(void);
 bool CtrCoop_IsDoubleInitiator(void);
 /* Restore the original full party before native defeat/field callbacks. */
 void CtrCoop_PrepareDoubleReturn(void);
+void CtrCoop_FinishDoubleTransport(void);
+bool CtrCoop_ApplyBlackoutMoney(void);
 uint8_t CtrCoop_LocalMultiplayerId(void);
 void CtrCoop_MenuFrame(void);
 void CtrCoop_OverworldFrame(void);

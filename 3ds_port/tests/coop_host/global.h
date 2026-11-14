@@ -63,6 +63,8 @@ typedef uint8_t bool8;
 #define BATTLE_TYPE_TRAINER (1 << 3)
 #define BATTLE_TYPE_LINK (1 << 1)
 #define BATTLE_TYPE_MULTI (1 << 6)
+#define BATTLE_TYPE_SAFARI (1 << 7)
+#define BATTLE_TYPE_TWO_OPPONENTS (1 << 15)
 #define BATTLE_TYPE_IS_MASTER (1 << 2)
 #define BATTLE_TYPE_LINK_IN_BATTLE 0x0020
 #define BATTLE_TYPE_ROAMER (1 << 10)
@@ -235,6 +237,7 @@ struct LinkPlayer
 {
     uint16_t id;
     uint16_t version;
+    uint8_t name[11];
 };
 
 extern struct SaveBlock2 *gSaveBlock2Ptr;

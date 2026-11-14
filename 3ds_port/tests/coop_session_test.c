@@ -109,6 +109,9 @@ static void ResetFixture(void)
     static const uint8_t name[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
 
     ResetLiveFixture();
+    FollowReset();
+    sFollowWarpCalls = 0;
+    sPrepareFollowBattle = true;
     CtrCoop_ResetBattleReturn();
     memset(&gMain, 0, sizeof(gMain));
     memset(&sCoop, 0, sizeof(sCoop));
@@ -603,15 +606,19 @@ static CtrCoopSnapshot RemoteAt(int16_t x, int16_t y)
 
 static void TestDoubleBattleState(void)
 {
-    uint8_t request[] = {CTR_COOP_DOUBLE_REQUEST_PACKET, CTR_COOP_PROTOCOL_VERSION, 0, 0};
+    uint8_t request[] = {CTR_COOP_DOUBLE_REQUEST_PACKET, CTR_COOP_PROTOCOL_VERSION, 0, 0, 1, 0, 0, 0};
 
     ReadyHost();
     sCoop.remoteValid = true;
     sCoop.remote = RemoteAt(29, 23);
     gBattleTypeFlags = BATTLE_TYPE_DOUBLE;
+    sFollow.state = FOLLOW_LEADER;
+    sFollow.token = 1;
+    sFollow.peerReady = true;
+    sFollow.peerAge = 0;
     CHECK(!CtrCoop_BattleStart(), "available nearby partner waits for double-battle handshake");
     CHECK(LastPacket(CTR_COOP_DOUBLE_REQUEST_PACKET) != NULL, "nearby double battle sends request");
-    CtrCoop_HandlePacket(PEER_ID, (const uint8_t[]){CTR_COOP_DOUBLE_DECLINE_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_DOUBLE_CONTROL_SIZE);
+    CtrCoop_HandlePacket(PEER_ID, (const uint8_t[CTR_COOP_DOUBLE_CONTROL_SIZE]){CTR_COOP_DOUBLE_DECLINE_PACKET, CTR_COOP_PROTOCOL_VERSION, 1,0,0,0}, CTR_COOP_DOUBLE_CONTROL_SIZE);
     ClearPackets();
     CHECK(CtrCoop_BattleStart() && LastPacket(CTR_COOP_DOUBLE_REQUEST_PACKET) == NULL, "Sprint 6: a declined partner falls back to a local double battle without a new request");
 
@@ -626,6 +633,8 @@ static void TestDoubleBattleState(void)
     sCoop.remoteValid = true;
     sCoop.remote = RemoteAt(27, 24);
     gMain.callback2 = CB2_Overworld;
+    sFollow.state = FOLLOW_FOLLOWER;
+    sFollow.token = 1;
     CtrCoop_HandlePacket(PEER_ID, request, sizeof(request));
     CHECK(LastPacket(CTR_COOP_DOUBLE_ACCEPT_PACKET) != NULL && sCoop.doubleState == DOUBLE_STATE_WAIT_START, "available partner accepts incoming double battle");
     ClearPackets();

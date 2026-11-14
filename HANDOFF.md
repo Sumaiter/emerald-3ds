@@ -1,5 +1,68 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Sprint 6: Aktive Folgegruppe statt automatischem Beitritt (2026-11-14)
+
+Aktueller lokaler Build: **0133a0e39c629df1**, Boot **E3ID-865a9244741eeebf**,
+ABI **97c8f051**, Protokoll **20**. Beide Instanzen muessen den neuen Build
+laden: Fenster schliessen und Paseo **Host und Gast starten** manuell starten.
+F6 installiert keine neue Version. Emulatoren, Profile und SAV-Dateien wurden
+von dieser Implementierung nicht angefasst; manuelle Abnahme ist offen.
+
+Neue verbindliche Spielregeln:
+
+- A auf einen freien Mitspieler: dessen Folgegruppe beitreten und automatisch
+  hinterherlaufen. B beendet das Folgen in der Oberwelt, auch waehrend einer
+  ausstehenden Kampfanfrage. Kurven werden ueber die empfangenen Wegpunkte
+  verfolgt; Kartenwechsel verwenden gepruefte native Kartenuebergaenge.
+- Naehe allein erzeugt keinen gemeinsamen Kampf. Nur ein aktiver Anfuehrer
+  mit verfuegbarem Folgespieler bietet einen gemeinsamen Kampf an. Der
+  Folgespieler loest beim Nachlaufen keine eigenen Trainer-/Graskaempfe aus.
+  Menue/PC/Skriptbelegung und verlorene Gruppenberechtigung erlauben keinen
+  erzwungenen Eintritt. Ohne Teilnahme bleibt der originale Solokampf.
+- Beide verwenden ihre ersten drei Pokemon; eigene Reserveplaetze vier bis
+  sechs werden weder eingesetzt noch ueberschrieben. Nach Erschoepfung eines
+  Dreierteams kaempft der andere Spieler weiter. Verloren ist erst, wenn beide
+  Dreierteams besiegt sind. Gemeinsames Geld wird bei Niederlage einmal belastet.
+- Ein normaler Einzel-Trainerkampf wird als Gruppenkampf zum Doppelkampf.
+  Originale Gegner bleiben; zusaetzliche verschiedene Arten passen zu
+  Traineridentitaet/-klasse/Typen und Level. Ziel min(6,2*Originalanzahl), bei
+  zu wenig passenden Arten weniger; niemals identische Originale klonen, um
+  Plaetze zu fuellen. 768 Einzel-Trainerkonfigurationen sind abgedeckt.
+- Bestehende Doppel-/Story-Gegnerteams bleiben erhalten. Bei Story mit
+  NPC-Partner (Troy) steuert der Folgespieler dessen vorhandene drei Pokemon;
+  seine eigenen sechs bleiben unveraendert, auch bei Niederlage. Auch die
+  native Storyauswahl des Anfuehrers ist auf seine ersten drei begrenzt.
+- Zustimmung traegt den exakten aktuellen Teamhash. Der Aufbau wartet auf
+  dessen vollstaendige Uebertragung; alte Join-/PC-Caches werden nicht geladen.
+  Ein nach Zustimmung geoeffnetes Menue oder veraendertes Team bricht den
+  Beitritt sauber ab. Host-/Gast-Anfragen haben getrennte Tokenbereiche.
+
+Technik und Nachweise:
+
+- Neues lokales Folgemodul src/3ds_coop_follow.inc, authentifiziertes Paket85.
+  Doppelkampf-Anfrage8B, Kontrolle10B (Gruppentoken+Teamhash), Version20 auch
+  fuer das Inventar. Alte Protokolle koennen nicht beitreten.
+- 0098-coop-follow-battles.patch: native Eingabe, Traineraufbau, erste lebende
+  Startpokemon, Drei-/Sechser-Ersatzpools, Storyauswahl, getrennte Rueckkehr,
+  einmalige Geldstrafe und RAM-Backup fuer Gaeste. SavePlayerParty ist eine
+  RAM-Kopie; echte Gast-Flash-/SAV-Schreiber bleiben gesperrt.
+- Alle99Patches auf frischer isolierter Basis anwendbar;19 betroffene native
+  Funktionskoerper stimmen mit den gebauten Quellen ueberein.
+- verify-coop einschliesslich neuer Folge-/Storytests gruen. Echte native
+  Verlust-/Wechsel-/Teamauswahl-/Kartenkoerper geprueft;519 Rueckkehrchecks.
+  ARM-Release und PAK erfolgreich. Belege unter build/coop-follow/:
+  verify-story-final.log, release-story-final.log, patch-chain-final.log,
+  native-tests-final.log, return-tests-final.log, build-hashes.json.
+
+**Sprint 6 bleibt in Arbeit:** EP/EV/Levelup/Lernen und regulaeres
+Trainerpreisgeld sind weiterhin die bekannte native-Link-Luecke; nicht als
+behoben oder manuell bestanden werten. Frontier/Geheimbasis/eReader/Safari
+bleiben originale Solokontexte; besondere Wildkaempfe ohne geeignete lokale
+Zweittabelle ebenfalls. Fang/Flucht, Rad/Surfen und Gruppen-Disconnects sowie
+Emulator-/Hardwaredarstellung brauchen weitere Abnahme. Die Folgebewegung
+nutzt native Kollisionen; keine Zusage fuer beliebige Hindernisse/Feld-HM-Pfade.
+Gras #1 und Zuschauer-Ruckeln #2 bleiben getrennt offen und unveraendert.
+
 ## Sprint6 integriert und ueberarbeitet (2026-11-14)
 
 Auf ausdruecklichen Nutzerauftrag wurde zuerst `upstream/main` von

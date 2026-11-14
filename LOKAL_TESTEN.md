@@ -1,22 +1,43 @@
 # Host und Gast auf diesem PC starten
 
-**Neuester Entwicklungsstand: Sprint6 integriert, Protokoll19**, Build
-**225ca2caa5a7881b**, Boot **E3ID-5790a58262fe8f67**, ABI **73bbc4ee**.
-Hintergrundtests und ARM-Release/PAK bestehen; noch kein Emulatornachtest.
-Gras und Zuschauer-Ruckeln bleiben die getrennten offenen Issues #1/#2.
+**Neuester Entwicklungsstand: Sprint 6 mit aktiver Folgegruppe**, Protokoll20,
+Build **0133a0e39c629df1**, Boot **E3ID-865a9244741eeebf**, ABI **97c8f051**.
+Hintergrundtests und ARM-Release/PAK bestanden. Noch kein Emulatornachtest.
+Beide Fenster schliessen, dann **Host und Gast starten** manuell ausfuehren.
+F6 installiert keinen Build.
 
-Sprint6 ist noch in Arbeit: EP-/Levelup-/EV-/Lern- und Trainerpreisgeldpfade
-werden vom nativen Linkmodus noch uebersprungen und brauchen weitere
-Implementierung. Diese Luecke ist kein bestandener Spieltest.
+Gezielter manueller Test fuer die neuen Regeln, jeweils Host/Gast vertauschen:
 
-Fuer den gezielten Doppelkampf-Test zuerst beide Fenster schliessen und das
-Paseo-Script neu starten (F6 installiert keinen Build). Jeweils Host und Gast
-ausloesen lassen: benachbarter freier Partner, entfernter/abwesender Partner
-und Partner in einem Menue/PC. Eigene Pokemon steuern, Wechsel/KO und
-Kampfende pruefen; danach erstes Dreierteam plus unveraenderte Reserveplaetze,
-HP/Status/AP und Weltfortschritt vergleichen. Die uebrigen Standardtests aus
-Sprint5 bleiben anerkannt. Hardware und Doppelkampf-Disconnects sind weiterhin
-gesonderte Abnahmepunkte.
+1. A auf den freien anderen Spieler: automatisch folgen. Kurven, Stillstand,
+   Tueren/Kartenwechsel pruefen. B loest die Gruppe sofort; mit gehaltener
+   Richtung muss man direkt selbst weiterlaufen koennen.
+2. Nur nebeneinander stehen: Trainer-/Wildkampf bleibt solo. Mit aktivem
+   Folgen einen normalen Einzel-Trainer ausloesen: beide treten als Doppel an.
+   Gegnerarten/-level passend zum Trainer, insgesamt hoechstens sechs.
+3. Vorher alle sechs eigenen Pokemon notieren. Im gemeinsamen Kampf nur die
+   ersten drei einsetzen/wechseln. Die Reserveplaetze vier bis sechs bleiben
+   nach dem Kampf unveraendert und duerfen nicht ausgeliehen werden.
+4. Ein Dreierteam komplett besiegen lassen: Partner kaempft alleine weiter.
+   Erst nach beiden Dreierteams Niederlage. Heilung danach gemaess nativem
+   WhiteOut; das gemeinsame Geld darf nicht zweimal halbiert werden.
+5. Vorhandene Story-Doppelgegner behalten ihr Team. Bei Troy-Partnerkampf
+   steuert der Folgespieler Troys Pokemon; sein eigenes komplettes Team bleibt
+   auch nach Verlust unveraendert. Anfuehrer kann in der Storyauswahl keine
+   Reserveplaetze vier bis sechs waehlen.
+6. Direkt nach PC-/Teamwechsel gemeinsam kaempfen: neue Reihenfolge und
+   aktuelle HP/Status/AP muessen verwendet werden. Partner im Menue/PC/Kampf
+   darf nicht herausgerissen werden. B waehrend der Beitrittsphase darf keinen
+   wartenden schwarzen Bildschirm erzeugen.
+7. Nach Sieg/Niederlage Rueckkehr, Bewegung und Menues pruefen. Erledigter
+   Trainer/Storyabschnitt darf nicht nochmal starten. Host speichern, neu
+   laden und Gast erneut verbinden: eigene Teams und Fortschritt vergleichen.
+
+EP/EV/Levelup/Attackenlernen und regulaeres Trainerpreisgeld im gemeinsamen
+Kampf sind weiterhin NICHT implementiert und werden nach dem separaten Fix
+abgenommen. Originale Sonderformate (Frontier/Geheimbasis/eReader/Safari)
+bleiben solo. Weitere Rad-/Surf-/Fang-/Flucht-/Disconnect-/Hardwaretests sind
+keine hier behaupteten bestandenen Tests. Gras #1 und Zuschauer-Ruckeln #2
+bleiben offen. Die bestaetigten Standardtests aus Sprint5 bleiben anerkannt.
 
 Die folgenden Rueckmeldungen beschreiben den zuvor getesteten Protokoll18-Build.
 

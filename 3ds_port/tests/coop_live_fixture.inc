@@ -19,6 +19,16 @@ static bool sWatchReady, sWatching;
 static unsigned sWatchRequests, sAutoSaves;
 static bool sAutoSaveSucceeds = true;
 static bool sLiveInventoryActive, sLiveMoneyActive;
+static unsigned sFollowWarpCalls;
+static uint8_t sFollowWarpGroup, sFollowWarpNum;
+static int16_t sFollowWarpX, sFollowWarpY;
+static bool sPrepareFollowBattle = true;
+bool CtrCoop_EnginePrepareFollowBattle(void) { return sPrepareFollowBattle; }
+bool CtrCoop_EngineFollowWarp(uint8_t group,uint8_t num,uint16_t layout,int16_t x,int16_t y)
+{
+    (void)layout; ++sFollowWarpCalls; sFollowWarpGroup=group;sFollowWarpNum=num;
+    sFollowWarpX=x;sFollowWarpY=y;return true;
+}
 void CB2_WhiteOut(void) {}
 void CB2_ReturnToFieldFadeFromBlack(void) {}
 

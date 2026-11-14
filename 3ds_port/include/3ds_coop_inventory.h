@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CTR_COOP_INVENTORY_VERSION 19
+#define CTR_COOP_INVENTORY_VERSION 20
 #define CTR_COOP_INVENTORY_REQUEST 65
 #define CTR_COOP_INVENTORY_RESULT 66
 #define CTR_COOP_INVENTORY_BEGIN 67

@@ -19,6 +19,8 @@ static bool sWatchReady, sWatching;
 static unsigned sWatchRequests, sAutoSaves;
 static bool sAutoSaveSucceeds = true;
 static bool sLiveInventoryActive, sLiveMoneyActive;
+void CB2_WhiteOut(void) {}
+void CB2_ReturnToFieldFadeFromBlack(void) {}
 
 uint32_t LocalLink_Milliseconds(void) { return 1000; }
 void PortRfu_PumpCoopEvents(void) {}

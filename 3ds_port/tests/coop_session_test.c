@@ -613,7 +613,7 @@ static void TestDoubleBattleState(void)
     CHECK(LastPacket(CTR_COOP_DOUBLE_REQUEST_PACKET) != NULL, "nearby double battle sends request");
     CtrCoop_HandlePacket(PEER_ID, (const uint8_t[]){CTR_COOP_DOUBLE_DECLINE_PACKET, CTR_COOP_PROTOCOL_VERSION}, CTR_COOP_DOUBLE_CONTROL_SIZE);
     ClearPackets();
-    XFAIL_CHECK(CtrCoop_BattleStart() && LastPacket(CTR_COOP_DOUBLE_REQUEST_PACKET) == NULL, "Sprint 6: a declined partner falls back to a local double battle without a new request");
+    CHECK(CtrCoop_BattleStart() && LastPacket(CTR_COOP_DOUBLE_REQUEST_PACKET) == NULL, "Sprint 6: a declined partner falls back to a local double battle without a new request");
 
     ReadyHost();
     sCoop.remoteValid = true;
@@ -625,11 +625,23 @@ static void TestDoubleBattleState(void)
     ReadyHost();
     sCoop.remoteValid = true;
     sCoop.remote = RemoteAt(27, 24);
+    gMain.callback2 = CB2_Overworld;
     CtrCoop_HandlePacket(PEER_ID, request, sizeof(request));
     CHECK(LastPacket(CTR_COOP_DOUBLE_ACCEPT_PACKET) != NULL && sCoop.doubleState == DOUBLE_STATE_WAIT_START, "available partner accepts incoming double battle");
+    ClearPackets();
+    CtrCoop_HandlePacket(PEER_ID, request, sizeof(request));
+    CHECK(LastPacket(CTR_COOP_DOUBLE_ACCEPT_PACKET) != NULL && sCoop.doubleState == DOUBLE_STATE_WAIT_START,
+          "repeated double request preserves an already accepted invitation");
+    sCoop.doubleState = DOUBLE_STATE_IDLE;
     sCoop.pcOpen = true;
     CtrCoop_HandlePacket(PEER_ID, request, sizeof(request));
     CHECK(LastPacket(CTR_COOP_DOUBLE_DECLINE_PACKET) != NULL, "PC use makes partner unavailable");
+    sCoop.pcOpen = false;
+    gMain.callback2 = CB2_InitBattle;
+    ClearPackets();
+    CtrCoop_HandlePacket(PEER_ID, request, sizeof(request));
+    CHECK(LastPacket(CTR_COOP_DOUBLE_DECLINE_PACKET) != NULL,
+          "an incoming double invitation cannot replace a non-field callback");
 }
 #endif
 
@@ -689,6 +701,106 @@ static void TestBattleStorageCollision(void)
 static void SetBattleMoney(uint32_t value) { sSaveBlock1.money = value ^ sSaveBlock2.encryptionKey; }
 static uint32_t BattleMoney(void) { return sSaveBlock1.money ^ sSaveBlock2.encryptionKey; }
 static uint16_t BattleCoins(void) { return sSaveBlock1.coins ^ (uint16_t)sSaveBlock2.encryptionKey; }
+
+#if CTR_COOP_TEST_MAX_SPRINT >= 6
+static void ReceiveBattlePayload(const uint8_t *payload, uint32_t size);
+static void TestDoublePartyRestore(void)
+{
+    for (unsigned guest = 0; guest < 2; ++guest)
+    {
+        struct Pokemon expected[PARTY_SIZE];
+        ReadyHost();
+        sCoop.guest = guest;
+        sCoop.doubleState = DOUBLE_STATE_ACTIVE;
+        sCoop.doublePartyRestored = false;
+        for (unsigned i = 0; i < PARTY_SIZE; ++i)
+        {
+            memset(&sDoubleLocalParty[i], 0, sizeof(struct Pokemon));
+            sDoubleLocalParty[i].box.species = 10 + i;
+            sDoubleLocalParty[i].hp = 20 + i;
+            sRemoteParty[i] = sDoubleLocalParty[i];
+            sRemoteParty[i].box.species += 30;
+            gPlayerParty[i] = sDoubleLocalParty[i];
+            gPlayerParty[i].box.species = 60 + i;
+            gPlayerParty[i].hp = 3 + i;
+        }
+        memcpy(expected, sDoubleLocalParty, sizeof(expected));
+        for (unsigned i = 0; i < MULTI_PARTY_SIZE; ++i)
+            expected[i] = gPlayerParty[(guest ? MULTI_PARTY_SIZE : 0) + i];
+        RestoreDoubleParty();
+        CHECK(!memcmp(gPlayerParty, expected, sizeof(expected)),
+              "double role %u restores changed first three and untouched reserve team", guest);
+        CHECK(sRemoteParty[0].box.species == (guest ? 60 : 63),
+              "double role %u maps partner's first three back to original slots", guest);
+        RestoreDoubleParty();
+        CHECK(!memcmp(gPlayerParty, expected, sizeof(expected)),
+              "double role %u restore is idempotent while live result waits", guest);
+    }
+}
+
+static void TestDoubleCallbackIsolation(void)
+{
+    static uint8_t payload[DOUBLE_SETUP_SIZE];
+    ReadyHost();
+    sCoop.doubleInitiator = true;
+    gMain.savedCallback = CB2_Overworld;
+    gBattleTypeFlags = BATTLE_TYPE_DOUBLE | BATTLE_TYPE_TRAINER;
+    PrepareDoubleSetup();
+    CHECK(ReadDouble32(sDoubleSendData, 12) == 0, "double setup has no serialized callback pointer");
+    memcpy(payload, sDoubleSendData, sizeof(payload));
+    ConfigureDoubleBattle(payload);
+    CHECK(gMain.savedCallback == CB2_Overworld, "double initiator keeps its own encounter callback");
+    CHECK(BeginLocalBattle(), "double callback fixture starts once");
+    sCoop.battleRetry = 13;
+    CHECK(CtrCoop_BattleStart() && sCoop.battleRetry == 13,
+          "repeated double init does not reset the active battle baseline");
+
+    ReadyHost();
+    sCoop.guest = true;
+    WriteDouble32(payload, 12, 0xdeadbeef);
+    ConfigureDoubleBattle(payload);
+    CHECK(gMain.savedCallback == ReturnFromRemoteDoubleBattle,
+          "invited player uses a local field return without executing the remote script callback");
+    gBattleOutcome = B_OUTCOME_WON;
+    ReturnFromRemoteDoubleBattle();
+    CHECK(sMainCallback == CB2_ReturnToFieldFadeFromBlack, "invited winner returns without continuing a nonexistent script");
+    gBattleOutcome = B_OUTCOME_LOST;
+    ReturnFromRemoteDoubleBattle();
+    CHECK(sMainCallback == CB2_WhiteOut, "invited defeat follows native WhiteOut");
+}
+
+static void TestDoubleResultHeader(void)
+{
+    static uint8_t payload[BATTLE_HEADER_SIZE + sizeof(struct Pokemon) * PARTY_SIZE + BATTLE_STORAGE_RECORD_SIZE];
+    uint32_t size;
+
+    ReadyHost();
+    CHECK(BATTLE_HEADER_SIZE % 4 == 0, "double result keeps party data aligned");
+    CHECK(BeginLocalBattle(), "double result fixture begins a local battle");
+    sCoop.doubleState = DOUBLE_STATE_ACTIVE;
+    sCoop.doubleInitiator = true;
+    SendBattleResult();
+    CHECK(ReadBattle16(sBattleSendData, 14) == 1 && ReadBattle16(sBattleSendData, 16) == 1,
+          "double result has separate sequence and battle-kind fields");
+
+    ReadyHost();
+    SetBattleMoney(100);
+    size = BuildBattlePayload(payload, 91);
+    payload[4] = 50;
+    payload[14] = 1;
+    payload[16] = 1;
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 100 && sStorage.boxes[0][0].species == 91,
+          "double result applies storage without duplicating the shared reward");
+    CHECK(sRemotePartyValid && sRemoteParty[0].box.species == 71,
+          "double result refreshes the remote party cache");
+    ClearPackets();
+    ReceiveBattlePayload(payload, size);
+    CHECK(BattleMoney() == 100 && sStorage.boxes[0][1].species == 0
+       && LastPacket(CTR_COOP_BATTLE_READY_PACKET) != NULL,
+          "double result replay is acknowledged without a second catch or reward");
+}
+#endif
 
 static void TestBattleEncryptedDelta(void)
 {
@@ -1188,6 +1300,9 @@ int main(void)
 #endif
 #if CTR_COOP_TEST_MAX_SPRINT >= 6
     TestDoubleBattleState();
+    TestDoublePartyRestore();
+    TestDoubleCallbackIsolation();
+    TestDoubleResultHeader();
 #endif
     if (sFailures != 0)
     {

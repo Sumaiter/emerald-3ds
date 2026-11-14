@@ -32,6 +32,8 @@ struct Main gMain;
 u32 gBattleTypeFlags;
 static unsigned dirty, failures, now, session=LOCAL_SESSION_IN, kind=LOCAL_KIND_COOP;
 static bool pyramid;
+static bool doubleBattle;
+bool CtrCoop_IsDoubleBattle(void) { return doubleBattle; }
 static CtrCoopInventory remote;
 static uint32_t remoteQty[2][CTR_COOP_INVENTORY_MAX_ITEMS];
 static uint32_t ledger[2][CTR_COOP_INVENTORY_MAX_ITEMS];
@@ -133,7 +135,8 @@ static void Adapter(void)
     ledger[0][0]=1;CHECK(!Validate(NULL,ledger,ITEMS_COUNT));ledger[0][0]=0;
     CHECK(Canonical(NULL));gMain.inBattle=true;CHECK(Canonical(NULL));
     gBattleTypeFlags=BATTLE_TYPE_WALLY_TUTORIAL;CHECK(!Canonical(NULL));
-    gBattleTypeFlags=BATTLE_TYPE_LINK;CHECK(!Canonical(NULL));gBattleTypeFlags=BATTLE_TYPE_RECORDED;CHECK(!Canonical(NULL));
+    gBattleTypeFlags=BATTLE_TYPE_LINK;CHECK(!Canonical(NULL));doubleBattle=true;CHECK(Canonical(NULL));doubleBattle=false;
+    gBattleTypeFlags=BATTLE_TYPE_RECORDED;CHECK(!Canonical(NULL));
     gMain.inBattle=false;pyramid=true;CHECK(!Canonical(NULL));pyramid=false;
     kind=LOCAL_KIND_UNION_ROOM;CHECK(!Canonical(NULL));kind=LOCAL_KIND_COOP;CHECK(Canonical(NULL));
 }

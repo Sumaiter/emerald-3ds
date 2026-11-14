@@ -1,5 +1,25 @@
 # Host und Gast auf diesem PC starten
 
+**Neuester Entwicklungsstand: Sprint6 integriert, Protokoll19**, Build
+**225ca2caa5a7881b**, Boot **E3ID-5790a58262fe8f67**, ABI **73bbc4ee**.
+Hintergrundtests und ARM-Release/PAK bestehen; noch kein Emulatornachtest.
+Gras und Zuschauer-Ruckeln bleiben die getrennten offenen Issues #1/#2.
+
+Sprint6 ist noch in Arbeit: EP-/Levelup-/EV-/Lern- und Trainerpreisgeldpfade
+werden vom nativen Linkmodus noch uebersprungen und brauchen weitere
+Implementierung. Diese Luecke ist kein bestandener Spieltest.
+
+Fuer den gezielten Doppelkampf-Test zuerst beide Fenster schliessen und das
+Paseo-Script neu starten (F6 installiert keinen Build). Jeweils Host und Gast
+ausloesen lassen: benachbarter freier Partner, entfernter/abwesender Partner
+und Partner in einem Menue/PC. Eigene Pokemon steuern, Wechsel/KO und
+Kampfende pruefen; danach erstes Dreierteam plus unveraenderte Reserveplaetze,
+HP/Status/AP und Weltfortschritt vergleichen. Die uebrigen Standardtests aus
+Sprint5 bleiben anerkannt. Hardware und Doppelkampf-Disconnects sind weiterhin
+gesonderte Abnahmepunkte.
+
+Die folgenden Rueckmeldungen beschreiben den zuvor getesteten Protokoll18-Build.
+
 Die beiden Restfehler sind zurueckgestellt und getrennt auf GitHub erfasst:
 [Grasanimation #1](https://github.com/Sumaiter/emerald-3ds/issues/1) und
 [Zuschauer-Ruckeln #2](https://github.com/Sumaiter/emerald-3ds/issues/2).
@@ -89,8 +109,8 @@ einmaliger fester Wildgegner bleibt ein eigener offener Implementierungspunkt;
 diese Faelle nicht aus den normalen Trainer-/Wildkampftests als bestanden
 ableiten. Keine dieser Luecken wird durch die gruenen Hintergrundtests abgenommen.
 
-Aktueller Koop-Stand: **Protokoll 18**, Build **d3d091c44f788f8e**,
-Bootkennung **E3ID-6a834575fbbbc71c**, ABI **bd6f7986**. Nach einem neuen Build beide Fenster
+Aktueller Koop-Stand: **Protokoll 19**, Build **225ca2caa5a7881b**,
+Bootkennung **E3ID-5790a58262fe8f67**, ABI **73bbc4ee**. Nach einem neuen Build beide Fenster
 schliessen und das Paseo-Script erneut starten; dabei werden die drei passenden
 Builddateien in die Profile kopiert. F6 setzt nur das bereits geladene Spiel
 zurueck und installiert keinen neuen Build.

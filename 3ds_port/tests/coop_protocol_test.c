@@ -436,11 +436,21 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_EncodeBattleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "battle chunk encodes");
     CHECK(CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "battle chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "battle payload roundtrip");
+    CHECK(CtrCoopProtocol_EncodeDoubleBegin(1232, 0x89ABCDEF, begin, CTR_COOP_SAVE_BEGIN_SIZE), "double begin encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleBegin(begin, CTR_COOP_SAVE_BEGIN_SIZE, &totalSize, &checksum) && totalSize == 1232 && checksum == 0x89ABCDEF, "double begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleBegin(begin, CTR_COOP_SAVE_BEGIN_SIZE, &totalSize, &checksum, &sequence), "double begin is not battle result");
+    CHECK(CtrCoopProtocol_EncodeDoubleRequestData(128, request, sizeof(request)), "double request encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleRequestData(request, sizeof(request), &offset) && offset == 128, "double request roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleRequest(request, sizeof(request), &offset), "double request is not battle request");
+    CHECK(CtrCoopProtocol_EncodeDoubleChunk(0, payload, sizeof(payload), chunk, sizeof(chunk)), "double chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "double payload roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk is not battle chunk");
 }
 
 static void TestBattleBeginIdentity(void)
 {
-    static const uint8_t expected[] = {36, 18, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
+    static const uint8_t expected[] = {36, 19, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
     uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE + 1];
     uint32_t totalSize = 7, checksum = 9;
     uint16_t sequence = 11;
@@ -504,7 +514,7 @@ static void TestResultIdentityPackets(void)
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
         uint8_t packet[9];
-        uint8_t expected[] = {codecs[c].type, 18, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, 19, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
         uint16_t sequence = 7;
         uint32_t checksum = 9;
 
@@ -560,7 +570,7 @@ static void TestUnchangedTransferBeginLayouts(void)
 
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
-        uint8_t expected[] = {codecs[c].type, 18, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, 19, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
         CHECK(sizeof(packet) == sizeof(expected) && codecs[c].encode(0x12345678, 0x89ABCDEF, packet, sizeof(packet))
             && memcmp(packet, expected, sizeof(expected)) == 0, "transfer %u retains its original ten-byte layout", codecs[c].type);
     }

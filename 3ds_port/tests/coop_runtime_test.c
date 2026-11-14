@@ -14,6 +14,14 @@ struct Main gMain;
 u32 gBattleTypeFlags;
 u16 gTrainerBattleOpponent_A;
 u8 gBattleOutcome;
+struct Pokemon gEnemyParty[PARTY_SIZE];
+struct LinkPlayer gLinkPlayers[MAX_RFU_PLAYERS];
+u32 gRngValue;
+u16 gTrainerBattleOpponent_B;
+u8 gBattleEnvironment;
+u8 gWirelessCommType;
+u8 gReceivedRemoteLinkPlayers;
+u16 Random(void) { return 0x1234; }
 
 static struct SaveBlock1 sSave1;
 static struct SaveBlock2 sSave2;

@@ -77,6 +77,11 @@ void CtrCoop_ScriptEnd(void);
 const uint8_t *CtrCoop_NoticeName(void);
 bool CtrCoop_NoticeIsInteraction(void);
 void CtrCoop_DismissNotice(void);
+bool CtrCoop_IsDoubleBattle(void);
+bool CtrCoop_IsDoubleInitiator(void);
+/* Restore the original full party before native defeat/field callbacks. */
+void CtrCoop_PrepareDoubleReturn(void);
+uint8_t CtrCoop_LocalMultiplayerId(void);
 void CtrCoop_MenuFrame(void);
 void CtrCoop_OverworldFrame(void);
 bool CtrCoop_EnterHostWorld(void);

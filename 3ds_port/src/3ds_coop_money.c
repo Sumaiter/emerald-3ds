@@ -1,5 +1,6 @@
 #include "global.h"
 #include "3ds_coop_money.h"
+#include "3ds_coop.h"
 #include "3ds_coop_inventory.h"
 #include "3ds_coop_inventory_bridge.h"
 #include "3ds_local.h"
@@ -68,7 +69,8 @@ static bool Canonical(void *user)
     (void)user;
     return gSaveBlock1Ptr && gSaveBlock2Ptr
         && !(LocalLink_GetSession() == LOCAL_SESSION_IN && LocalLink_GetSessionKind() != LOCAL_KIND_COOP)
-        && !(gMain.inBattle && (gBattleTypeFlags & (BATTLE_TYPE_WALLY_TUTORIAL | BATTLE_TYPE_RECORDED | BATTLE_TYPE_LINK)));
+        && !(gMain.inBattle && ((gBattleTypeFlags & (BATTLE_TYPE_WALLY_TUTORIAL | BATTLE_TYPE_RECORDED))
+            || ((gBattleTypeFlags & BATTLE_TYPE_LINK) && !CtrCoop_IsDoubleBattle())));
 }
 static bool Hooked(void)
 {

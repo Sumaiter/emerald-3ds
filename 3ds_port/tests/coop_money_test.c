@@ -9,6 +9,8 @@ struct SaveBlock1 *gSaveBlock1Ptr;
 struct SaveBlock2 *gSaveBlock2Ptr;
 struct Main gMain;
 uint32_t gBattleTypeFlags;
+static bool doubleBattle;
+bool CtrCoop_IsDoubleBattle(void) { return doubleBattle; }
 typedef struct {
     CtrCoopInventory wallet;
     struct SaveBlock1 save;
@@ -229,6 +231,9 @@ int main(void)
     TestRacingPurchasesAndRefund(); TestRetryAndSeparateSingleton();
     TestGainsCapsDisconnectAndRekey(); TestSaveCopyAndTemporaryBattle();
     TestNativePreflightAndStackReset();
+    gMain.inBattle=true;gBattleTypeFlags=BATTLE_TYPE_LINK;
+    CHECK(!Canonical(NULL));doubleBattle=true;CHECK(Canonical(NULL));doubleBattle=false;
+    gMain.inBattle=false;gBattleTypeFlags=0;
     printf("shared wallet regressions: %u failures\n",failures);
     return failures?1:0;
 }

@@ -2,6 +2,15 @@
 
 Stand: 2026-11-14
 
+Neuester Integrationsstand: Upstream/main erneut geprueft, keine fehlenden
+neuen Commits. Sprint6 in Main integriert und direkt erkannte Fallback-/
+Team-/Callback-/Ledgerprobleme repariert; Hintergrundtests und ARM-Build gruen.
+Sprint6 bleibt IN ARBEIT: native Linkpfade ueberspringen bisher EP und normales
+Trainerpreisgeld, und die gemeinsame Kampfsteuerung ist noch nicht im Emulator
+abgenommen. Gras #1 und Zuschauer-Ruckeln #2 bleiben getrennt zurueckgestellt.
+Neueste Build-/Belegangaben stehen oben in HANDOFF.md und LOKAL_TESTEN.md.
+
+
 Neuester Emulatornachtest: Gras beim entfernten Spieler fehlt weiterhin;
 Zuschauen ist verbessert, aber noch laggy. Beide Nachtests sind NICHT bestanden
 und als getrennte Issues zurueckgestellt: [Gras #1](https://github.com/Sumaiter/emerald-3ds/issues/1)
@@ -44,7 +53,7 @@ Festgelegte Grenzen: maximal zehn gespeicherte Gastnamen pro Host-Spielstand, oh
 | 3 | Gemeinsame Oberwelt und zweiten Spieler darstellen | Fertig |
 | 4 | Spielerprofil, Mehrspieler-Box und PC-Sperre | Fertig |
 | 5 | Unabhängige Einzelkämpfe und gemeinsame Trainerwelt | In Arbeit: Standardtests bestanden; Gras-/Zuschauer-Nachtest und Grenzfaelle offen |
-| 6 | Gemeinsame Doppelkämpfe | Offen |
+| 6 | Gemeinsame Doppelkämpfe | In Arbeit: integriert, EP/Preisgeld und Emulatorabnahme offen |
 | 7 | Abmeldung, Verbindungsabbrüche und sicheres Speichern | Offen |
 | 8 | Hardwaretests, Stabilisierung und spielbare Alpha | Offen |
 | 9 | Vollständiges Solospiel: Entwicklungen und frühere Event-Inhalte | Offen |
@@ -266,15 +275,15 @@ stehen in `LOKAL_TESTEN.md`.
 
 ## Sprint 6: Gemeinsame Doppelkämpfe
 
-**Status: Offen**
+**Status: In Arbeit. Integration/erste Korrekturen und Hintergrundbuild bestanden; EP/Preisgeld und Emulatorabnahme offen.**
 
 ### Aufgaben
 
-- [ ] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen.
+- [x] Vor Doppelkämpfen Karte, Nähe und Verfügbarkeit des Partners prüfen (Hintergrundtests).
 - [ ] Bestehende Link-Multikampf- und Direktnachrichten für normale Doppelkämpfe erweitern.
 - [ ] Beiden Spielern die Kontrolle über ihre eigenen Pokémon im gemeinsamen Kampf geben.
 - [ ] Doppelkämpfe durch Host oder Gast mit derselben Beitrittslogik unterstützen.
-- [ ] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen.
+- [x] Ohne verfügbaren Partner auf den ursprünglichen Doppelkampf mit einem Spieler zurückfallen (inklusive Partner-Ablehnung regressionsgeprueft).
 - [ ] Züge, Wechsel, Ohnmacht, Flucht, Fangversuche und Kampfende korrekt synchronisieren.
 - [ ] EP, Geld, Items und andere Ergebnisse eindeutig dem gemeinsamen Spielstand zuordnen.
 

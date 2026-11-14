@@ -1,5 +1,62 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Sprint6 integriert und ueberarbeitet (2026-11-14)
+
+Auf ausdruecklichen Nutzerauftrag wurde zuerst `upstream/main` von
+ZallaxDev/emerald-3ds neu abgerufen. Stand bleibt `bcae4b7` (2026-10-30),
+bereits Vorfahr unseres Main; keine neueren fehlenden Commits zu uebernehmen.
+Der vorherige gepruefte Koop-Stand wurde als `612a28d` auf origin/main gepusht.
+Die zwei Restfehler bleiben getrennt offen: [Gras #1](https://github.com/Sumaiter/emerald-3ds/issues/1)
+und [Zuschauen #2](https://github.com/Sumaiter/emerald-3ds/issues/2).
+
+Danach Sprint6 (`ea3d332`) mit Main integriert. Konflikte betreffen Header,
+Protokoll und Backend; die neueren Story-/Inventory-/Wallet-/HP-/Disconnect-
+Funktionen bleiben erhalten. **Protokoll19**, Ergebnisheader20B, separate
+Doppelkampf-Pakete40..46 und unveraenderte getrennte Bereiche60..84.
+
+Direkt korrigiert und regressionsgeprueft:
+
+- Partner-Ablehnung faellt einmalig auf den lokalen Doppelkampf zurueck,
+  ohne sofort eine neue Einladung zu senden (vorher XFAIL, jetzt regulaerer Test).
+- Gast/Host erhalten ihre veraenderten ersten drei Pokemon in den richtigen
+  Originalplaetzen; die restlichen drei bleiben erhalten. Restore ist bei
+  aufgeschobener Ergebnisuebertragung idempotent und laeuft vor WhiteOut.
+- Wiederholtes CB2_InitBattle setzt keine aktive Baseline zurueck.
+- Kein Callbackpointer im Setup-Paket; Initiator behaelt den eigenen Callback,
+  eingeladener Spieler bekommt eigene Feldrueckkehr ohne fremde Skriptfortsetzung.
+- Bereits akzeptierte Einladungen koennen wiederholt werden; andere Menues,
+  laufende Skripte/Kaempfe, PC-/Transferbelegung verhindern neue Annahme.
+- Live-Inventar und Wallet erlauben den eigenen Koop-Doppelkampf, waehrend
+  native Link-/Tutorial-/Recorded-Kontexte weiter ausgenommen bleiben.
+- Alte mehrfach gestueckelte0083-Diffs normalisiert (keine zusaetzliche
+  Funktion): sonst scheiterte frisches git apply mit pokemon_storage_system.c
+  "wrong type". Jetzt alle98Patches in Bootstrap-Reihenfolge anwendbar.
+
+Gemeinsames verify-coop gruen, Sitzungssuite mit0erwarteten Fehlern, neue
+echte native Double-Return-/Link-Setup-Bodytests gruen, ARM-Release/PAK gruen.
+98Patches auf isolierter Originalbasis angewendet; neun beruehrte native
+Funktionskoerper stimmen mit dem gebauten Baum ueberein. Lokalisierte Daten
+werden dabei nicht mit unveraenderten englischen Daten gleichgesetzt.
+307Portinputs bytegleich, Release-Audit einschliesslich neuer Dateien gruen.
+
+Build **225ca2caa5a7881b**, Boot **E3ID-5790a58262fe8f67**, ABI **73bbc4ee**.
+Belege build/coop-nextwave/sprint6-{final-tests,release,patch-chain}.log,
+sprint6-build-hashes.json, sprint6-patch-live-equivalence.log,
+sprint6-source-stage-final.log, sprint6-audit.log. Artefakte weiter unter
+build/upstream/3ds_port/dist und build/upstream/3ds_port/build/emerald3ds.pak.
+Keine Emulator-/SAV-/Profilinstallation, keine Hardwareabnahme.
+
+**Sprint6 bleibt IN ARBEIT:** Zuege/Wechsel/Ende beider Rollen im Emulator
+noch nicht abgenommen. Quellreview zeigt ausserdem eine klare Restluecke:
+Cmd_getexp schliesst BATTLE_TYPE_LINK aus; HandleEndTurn_BattleWon waehlt
+den Link-Abschluss statt des lokalen Trainerabschlusses mit Preisgeld.
+Der bisherige Sprint6-Code verwendet diese Flags fuer den Koop-Transport.
+Native EP-/Levelup-/EV-/Lern- und Preisgeldpfade muessen gezielt fuer Koop
+erweitert werden, mit eindeutiger Spieler-/Hostzustaendigkeit. Nicht nur das
+LINK-Bit pauschal loeschen: Master/Player/LinkPartner-Controller haben
+unterschiedliche Aufgaben, Partner-ExpUpdate ist nativ ein No-op.
+Gruene Infrastrukturtests beweisen diese noch fehlende Spiellogik nicht.
+
 ## Auftrag: Issues sichern, GitHub aktualisieren, dann Sprint6 (2026-11-14)
 
 Die zwei Restfehler sind auf Nutzerwunsch getrennte offene GitHub-Issues:

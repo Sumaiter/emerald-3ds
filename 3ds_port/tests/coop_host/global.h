@@ -289,6 +289,8 @@ void MoveObjectEventToMapCoords(struct ObjectEvent *objectEvent, int16_t x, int1
 void ShowPokemonStorageSystemPC(void);
 void PlaySE(uint16_t song);
 void CB2_Overworld(void);
+void CB2_WhiteOut(void);
+void CB2_ReturnToFieldFadeFromBlack(void);
 void CB2_InitStarterSelection(void);
 bool8 CB2_StarterSelectionActive(void);
 void SaveObjectEvents(void);

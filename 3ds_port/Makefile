@@ -439,6 +439,7 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	"$(PYTHON)" tests/test_coop_battle_return_hooks.py --source $(STARTER_MENU_ROOT)/src
 	"$(PYTHON)" tests/test_coop_double_hooks.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_follow_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_route101_battles.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_spectator.py --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_spectator_video.py --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_spectator_benchmark.py --cc "$(HOSTCC)"

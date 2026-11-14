@@ -1,5 +1,63 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Route101: zwei wiederholbare Doppelkampf-Tests (2026-11-14)
+
+Build **092f6412820bb8d8**, Boot **E3ID-ab63e7ce08e9de5c**, ABI **786f1e4c**, Protokoll20.
+Hintergrundtests und ARM-Release/PAK bestanden; noch kein Emulatornachtest.
+
+Wiederholbare Testkaempfe auf **Route101**, ganz im Norden vor Rosaltstadt:
+
+- Links **Junge / TEST A** bei (8,3): gewoehnlicher Doppelkampf ohne
+  NPC-Partner, vier verschiedene Gegner auf Level5. Zwei kampffaehige eigene
+  Pokemon auf den ersten drei Plaetzen erforderlich.
+- Rechts **Troy / TEST B** bei (12,3): Story-Partner-Doppelkampf gegen zwei
+  Trainer mit je drei verschiedenen Pokemon auf Level5. Troy bringt
+  Stollunior, Puppance und Tanhel auf Level5 mit. Mindestens ein kampffaehiges
+  eigenes Pokemon auf den ersten drei Plaetzen erforderlich.
+- Beide mit A ansprechen und bestaetigen. Fuer Koop zuerst mit A dem anderen
+  Spieler folgen; der Anfuehrer startet dann den Test. Ohne Folgegruppe ist A
+  ein normales eigenes Doppel, B ein Doppel mit computergesteuertem Troy.
+  Mit Folgegruppe steuert bei B der Folgespieler Troys drei Pokemon; sein
+  eigenes ganzes Team bleibt erhalten.
+- Nach jedem Ende erneut ansprechbar. HP/AP/Status und verbrauchte Mittel
+  haben die normale Wirkung; kein automatisches Vollheilen fuer einen Test.
+  Niederlage verwendet den nativen WhiteOut. Reserveplaetze des Anfuehrers
+  werden beim Partner-Test vor Ergebnis/Speichern unveraendert restauriert.
+- Beide Emulatorfenster schliessen und Paseo **Host und Gast starten** manuell
+  ausfuehren. F6 installiert keinen Build. Route101 verlassen und neu betreten,
+  falls ein alter Spielstand noch die zuvor geladenen Kartenobjekte enthaelt.
+
+Manuell noch offen: beide Tests einmal solo und in Folgegruppe starten,
+Host/Gast als Anfuehrer tauschen, Attacken/Ziele/Wechsel und Teamgrenzen pruefen,
+Sieg/Niederlage und direkte Wiederholung sowie eigene Teams nach Save/Rejoin.
+Die bekannten EP-/Preisgeldluecken in gemeinsamen Kaempfen sowie Gras#1 und
+Zuschauer#2 bleiben offen. Emulatorabnahme wird nicht behauptet.
+
+
+Technik:0099-route101-repeatable-double-tests.patch, sieben Engine-/Datenfiles,
+drei eigene TrainerIDs855..857 innerhalb vorhandener Flagkapazitaet864.
+Nur die zugehoerigen Testflags werden fuer Wiederholung geloescht; kein echtes
+Storyszenario wird zurueckgesetzt. Debugroster beeinflussen die768 abgeleiteten
+normalen Trainerergaenzungen nicht. Neue sichere RAM-Rueckkehr restauriert
+das komplette eigene Team vor Ergebnis/WhiteOut. Originale Storypartner
+und Skripte bleiben unveraendert.
+
+Zusaetzlicher Buildfix:gen_missing_map_includes.py erneuert vorhandene
+Header/Events/Connections bei neuerem MapJSON/Layout/Compiler; full.mk nimmt
+den Generator selbst als Dependency auf. So werden die zwei NPCs auch in
+inkrementellen Builds tatsaechlich erzeugt. Mit echtem mapjson wurden
+frisch/unveraendert/editiert/fehlend geprueft; gebaute Route101-Events haben
+acht Objekte einschliesslich LocalIDs7/8 und korrekter Position/Hoehe.
+
+Belege unter build/coop-test-battles/:verify-coop-final.log, release-final.log,
+native-built-final.log, patch-chain-v3.log, build-hashes.json, audit.log.
+Alle100Patches frisch angewandt;0099 vorwaerts/rueckwaerts bytegleich mit der
+jeweiligen Basis. Neue Testskripte und sieben native/Datenaenderungen stimmen
+mit der Patchkette ueberein (bestehende lokalisierte Dialoge ausgenommen).
+
+Die folgende Sektion dokumentiert den vorausgehenden Folgegruppen-Build;
+dessen Spielregeln gelten weiter, seine Buildkennung ist historisch.
+
 ## Sprint 6: Aktive Folgegruppe statt automatischem Beitritt (2026-11-14)
 
 Aktueller lokaler Build: **0133a0e39c629df1**, Boot **E3ID-865a9244741eeebf**,

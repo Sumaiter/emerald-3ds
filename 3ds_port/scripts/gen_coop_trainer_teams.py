@@ -23,6 +23,9 @@ def generate(upstream):
     text = (upstream/'src/data/trainers.h').read_text(encoding='utf-8')
     trainers = []
     for m in re.finditer(r'\[(TRAINER_\w+)\]\s*=\s*\{(.*?)\n    \}', text, re.S):
+        # Debug fixtures must not change the species/levels chosen for story trainers.
+        if m[1].startswith('TRAINER_ROUTE101_TEST_'):
+            continue
         body = m[2]
         party = re.search(r'\.party\s*=\s*\w+\((\w+)\)', body)
         cls = re.search(r'\.trainerClass\s*=\s*(\w+)', body)

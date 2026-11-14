@@ -5,7 +5,12 @@ Stand: 2026-11-14
 Neuester Ausbau: explizite Folgegruppe mit A/B, gemeinsame Kaempfe nur beim
 Hinterherlaufen, erste drei pro Spieler, Partner spielt nach drei KO weiter,
 Trainerergaenzungen bis sechs und steuerbarer Story-NPC-Partner. Protokoll20;
-Hintergrundtests/99Patchkette/Release bestanden, Emulatorabnahme offen.
+Hintergrundtests/100Patchkette/Release bestanden, Emulatorabnahme offen.
+
+Neu fuer die manuelle Sprint6-Abnahme: zwei wiederholbare Level5-Doppelkaempfe
+auf Route101, links Junge ohne NPC-Partner und rechts Troy mit NPC-Partner.
+Koop nur mit Folgegruppe; der Folgespieler steuert die drei geliehenen Pokemon.
+Hintergrundchecks und Build bestanden, die manuellen Tests stehen noch aus.
 
 Vorheriger Integrationsstand: Upstream/main erneut geprueft, keine fehlenden
 neuen Commits. Sprint6 in Main integriert und direkt erkannte Fallback-/

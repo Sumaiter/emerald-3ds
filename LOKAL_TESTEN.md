@@ -1,10 +1,40 @@
 # Host und Gast auf diesem PC starten
 
 **Neuester Entwicklungsstand: Sprint 6 mit aktiver Folgegruppe**, Protokoll20,
-Build **0133a0e39c629df1**, Boot **E3ID-865a9244741eeebf**, ABI **97c8f051**.
+Build **092f6412820bb8d8**, Boot **E3ID-ab63e7ce08e9de5c**, ABI **786f1e4c**.
 Hintergrundtests und ARM-Release/PAK bestanden. Noch kein Emulatornachtest.
 Beide Fenster schliessen, dann **Host und Gast starten** manuell ausfuehren.
 F6 installiert keinen Build.
+
+## Neue Testtrainer auf Route101
+
+Wiederholbare Testkaempfe auf **Route101**, ganz im Norden vor Rosaltstadt:
+
+- Links **Junge / TEST A** bei (8,3): gewoehnlicher Doppelkampf ohne
+  NPC-Partner, vier verschiedene Gegner auf Level5. Zwei kampffaehige eigene
+  Pokemon auf den ersten drei Plaetzen erforderlich.
+- Rechts **Troy / TEST B** bei (12,3): Story-Partner-Doppelkampf gegen zwei
+  Trainer mit je drei verschiedenen Pokemon auf Level5. Troy bringt
+  Stollunior, Puppance und Tanhel auf Level5 mit. Mindestens ein kampffaehiges
+  eigenes Pokemon auf den ersten drei Plaetzen erforderlich.
+- Beide mit A ansprechen und bestaetigen. Fuer Koop zuerst mit A dem anderen
+  Spieler folgen; der Anfuehrer startet dann den Test. Ohne Folgegruppe ist A
+  ein normales eigenes Doppel, B ein Doppel mit computergesteuertem Troy.
+  Mit Folgegruppe steuert bei B der Folgespieler Troys drei Pokemon; sein
+  eigenes ganzes Team bleibt erhalten.
+- Nach jedem Ende erneut ansprechbar. HP/AP/Status und verbrauchte Mittel
+  haben die normale Wirkung; kein automatisches Vollheilen fuer einen Test.
+  Niederlage verwendet den nativen WhiteOut. Reserveplaetze des Anfuehrers
+  werden beim Partner-Test vor Ergebnis/Speichern unveraendert restauriert.
+- Beide Emulatorfenster schliessen und Paseo **Host und Gast starten** manuell
+  ausfuehren. F6 installiert keinen Build. Route101 verlassen und neu betreten,
+  falls ein alter Spielstand noch die zuvor geladenen Kartenobjekte enthaelt.
+
+Manuell noch offen: beide Tests einmal solo und in Folgegruppe starten,
+Host/Gast als Anfuehrer tauschen, Attacken/Ziele/Wechsel und Teamgrenzen pruefen,
+Sieg/Niederlage und direkte Wiederholung sowie eigene Teams nach Save/Rejoin.
+Die bekannten EP-/Preisgeldluecken in gemeinsamen Kaempfen sowie Gras#1 und
+Zuschauer#2 bleiben offen. Emulatorabnahme wird nicht behauptet.
 
 Gezielter manueller Test fuer die neuen Regeln, jeweils Host/Gast vertauschen:
 

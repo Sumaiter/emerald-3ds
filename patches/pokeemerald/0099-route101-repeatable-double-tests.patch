@@ -1,0 +1,307 @@
+diff --git a/data/maps/Route101/map.json b/data/maps/Route101/map.json
+--- a/data/maps/Route101/map.json
++++ b/data/maps/Route101/map.json
+@@ -104,6 +104,32 @@
+       "trainer_sight_or_berry_tree_id": "0",
+       "script": "Route101_EventScript_Boy",
+       "flag": "FLAG_HIDE_ROUTE_101_BOY"
++    },
++    {
++      "graphics_id": "OBJ_EVENT_GFX_YOUNGSTER",
++      "x": 8,
++      "y": 3,
++      "elevation": 3,
++      "movement_type": "MOVEMENT_TYPE_FACE_DOWN",
++      "movement_range_x": 0,
++      "movement_range_y": 0,
++      "trainer_type": "TRAINER_TYPE_NONE",
++      "trainer_sight_or_berry_tree_id": "0",
++      "script": "Route101_EventScript_TestDouble",
++      "flag": "0"
++    },
++    {
++      "graphics_id": "OBJ_EVENT_GFX_STEVEN",
++      "x": 12,
++      "y": 3,
++      "elevation": 3,
++      "movement_type": "MOVEMENT_TYPE_FACE_DOWN",
++      "movement_range_x": 0,
++      "movement_range_y": 0,
++      "trainer_type": "TRAINER_TYPE_NONE",
++      "trainer_sight_or_berry_tree_id": "0",
++      "script": "Route101_EventScript_TestPartner",
++      "flag": "0"
+     }
+   ],
+   "warp_events": [],
+diff --git a/data/maps/Route101/scripts.inc b/data/maps/Route101/scripts.inc
+--- a/data/maps/Route101/scripts.inc
++++ b/data/maps/Route101/scripts.inc
+@@ -1,3 +1,62 @@
++@ Repeatable fixtures: no normal trainer or story flags are reused.
++Route101_EventScript_TestDouble::
++    lock
++    faceplayer
++    msgbox Route101_Text_TestDouble, MSGBOX_YESNO
++    goto_if_eq VAR_RESULT, NO, Route101_EventScript_TestEnd
++    setvar VAR_0x8004, 0
++    goto Route101_EventScript_TestStart
++
++Route101_EventScript_TestPartner::
++    lock
++    faceplayer
++    msgbox Route101_Text_TestPartner, MSGBOX_YESNO
++    goto_if_eq VAR_RESULT, NO, Route101_EventScript_TestEnd
++    setvar VAR_0x8004, 1
++
++Route101_EventScript_TestStart::
++    closemessage
++    specialvar VAR_RESULT, Route101_StartTestBattle
++    goto_if_eq VAR_RESULT, FALSE, Route101_EventScript_TestNotReady
++    waitstate
++    msgbox Route101_Text_TestAgain, MSGBOX_DEFAULT
++Route101_EventScript_TestEnd::
++    release
++    end
++
++Route101_EventScript_TestNotReady::
++    msgbox Route101_Text_TestNotReady, MSGBOX_DEFAULT
++    goto Route101_EventScript_TestEnd
++
++Route101_Text_TestDouble:
++    .string "TEST A: Doppelkampf ohne NPC-Partner.\n"
++    .string "Meine vier POKEMON sind auf Level 5.\p"
++    .string "Im Koop zuerst dem Spieler folgen,\n"
++    .string "dann spricht der Anfuehrer mich an.\p"
++    .string "Du brauchst zwei kampffaehige\n"
++    .string "POKEMON auf den ersten drei Plaetzen.\p"
++    .string "Der Test ist beliebig wiederholbar.\n"
++    .string "Moechtest du jetzt kaempfen?$"
++
++Route101_Text_TestPartner:
++    .string "TEST B: Doppelkampf mit NPC-Partner.\n"
++    .string "Ich helfe mit drei POKEMON auf Lv. 5.\p"
++    .string "Im Koop steuert der Folgespieler\n"
++    .string "mein STOLLUNIOR, PUPPANCE und TANHEL.\p"
++    .string "Sein eigenes Team bleibt unveraendert.\n"
++    .string "Du kaempfst mit deinen ersten drei.\p"
++    .string "Mindestens eines muss kampffaehig sein.\n"
++    .string "Moechtest du jetzt kaempfen?$"
++
++Route101_Text_TestAgain:
++    .string "Test beendet. Sprich mich wieder an,\n"
++    .string "wenn du erneut testen willst.$"
++
++Route101_Text_TestNotReady:
++    .string "Bitte zuerst POKEMON heilen.\n"
++    .string "TEST A braucht zwei, TEST B eines\l"
++    .string "auf den ersten drei Teamplaetzen.$"
++
+ Route101_MapScripts::
+ 	map_script MAP_SCRIPT_ON_TRANSITION, Route101_OnTransition
+ 	map_script MAP_SCRIPT_ON_FRAME_TABLE, Route101_OnFrame
+diff --git a/data/specials.inc b/data/specials.inc
+--- a/data/specials.inc
++++ b/data/specials.inc
+@@ -543,3 +543,4 @@
+ 	def_special LocalSession_Wait
+ 	def_special LocalSession_CanEnter
+ 	def_special LocalSession_Leave
++	def_special Route101_StartTestBattle
+diff --git a/include/constants/opponents.h b/include/constants/opponents.h
+--- a/include/constants/opponents.h
++++ b/include/constants/opponents.h
+@@ -857,11 +857,15 @@
+ #define TRAINER_BRENDAN_PLACEHOLDER         853
+ #define TRAINER_MAY_PLACEHOLDER             854
+ 
+-// NOTE: Because each Trainer uses a flag to determine when they are defeated, there is only space for 9 additional trainers before trainer flag space overflows
++// NOTE: Because each Trainer uses a flag to determine when they are defeated, there is only space for 6 additional trainers before trainer flag space overflows
+ //       More space can be made by shifting flags around in constants/flags.h or changing how trainer flags are handled
+ //       MAX_TRAINERS_COUNT can be increased but will take up additional saveblock space
+ 
+-#define TRAINERS_COUNT                      855
++#define TRAINER_ROUTE101_TEST_DOUBLE         855
++#define TRAINER_ROUTE101_TEST_PARTNER_A      856
++#define TRAINER_ROUTE101_TEST_PARTNER_B      857
++
++#define TRAINERS_COUNT                      858
+ #define MAX_TRAINERS_COUNT                  864
+ 
+ #endif  // GUARD_CONSTANTS_OPPONENTS_H
+diff --git a/src/battle_setup.c b/src/battle_setup.c
+--- a/src/battle_setup.c
++++ b/src/battle_setup.c
+@@ -43,6 +43,7 @@
+ #include "mirage_tower.h"
+ #include "field_screen_effect.h"
+ #include "data.h"
++#include "load_save.h"
+ #include "constants/battle_frontier.h"
+ #include "constants/battle_setup.h"
+ #include "constants/event_objects.h"
+@@ -1965,3 +1966,94 @@
+ 
+     return i;
+ }
++
++
++static const u8 sRoute101TestDefeated[] = _("Der Test ist beendet! Bereit fuer mehr?");
++
++static void CB2_EndRoute101TestBattle(void)
++{
++    u32 i;
++
++    if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER)
++    {
++        // Keep the leader's real combat changes, restore reserves verbatim,
++        // and discard the temporary NPC triplet before any co-op result/save.
++        for (i = 0; i < MULTI_PARTY_SIZE; i++)
++            gSaveBlock1Ptr->playerParty[i] = gPlayerParty[i];
++        LoadPlayerParty();
++    }
++
++    if (IsPlayerDefeated(gBattleOutcome))
++        SetMainCallback2(CB2_WhiteOut);
++    else
++    {
++#ifdef PLATFORM_3DS
++        CtrCoop_BattleEnd();
++#endif
++        SetMainCallback2(CB2_ReturnToFieldContinueScriptPlayMapMusic);
++    }
++}
++
++u16 Route101_StartTestBattle(void)
++{
++    static const u16 partnerSpecies[MULTI_PARTY_SIZE] = {
++        SPECIES_ARON, SPECIES_BALTOY, SPECIES_BELDUM,
++    };
++    bool8 withPartner = gSpecialVar_0x8004 == 1;
++    u32 i, alive = 0;
++
++    if (gSpecialVar_0x8004 > 1)
++        return FALSE;
++    for (i = 0; i < MULTI_PARTY_SIZE; i++)
++    {
++        if (GetMonData(&gPlayerParty[i], MON_DATA_SPECIES)
++         && !GetMonData(&gPlayerParty[i], MON_DATA_IS_EGG)
++         && GetMonData(&gPlayerParty[i], MON_DATA_HP))
++            alive++;
++    }
++    if (alive < (withPartner ? 1 : 2))
++        return FALSE;
++
++    gApproachingTrainerId = 0;
++    InitTrainerBattleVariables();
++    gApproachingTrainerId = 1;
++    InitTrainerBattleVariables();
++    gApproachingTrainerId = 0;
++    sTrainerADefeatSpeech = (u8 *)sRoute101TestDefeated;
++    sTrainerBDefeatSpeech = (u8 *)sRoute101TestDefeated;
++    sNoOfPossibleTrainerRetScripts = 0;
++    sShouldCheckTrainerBScript = FALSE;
++    gNoOfApproachingTrainers = 0;
++    gWhichTrainerToFaceAfterBattle = 0;
++    gTrainerBattleOpponent_A = withPartner ? TRAINER_ROUTE101_TEST_PARTNER_A : TRAINER_ROUTE101_TEST_DOUBLE;
++    gTrainerBattleOpponent_B = withPartner ? TRAINER_ROUTE101_TEST_PARTNER_B : TRAINER_NONE;
++    // Only these dedicated fixture flags are reset; no real story progress.
++    FlagClear(TRAINER_FLAGS_START + gTrainerBattleOpponent_A);
++    if (withPartner)
++        FlagClear(TRAINER_FLAGS_START + gTrainerBattleOpponent_B);
++    gBattleTypeFlags = BATTLE_TYPE_TRAINER | BATTLE_TYPE_DOUBLE;
++    gPartnerTrainerId = 0;
++    gBattleScripting.specialTrainerBattleType = 0;
++    if (withPartner)
++    {
++        SavePlayerParty();
++        for (i = 0; i < MULTI_PARTY_SIZE; i++)
++        {
++            CreateMon(&gPlayerParty[MULTI_PARTY_SIZE + i], partnerSpecies[i],
++                      5, 0, FALSE, 0, OT_ID_PRESET, 61226);
++            SetMonData(&gPlayerParty[MULTI_PARTY_SIZE + i], MON_DATA_OT_NAME,
++                       gTrainers[TRAINER_STEVEN].trainerName);
++        }
++        // The NPC owns slots 3..5 even if the player's first triplet has gaps.
++        gPlayerPartyCount = PARTY_SIZE;
++        gPartnerTrainerId = TRAINER_STEVEN_PARTNER;
++        gBattleScripting.specialTrainerBattleType = SPECIAL_BATTLE_STEVEN;
++        gBattleTypeFlags |= BATTLE_TYPE_MULTI | BATTLE_TYPE_TWO_OPPONENTS | BATTLE_TYPE_INGAME_PARTNER;
++    }
++    LockPlayerFieldControls();
++    FreezeObjectEvents();
++    StopPlayerAvatar();
++    gMain.savedCallback = CB2_EndRoute101TestBattle;
++    DoTrainerBattle();
++    return TRUE;
++}
+diff --git a/src/data/trainer_parties.h b/src/data/trainer_parties.h
+--- a/src/data/trainer_parties.h
++++ b/src/data/trainer_parties.h
+@@ -12434,3 +12434,23 @@
+     .species = SPECIES_KYOGRE,
+     }
+ };
++
++// Repeatable Route 101 fixtures. These are not normal story opponents.
++static const struct TrainerMonNoItemDefaultMoves sParty_Route101TestDouble[] = {
++    {.iv = 0, .lvl = 5, .species = SPECIES_ZIGZAGOON},
++    {.iv = 0, .lvl = 5, .species = SPECIES_POOCHYENA},
++    {.iv = 0, .lvl = 5, .species = SPECIES_WURMPLE},
++    {.iv = 0, .lvl = 5, .species = SPECIES_TAILLOW},
++};
++
++static const struct TrainerMonNoItemDefaultMoves sParty_Route101TestPartnerA[] = {
++    {.iv = 0, .lvl = 5, .species = SPECIES_ZIGZAGOON},
++    {.iv = 0, .lvl = 5, .species = SPECIES_WURMPLE},
++    {.iv = 0, .lvl = 5, .species = SPECIES_SEEDOT},
++};
++
++static const struct TrainerMonNoItemDefaultMoves sParty_Route101TestPartnerB[] = {
++    {.iv = 0, .lvl = 5, .species = SPECIES_POOCHYENA},
++    {.iv = 0, .lvl = 5, .species = SPECIES_LOTAD},
++    {.iv = 0, .lvl = 5, .species = SPECIES_WINGULL},
++};
+diff --git a/src/data/trainers.h b/src/data/trainers.h
+--- a/src/data/trainers.h
++++ b/src/data/trainers.h
+@@ -10260,4 +10260,39 @@
+         .aiFlags = 0,
+         .party = NO_ITEM_DEFAULT_MOVES(sParty_MayLinkPlaceholder),
+     },
++    [TRAINER_ROUTE101_TEST_DOUBLE] =
++    {
++        .trainerClass = TRAINER_CLASS_YOUNGSTER,
++        .encounterMusic_gender = TRAINER_ENCOUNTER_MUSIC_MALE,
++        .trainerPic = TRAINER_PIC_YOUNGSTER,
++        .trainerName = _("TEST A"),
++        .items = {},
++        .doubleBattle = TRUE,
++        .aiFlags = AI_SCRIPT_CHECK_BAD_MOVE,
++        .party = NO_ITEM_DEFAULT_MOVES(sParty_Route101TestDouble),
++    },
++
++    [TRAINER_ROUTE101_TEST_PARTNER_A] =
++    {
++        .trainerClass = TRAINER_CLASS_YOUNGSTER,
++        .encounterMusic_gender = TRAINER_ENCOUNTER_MUSIC_MALE,
++        .trainerPic = TRAINER_PIC_YOUNGSTER,
++        .trainerName = _("TEST B"),
++        .items = {},
++        .doubleBattle = TRUE,
++        .aiFlags = AI_SCRIPT_CHECK_BAD_MOVE,
++        .party = NO_ITEM_DEFAULT_MOVES(sParty_Route101TestPartnerA),
++    },
++
++    [TRAINER_ROUTE101_TEST_PARTNER_B] =
++    {
++        .trainerClass = TRAINER_CLASS_LASS,
++        .encounterMusic_gender = TRAINER_ENCOUNTER_MUSIC_MALE,
++        .trainerPic = TRAINER_PIC_LASS,
++        .trainerName = _("TEST C"),
++        .items = {},
++        .doubleBattle = TRUE,
++        .aiFlags = AI_SCRIPT_CHECK_BAD_MOVE,
++        .party = NO_ITEM_DEFAULT_MOVES(sParty_Route101TestPartnerB),
++    },
+ };

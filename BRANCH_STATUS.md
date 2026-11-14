@@ -1,6 +1,6 @@
 # Aktueller Sprint-6-Ausbau: aktive Folgegruppe
 
-Version20, Build 0133a0e39c629df1, Boot E3ID-865a9244741eeebf, ABI 97c8f051.
+Version20, Build 092f6412820bb8d8, Boot E3ID-ab63e7ce08e9de5c, ABI 786f1e4c.
 A auf freien Mitspieler schliesst sich ihm an; B beendet das Folgen. Nur ein
 aktiver Anfuehrer holt seinen verfuegbaren Folgespieler in den Kampf. Ohne
 Folgegruppe bleiben Kaempfe solo. Normale Einzel-Trainer werden zu Doppel-
@@ -8,8 +8,12 @@ gegnern mit individuellen Ergaenzungen bis maximal sechs; Storyteams bleiben
 erhalten. Beide nutzen nur ihre ersten drei, nach einem erschoepften Dreierteam
 kaempft der Partner weiter. Story-NPC-Partner wird vom Folgespieler gesteuert,
 ohne dessen eigenes Team zu veraendern. Details und manuelle Testliste in
-HANDOFF.md/LOKAL_TESTEN.md. Hintergrundtests,99Patchkette und Release gruen;
+HANDOFF.md/LOKAL_TESTEN.md. Hintergrundtests,100Patchkette und Release gruen;
 Emulatorabnahme sowie die bekannte EP-/Preisgeldanbindung noch offen.
+
+Neu: zwei wiederholbare Level5-Doppeltests auf Route101 (Junge ohne Partner,
+Troy mit NPC-Partner). Stand in Main und sprint-6; Nutzung in LOKAL_TESTEN.md.
+Der inkrementelle Kartengenerator aktualisiert nun auch schon vorhandene Includes.
 
 Die folgenden Angaben beschreiben die vorherige Sprint-6-Integration.
 

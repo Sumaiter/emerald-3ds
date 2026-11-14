@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Run mapjson for every map whose header/events/connections includes are missing."""
+"""Run mapjson for maps with missing or outdated generated includes."""
 
 from __future__ import annotations
 
@@ -28,7 +28,9 @@ def main() -> None:
             out_dir / "connections.inc",
         ]
 
-        if all(p.exists() for p in needed):
+        source_time = max(map_json.stat().st_mtime_ns, LAYOUTS_JSON.stat().st_mtime_ns,
+                          MAPJSON.stat().st_mtime_ns)
+        if all(p.exists() and p.stat().st_mtime_ns >= source_time for p in needed):
             continue
 
         subprocess.check_call(

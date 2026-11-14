@@ -34,6 +34,8 @@ python tools/bootstrap.py --make --german-rom smaragd.gba
 
 Für den deutschen Build wird eine eigene, unveränderte deutsche Smaragd-ROM benötigt. Die ROM wird ausschließlich lokal gelesen. ROMs, Spielstände, Datenpakete und Build-Artefakte gehören nicht in einen Commit.
 
+Der [Installationsleitfaden](docs/INSTALLATION.md#linux-and-macos) beschreibt auch den Python-Builder auf Linux und macOS. Immer Quellstand, ausführbare Datei und Payload dieses Koop-Forks zusammen verwenden; die Original-Releases enthalten diese Koop-Änderungen nicht.
+
 ## Prüfen
 
 ```sh

@@ -149,6 +149,17 @@ payload. To run the local builder:
    card. Add `SD:/3ds/dspfirm.cdc` for sound (see [Sound](#sound)), eject the
    card and launch **Emerald 3DS** from the Homebrew Launcher.
 
+### macOS (if you build the standalone package yourself)
+
+Official releases are built on Windows. If you build the macOS standalone package yourself (`tools/build_release.py --platform macOS`):
+
+1. Open the resulting `Emerald3DS-vX.Y.Z-macOS` folder.
+2. Double-click `Emerald3DS-Builder`. If Gatekeeper blocks it because of an unidentified developer, right-click the file and select **Open**.
+   Keep both builders, `_internal/` and `payload/` together in the extracted
+   folder. If App Translocation still prevents finding the payload, use the
+   local Python builder above with an explicit `--payload` path.
+3. Follow the same steps as Windows to select your ROM and SD card.
+
 See the [builder documentation](../builder/README.md) for other source-builder commands.
 
 Emerald 3DS is an unofficial fan project, not affiliated

@@ -1,5 +1,23 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Sprint 7: Integration nach Sprint-6-Nutzerabnahme (2026-11-15)
+
+Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
+
+Sprint 6 als 404dd82 auf origin/main gepusht. Sprint-7-Merge von b6bb91c:
+Logout 47..50 auf Protokoll 21 portiert; aktuelle Doppel-/Follow-Paketgroessen
+erhalten. Alter PeerLeft aus dem Branch verworfen, damit Host-Solokaempfe
+weitergehen und sicherer Gast-longjmp/Savebarrieren erhalten bleiben.
+Komplette finale Party vor Row-Unlock; Pruefsumme, wiederholbare Pulls,
+ACK-Replay und Schutz gegen spaete Party-/PC-Pakete. Kein Kampf-/Leihteam als
+kanonische Logoutparty; unsichere Abmeldung bleibt normaler Stack-Abbruch.
+CtrCoop_Leaving sperrt Gast-Tasten/Touch bis ACK/Timeout. Host merkt Autosave
+nach Commit vor und wartet weiter auf sicheren Kontext. Keine SAV-/Emulator-
+Bedienung. Issue #5 bestaetigt behoben und geschlossen, #1..4/#6..8 offen.
+Neue coop_logout_test.c samt Make-Integration; native UI-Keyfilter-Regression
+erweitert. Gesamtverify/ARM-Release/PAK/Linkaudit bestanden; manueller Nachtest offen.
+Nachweise build/sprint7-integration/. Testliste oben in LOKAL_TESTEN.md.
+
 ## Sprint 6: Nutzerabnahme und Uebergang zu Sprint 7 (2026-11-15)
 
 Nutzer bestaetigt: "ansonsten klappt jetzt alles von sprint 6". Build

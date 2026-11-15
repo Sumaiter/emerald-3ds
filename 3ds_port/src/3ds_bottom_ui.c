@@ -6732,6 +6732,11 @@ static u8 ProcessTouch(u8 mode)
 {
     const CtrInput *in = CtrInput_Get();
 
+    if (CtrCoop_Leaving())
+    {
+        sTouch.active = sTouch.bag = FALSE;
+        return HIT_NONE;
+    }
     if (CtrCoop_IsWatching())
     {
         sTouch.active = sTouch.bag = FALSE;
@@ -6980,7 +6985,7 @@ uint16_t CtrBottom_FilterKeys(uint16_t held)
     if ((held & CTR_SOFT_RESET_KEYS) == CTR_SOFT_RESET_KEYS && !gSoftResetDisabled)
         return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow ? CTR_SOFT_RESET_KEYS : held;
     return sFocus != FOCUS_NONE || sInside != INSIDE_NONE || sSwallow || sMapFly
-        || CtrCoop_NoticeName() != NULL || CtrCoop_IsWatching() ? 0 : held;
+        || CtrCoop_NoticeName() != NULL || CtrCoop_IsWatching() || CtrCoop_Leaving() ? 0 : held;
 }
 
 /* Whether the dock is on screen: not in battle, not under the boxes or the
@@ -7129,6 +7134,8 @@ static void ProcessKeys(u8 mode)
     u16 down = in->down;
     bool8 x = (in->physicalDown & CTR_KEY_X) != 0;
 
+    if (CtrCoop_Leaving())
+        return;
     if (CtrCoop_IsWatching())
     {
         if (down & B_BUTTON)

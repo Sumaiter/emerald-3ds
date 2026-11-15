@@ -73,6 +73,8 @@ static u8 saveResult=SAVE_STATUS_OK,lastSaveType;
 static void CB2_Overworld(void) {}
 static void OtherCallback(void) {}
 static bool CtrCoop_IsWatching(void) { return watching; }
+static bool leaving;
+static bool CtrCoop_Leaving(void) { return leaving; }
 static bool CtrCoop_IsFollowing(void) { return false; }
 static bool CtrCoop_TryFollowAt(s16 x,s16 y) { (void)x;(void)y;return false; }
 static void CtrCoop_FollowKeys(u16 *pressed,u16 *held) { (void)pressed;(void)held; }
@@ -150,6 +152,8 @@ int main(void) {
     sTouch.active=sTouch.bag=true;ProcessTouch(0);
     assert(!watching && !sSwallow && !sTouch.active && !sTouch.bag);
     assert(CtrBottom_FilterKeys(DPAD_RIGHT)==DPAD_RIGHT);
+    leaving=true;assert(CtrBottom_FilterKeys(DPAD_RIGHT|A_BUTTON|B_BUTTON)==0);
+    leaving=false;assert(CtrBottom_FilterKeys(DPAD_RIGHT)==DPAD_RIGHT);
     watching=true;input.touchX=35;ProcessTouch(0);assert(watching);
     input.touchX=100;input.touchY=210;ProcessTouch(0);assert(watching);
     input.touchY=156;ProcessTouch(0);assert(!watching);

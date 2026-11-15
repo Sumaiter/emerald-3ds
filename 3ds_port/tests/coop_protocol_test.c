@@ -446,11 +446,19 @@ static void TestBattleProtocol(void)
     CHECK(CtrCoopProtocol_DecodeDoubleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk decodes");
     CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "double payload roundtrip");
     CHECK(!CtrCoopProtocol_DecodeBattleChunk(chunk, sizeof(chunk), 0, decodedPayload, sizeof(decodedPayload), &decodedSize), "double chunk is not battle chunk");
+    CHECK(CtrCoopProtocol_EncodeLogoutBegin(600, 0x10203040, begin, CTR_COOP_SAVE_BEGIN_SIZE), "logout begin encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutBegin(begin, CTR_COOP_SAVE_BEGIN_SIZE, &totalSize, &checksum) && totalSize == 600 && checksum == 0x10203040, "logout begin roundtrip");
+    CHECK(!CtrCoopProtocol_DecodeDoubleBegin(begin, sizeof(begin), &totalSize, &checksum), "logout begin is not double setup");
+    CHECK(CtrCoopProtocol_EncodeLogoutRequest(512, request, sizeof(request)), "logout request encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutRequest(request, sizeof(request), &offset) && offset == 512, "logout request roundtrip");
+    CHECK(CtrCoopProtocol_EncodeLogoutChunk(512, payload, sizeof(payload), chunk, sizeof(chunk)), "logout chunk encodes");
+    CHECK(CtrCoopProtocol_DecodeLogoutChunk(chunk, sizeof(chunk), 512, decodedPayload, sizeof(decodedPayload), &decodedSize), "logout chunk decodes");
+    CHECK(decodedSize == sizeof(payload) && memcmp(payload, decodedPayload, sizeof(payload)) == 0, "logout payload roundtrip");
 }
 
 static void TestBattleBeginIdentity(void)
 {
-    static const uint8_t expected[] = {36, 20, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
+    static const uint8_t expected[] = {36, CTR_COOP_PROTOCOL_VERSION, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89, 0x57, 0x13};
     uint8_t packet[CTR_COOP_BATTLE_BEGIN_SIZE + 1];
     uint32_t totalSize = 7, checksum = 9;
     uint16_t sequence = 11;
@@ -514,7 +522,7 @@ static void TestResultIdentityPackets(void)
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
         uint8_t packet[9];
-        uint8_t expected[] = {codecs[c].type, 20, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, CTR_COOP_PROTOCOL_VERSION, 0x57, 0x13, 0xEF, 0xCD, 0xAB, 0x89};
         uint16_t sequence = 7;
         uint32_t checksum = 9;
 
@@ -570,7 +578,7 @@ static void TestUnchangedTransferBeginLayouts(void)
 
     for (unsigned c = 0; c < sizeof(codecs) / sizeof(codecs[0]); c++)
     {
-        uint8_t expected[] = {codecs[c].type, 20, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
+        uint8_t expected[] = {codecs[c].type, CTR_COOP_PROTOCOL_VERSION, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89};
         CHECK(sizeof(packet) == sizeof(expected) && codecs[c].encode(0x12345678, 0x89ABCDEF, packet, sizeof(packet))
             && memcmp(packet, expected, sizeof(expected)) == 0, "transfer %u retains its original ten-byte layout", codecs[c].type);
     }

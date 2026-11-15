@@ -1,4 +1,15 @@
-# Upstream-PR-Integration auf Main und Sprint 6
+# Entwicklungsstand: Sprint 7 auf Main
+
+## Sprint-7-Integration (2026-11-15)
+
+Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
+
+Sprint 6 vom Nutzer abgenommen und als 404dd82 auf origin/main gesichert.
+Mergequelle Sprint 7: b6bb91c. Logout 47..50 auf aktuellem Protokoll 21, keine
+Ruecknahme der aktuellen Koop-Kampf-/Speicher-/Menuekorrekturen. Atomarer
+finaler Teamtransfer, Wiederholungen/ACK-Replay und PC-/Savebarrieren ergaenzt.
+Gesamtverify/ARM-Release/PAK/Linkaudit bestanden; manuelle Sprint-7-Abnahme offen.
+Issue #5 geschlossen; bekannte Issues #1..4 und #6..8 bleiben separat offen.
 
 ## Sprint 6: Nutzerabnahme und Uebergang zu Sprint 7 (2026-11-15)
 

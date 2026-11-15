@@ -1,5 +1,55 @@
 # Host und Gast auf diesem PC starten
 
+## Sprint 7 testen: Abmelden, Abbrueche und Speichern (2026-11-15)
+
+Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
+
+Sprint 6 ist vom Nutzer abgenommen; bekannte Issues #1..4 und #6..8 bleiben
+separat offen, #5 ist geschlossen. Sprint 7 ist aus dem vorbereiteten Branch
+auf dem aktuellen Stand integriert. Gesamtverify, ARM-Release und PAK bestanden.
+Neuer Stand nutzt Protokoll 21; beide
+Instanzen ueber **Host und Gast starten** mit dem neuen Paar neu laden.
+F6 installiert keinen Build. Die alten Testlisten weiter unten sind Historie.
+
+Vorher den Host normal speichern. Fuer Vergleiche ein verletztes Gast-Pokemon
+mit verbrauchten AP und ggf. Status/Item sowie Team- und Boxbelegung merken.
+
+1. **Gast normal abmelden:** Im freien Feld LOKALER KOOP ausschalten. Nach
+   kurzer finaler Uebertragung landet der Gast im Hauptmenue. Host bleibt
+   bedienbar, Gastfigur verschwindet, dessen Boxenreihe ist wieder verfuegbar.
+   HP/AP/Status/Items bleiben erhalten; kein Heilen oder doppeltes Pokemon.
+2. **Gast hart trennen:** Gast-Emulator schliessen bzw. F6 beim Gast. In der
+   Oberwelt und waehrend eigenem Gast-Dialog wiederholen. Host bleibt
+   spielbar; Trainer-/Dialog-/PC-Sperren werden nach Verbindungserkennung
+   freigegeben. Erhalten bleiben nur vollstaendig uebernommene Aenderungen.
+3. **Host hart trennen:** Host F6, Welt ausschalten oder Host schliessen.
+   Gast muss ins Hauptmenue, ohne Freeze oder Speicherung der Hostwelt in
+   seinen lokalen Spielstand. Je einmal Gast im Feld, Dialog, Beutel/Team,
+   PC und Kampf pruefen. Danach neu beitreten koennen.
+4. **Abbruch im Kampf:** Gast trennen, waehrend der Host einen eigenen
+   unabhaengigen Einzelkampf fuehrt: dieser darf weitergehen. Danach einen
+   gemeinsamen wilden/Trainer-Doppelkampf und Troy-Leihteamkampf durch
+   Gastabbruch beenden: Host muss sauber zurueckkehren. Echte Teams samt
+   Reserven muessen erhalten sein, keine Leih-Pokemon im eigenen Team oder
+   PC. Das Einzelspieler-K.-o.-Verhalten aus Issue #7 bleibt separat offen.
+5. **Abbruch am PC:** Gast beim Verschieben eines Pokemon und dann nach
+   bestaetigtem Verschieben trennen. Keine verlorenen/duplizierten Pokemon;
+   nur vollstaendige PC-Aenderungen duerfen uebernommen sein. Auch testen,
+   waehrend der HOST den PC geoeffnet hat: dessen laufende Bedienung darf
+   nicht abgebrochen werden. Nach Schliessen sind die Sperren wieder frei.
+6. **Aufgeschobenes Autosave:** Gast trennen, waehrend Host im Kampf, Dialog
+   oder PC ist. Host erst normal daraus zurueckkehren lassen. Anschliessend
+   Host komplett neu starten/laden: Team, Boxen, KP/AP/Status, gemeinsame
+   Items/Geld und bestaetigter Fortschritt stimmen. Kein Speichern mitten
+   in einer unfertigen Transaktion. Vor dem Neuladen kurz im freien Feld warten.
+7. **Wiederbeitritt:** Nach normaler und harter Trennung mit demselben
+   Gastprofil erneut beitreten. Richtige Pokemon/Position, keine doppelte
+   Figur, keine alte PC-/Trainer-/Folgesperre oder doppelte Belohnung. Danach
+   PC benutzen und einen weiteren Kampf starten. Zwei bis drei Zyklen pruefen.
+
+Noch nicht manuell abgenommen. Bei Fehler den Punkt, Host-/Gastkontext und
+das Verhalten beider Bildschirme nennen; Logs vor einem weiteren Neustart sichern.
+
 ## Sprint 6 vom Nutzer abgenommen (2026-11-15)
 
 Rueckmeldung: "ansonsten klappt jetzt alles von sprint 6" fuer Build

@@ -553,6 +553,8 @@ static void TestLogoutTransaction(void)
         for (uint8_t i = 0; i < PARTY_SIZE; i++)
             CHECK(sStorage.boxes[CTR_COOP_STORAGE_BOX_ID][CTR_COOP_STORAGE_ROW_SIZE + i].species == 21 + i, "bad logout checksum preserves old row");
         CHECK(LastPacket(CTR_COOP_LOGOUT_READY_PACKET) == NULL, "bad logout is not confirmed");
+        CHECK(CtrCoop_StorageSlotLocked(CTR_COOP_STORAGE_BOX_ID, CTR_COOP_STORAGE_ROW_SIZE),
+              "incomplete logout keeps the guest row locked");
 
         SendTransfer(CtrCoopProtocol_EncodeLogoutBegin, CtrCoopProtocol_EncodeLogoutChunk,
             (const uint8_t *)party, sizeof(party), checksum, false, 0);

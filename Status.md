@@ -1,5 +1,34 @@
 # Status: Emerald 3DS Koop-Mod
 
+## Sprint 7: Integration von Abmeldung und sicherem Abbruch (2026-11-15)
+
+Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
+
+Sprint 6 ist als 404dd82 auf origin/main gesichert. Der vorbereitete Sprint-7-
+Branch b6bb91c ist mit dem aktuellen Stand integriert; Protokoll 21, Logout-
+Pakete 47..50. Die bestehende sichere Hostverlust-Menue-Rueckkehr, atomare
+Kampfergebnisse, PC-/Story-/Bewegungs-Savebarrieren und RAM-Journale bleiben
+erhalten. Der alte Sprint-7-PeerLeft-Pfad, der auch unabhaengige Hostkaempfe
+beenden wuerde, wird nicht uebernommen.
+
+Geordnetes Gast-Abmelden friert im sicheren Feldzustand das volle echte Team
+ein und uebertraegt es mit Pruefsumme. Erst nach kompletter Uebernahme wird die
+Gastreihe freigegeben und ein Host-Autosave vorgemerkt. Verlorene Requests/
+Chunks und die finale Bestaetigung werden wiederholt; doppelte BEGIN setzen
+keinen Teiltransfer zurueck. Alte Party-/PC-Pakete nach Commit werden ignoriert.
+PC-Cursor und andere Transfers verhindern einen konkurrierenden Logout-Commit.
+Waehrend der finalen Uebertragung sind Gast-Eingaben gesperrt; Abschluss oder
+Timeout verlassen den Engine-Stack ueber den getesteten Hauptmenuepfad.
+Ein Abmelden aus unsicheren Kontexten nutzt den bisherigen Abbruchpfad mit
+zuletzt vollstaendig uebernommenem Team, niemals ein temporaeres Kampfteam.
+
+Gesamtverify einschliesslich Koop-/Logout-/UI-Regressionen, ARM-Release, PAK
+und Link-/Assetaudit bestanden (34 Pflichtsymbole, 6388 Assets). Nachweise:
+build/sprint7-integration/{verify.log,release.log,release-audit.log,build-hashes.json}.
+Manuelle Sprint-7-Abnahme noch offen, siehe LOKAL_TESTEN.md. Issues #1..4 und
+#6..8 bleiben offen. Issue #5 nach bestaetigter Korrektur auf GitHub geschlossen.
+Nachfolgend Historie.
+
 ## Sprint 6: Nutzerabnahme und Uebergang zu Sprint 7 (2026-11-15)
 
 Nutzerrueckmeldung: "ansonsten klappt jetzt alles von sprint 6". Der zuletzt
@@ -646,7 +675,7 @@ stehen in `LOKAL_TESTEN.md`.
 
 ## Sprint 7: Abmeldung, Verbindungsabbrüche und sicheres Speichern
 
-**Status: Offen**
+**Status: In Main integriert; Gesamtverify, ARM-Release und Datenpaket bestanden. Manuelle Sprint-7-Abnahme offen.**
 
 ### Aufgaben
 

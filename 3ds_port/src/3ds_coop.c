@@ -452,6 +452,11 @@ struct LegacyCoopSaveExtension
 
 _Static_assert(sizeof(struct CoopSaveExtension) <= sizeof(((struct SaveBlock1 *)0)->unused_3598),
     "Co-op save extension must fit in the reserved save area");
+_Static_assert(sizeof(struct PokemonStorage) == 33744, "Original storage size unchanged");
+#if UINTPTR_MAX == UINT32_MAX
+_Static_assert(sizeof(struct SaveBlock2) + sizeof(struct SaveBlock1) + sizeof(struct PokemonStorage) == 53380, "Initial snapshot size unchanged");
+#endif
+_Static_assert(DOUBLE_SETUP_SIZE == 1232, "Double setup size unchanged");
 
 static const uint8_t sDefaultGuestName[] = {'G', 'A', 'S', 'T', 0xFF, 0xFF, 0xFF, 0xFF};
 

@@ -547,7 +547,7 @@ build/coop_storage_test$(EXESUFFIX): tests/coop_storage_test.c src/3ds_coop_stor
 
 build/coop_session_test$(EXESUFFIX): tests/coop_session_test.c tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h include/3ds_coop_storage.h
 	@mkdir -p build
-	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=7 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=8 -Itests/coop_host -Iinclude tests/coop_session_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
 
 STARTER_MENU_ROOT := $(if $(wildcard $(ROOT)/src/main_menu.c),$(ROOT),$(ROOT)/build/upstream)
 .PHONY: verify-coop-bike

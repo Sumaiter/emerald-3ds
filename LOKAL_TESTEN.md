@@ -1,5 +1,35 @@
 # Host und Gast auf diesem PC starten
 
+## Sprint 8: Stabilitaet und Hardware (2026-11-15)
+
+Build **de9038e56316c802**, Boot **E3ID-7ece52197182658c**, ABI **a8444026**, Protokoll 21.
+
+Der Sprint-8-Branch ist auf aktuellem Main integriert. Neue automatische
+Protokoll-/Speicherpruefungen sowie Gesamtverify/ARM-Release/PAK sind bestanden;
+die manuelle Sprint-8-Abnahme ist offen.
+Die beiden gezielten Sprint-7-Tests sind bereits bestaetigt. Die umfangreichen
+Sprint-6-/7-Listen weiter unten sind Historie und keine neue Pflichtliste.
+Bekannte Issues #1..4 und #6..8 bleiben separat offen.
+
+1. **Laengere Sitzung:** 30 bis 60 Minuten mit Kartenwechseln, Solo-/gemeinsamen
+   Kaempfen, PC, Items/Geld sowie einzelnen Ab- und Wiederanmeldungen spielen.
+   Auf neue Haenger, wachsenden Rueckstand und verloren gegangene Daten achten.
+   Anschliessend Host speichern/neuladen und Team/Boxen/Fortschritt vergleichen.
+2. **Zwei reale Konsolen:** Beitritt, laengeres gemeinsames Spielen, PC und
+   Kampf, Abmeldung und Wiederbeitritt auf zwei 3DS-/2DS-Geraeten pruefen.
+   Ergebnis pro Geraetemodell festhalten; Emulatorabnahme ersetzt dies nicht.
+3. **Darstellung und Leistung:** Soweit verfuegbar Old 3DS und New 3DS jeweils
+   mit Voxel ein/aus pruefen. Laengere Kaempfe und Kartenwechsel duerfen keine
+   neuen Freeze-/Grafik-/Speicherfehler ausloesen. Bekannte Zuschauer-/NPC-
+   Bewegungsfehler weiterhin unter ihren vorhandenen Issues erfassen.
+4. **Originale Linkfunktionen:** Nach beendetem Koop Union Room, Tausch,
+   normalen Linkkampf und verfuegbare Link-Minispiele pruefen. Danach erneut
+   Koop starten: kein altes Team, keine fremden Items/Geldstaende/Sperren.
+
+Reale Konsolen und Langzeittests bisher nicht durchgefuehrt. Ein erfolgreicher
+Build/Merge allein gibt keine spielbare Alpha frei. Aktuellen Build immer auf
+beiden Geraeten gemeinsam aktualisieren; F6 installiert kein neues Paar.
+
 ## Sprint 7: gezielte Nutzertests bestanden (2026-11-15)
 
 Build 8af20c2c7a809005: Gast normal abmelden und mit erhaltenem Team/KP/AP/Status

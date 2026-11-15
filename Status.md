@@ -1,5 +1,31 @@
 # Status: Emerald 3DS Koop-Mod
 
+## Sprint 8: Stabilisierung integriert, Hardwareabnahme offen (2026-11-15)
+
+Build **de9038e56316c802**, Boot **E3ID-7ece52197182658c**, ABI **a8444026**, Protokoll 21.
+
+Sprint 7 samt beiden bestandenen Nutzertests als 133aa06 auf origin/main
+gesichert. Mergequelle Sprint 8: f378496. Zusaetzliche Protokolltests weisen
+falsche Versionen/Pakettypen, gekuerzte Pakete und falsche Chunk-Offsets ab.
+Der uebernommene Logout-Laengentest prueft jetzt echte Verkuerzung auf neun
+Bytes statt versehentlich eine elf Byte lange Ueberlaenge. Native Compile-
+Assertions sichern 33744 Byte Boxspeicher, 53380 Byte initialen Snapshot auf
+32-Bit-Zielen und 1232 Byte Doppelkampf-Setup. Protokoll bleibt 21.
+
+SETUP verweist auf den aktuellen Main-Stand, die Gesamtpruefung der gestagten
+Engine und die bestehenden Abnahmen. Veraltete Einzelpatch-Reversechecks
+wurden durch den Hinweis auf die komplette geordnete Patchkette ersetzt.
+Das optionale Test-Save-Release ist erreichbar und enthaelt eine SAV-Datei;
+es wurde nichts heruntergeladen oder in laufende Profile geschrieben.
+
+Gesamtverify einschliesslich Koop-/Protokoll-/Speicherregressionen, ARM-Release,
+PAK und Link-/Assetaudit bestanden (34 Pflichtsymbole, 6388 Assets). Nachweise:
+build/sprint8-integration/{verify.log,release.log,release-audit.log,build-hashes.json}.
+Sprint 8 bleibt fuer reale Konsolen,
+Old-/New-3DS mit Voxel, laengere Sitzungen und native Linkfunktionen manuell
+offen; der Branch-Merge ist keine Hardware-/Alpha-Abnahme. Offene Issues
+#1..4 und #6..8 bleiben bestehen. Naechste Testschritte in LOKAL_TESTEN.md.
+
 ## Sprint 7: Nutzerabnahme bestanden (2026-11-15)
 
 Nutzer bestaetigt beide gezielten Nachtests fuer Build 8af20c2c7a809005:
@@ -706,11 +732,11 @@ stehen in `LOKAL_TESTEN.md`.
 
 ## Sprint 8: Hardwaretests, Stabilisierung und spielbare Alpha
 
-**Status: Offen**
+**Status: In Main integriert; Gesamtverify, ARM-Release und Datenpaket bestanden. Hardware-/Langzeitabnahme offen.**
 
 ### Aufgaben
 
-- [ ] Automatisierte Tests für Speicherformat, Boxensperren und Koop-Protokoll ergänzen.
+- [x] Automatisierte Tests für Speicherformat, Boxensperren und Koop-Protokoll ergänzen.
 - [ ] Zwei-Instanzen-Tests mit Azahar durchführen, soweit die benötigten UDS-Funktionen unterstützt werden.
 - [ ] Tests mit zwei realen 3DS-/2DS-Konsolen durchführen.
 - [ ] Verhalten auf Old 3DS und New 3DS sowie mit aktivierter Voxel-Darstellung prüfen.

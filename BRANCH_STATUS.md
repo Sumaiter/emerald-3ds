@@ -1,4 +1,14 @@
-# Entwicklungsstand: Sprint 7 auf Main
+# Entwicklungsstand: Sprint 8 auf Main
+
+## Sprint-8-Integration (2026-11-15)
+
+Build **de9038e56316c802**, Boot **E3ID-7ece52197182658c**, ABI **a8444026**, Protokoll 21.
+
+Sprint 7 einschliesslich Nutzerabnahme als 133aa06 auf origin/main. Sprint 8
+von f378496 integriert: negative Protokolltests, native Groessenasserts,
+aktualisierte Einrichtung/Testhinweise; Protokoll 21 bleibt bestehen.
+Gesamtverify/ARM-Release/PAK/Linkaudit bestanden. Hardware-/Langzeitabnahme von Sprint 8 bleibt
+offen; bekannte Issues #1..4 und #6..8 sind nicht durch den Merge erledigt.
 
 ## Sprint-7-Abnahme (2026-11-15)
 

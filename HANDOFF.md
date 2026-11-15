@@ -1,5 +1,21 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Sprint 8: Stabilisierung auf aktuellem Main (2026-11-15)
+
+Build **de9038e56316c802**, Boot **E3ID-7ece52197182658c**, ABI **a8444026**, Protokoll 21.
+
+Sprint-7-Abnahme als 133aa06 gepusht; Sprint 8 von f378496 integriert.
+Protokoll 21 unveraendert. Native Speicher-/Setup-Compileasserts und weitere
+negative Codecproben uebernommen; Logout-Truncationtest auf echte neun Byte
+berichtigt (der alte Test gab elf Byte an den zehn Byte langen Codec).
+SETUP auf Main/Gesamtverify und aktuelle Abnahmen korrigiert; Einzelpatch-
+Reversechecks durch vollstaendige isolierte Patchkettenpruefung ersetzt.
+Test-SAV-Release-Metadaten geprueft, kein Download/Profil-/Emulatoreingriff.
+Gesamtverify/ARM-Release/PAK/Linkaudit bestanden. Manuelle Hardware-/Langzeit-/native Linkabnahme
+fuer Sprint 8 bleibt offen, bekannte Issues unveraendert. Die bereits
+bestaetigten Sprint-6-/7-Tests nicht erneut als Pflichtabnahme auflisten.
+Nachweise build/sprint8-integration/, Testplan oben in LOKAL_TESTEN.md.
+
 ## Sprint 7: beide Nachtests vom Nutzer bestanden (2026-11-15)
 
 Build 8af20c2c7a809005: normales Gast-Abmelden und anschliessender Wiederbeitritt/

@@ -1,6 +1,13 @@
 # Ersteinrichtung auf einem PC
 
-Diese Anleitung richtet Emerald 3DS mit dem Local-Co-op-Mod unter Windows ein. Der aktuelle Mod ist eine fehlerhafte Entwicklungsversion; der offene Teststand steht in `HANDOFF.md`.
+Diese Anleitung richtet Emerald 3DS mit dem Local-Co-op-Mod unter Windows ein. Der aktuelle Mod ist eine Entwicklungsversion; der offene Teststand steht in `HANDOFF.md`.
+
+## Entwicklungsbranch auswählen
+
+- `main`: aktueller integrierter Stand mit Sprint 6/7 und den Sprint-8-Prüfungen
+- `sprint-6`, `sprint-7`, `sprint-8`: ursprüngliche Entwicklungsstände; spätere Korrekturen liegen in `main`
+
+Für den aktuellen Stand `git switch main` verwenden. Vor einem Build die Portdateien desselben Branches nach `build/upstream/3ds_port/` kopieren. Keine Spielstände oder ROMs aus einem anderen Branch oder PC übernehmen, ohne vorher eine Sicherung anzulegen.
 
 ## Was zusätzlich zum Repository benötigt wird
 
@@ -117,6 +124,8 @@ Die drei Build-Dateien auf **beide** emulierten SD-Karten kopieren:
 
 Beide Instanzen müssen denselben 3DSX-Build und dasselbe PAK erhalten, weil die Netzwerkverbindung die Build-ID vergleicht. Für Diagnoseausgaben in jedem Spielverzeichnis eine leere Datei `debug.txt` anlegen. Das Spiel schreibt dann `port.log` und behält die vorherige Sitzung als `port-prev.log`.
 
+Optional kann der Host-Testspielstand aus <https://github.com/Sumaiter/emerald-3ds/releases/tag/test-save-2026-11-10> verwendet werden. Das Release enthält nur die SAV-Datei, keine Spieldateien. Vorhandene Spielstände zuerst sichern und die heruntergeladene Datei als `emerald3ds.sav` im Host-Spielverzeichnis ablegen.
+
 ## 5. Lokalen Mehrspielerraum starten
 
 Für den UDS-Test mit Azahar wird ein Raumprozess benötigt. Die separate Datei `azahar-room.exe` verwenden, nicht `azahar.exe --room`.
@@ -129,10 +138,12 @@ azahar-room.exe --room-name "Emerald Koop" \
   --port 24872 --max_members 2
 ```
 
+Ist der Port belegt, beim Raumstart einen freien alternativen Port verwenden, beispielsweise 24873. Beide Clients müssen denselben Port erhalten.
+
 In **beiden** Azahar-Oberflächen im Multiplayer-Menü **Direkt mit Raum verbinden / Direct Connect** wählen:
 
 - Adresse: `127.0.0.1`
-- Port: `24872`
+- Port: `24872` oder den gewählten Alternativport
 - Passwort: leer, sofern keines gesetzt wurde
 
 Danach HOST und GAST jeweils `Emerald3DS.3dsx` starten. Im Spiel öffnet der Host unter Optionen **LOKALER KOOP**; der Gast wählt im Hauptmenü **SPIEL SUCHEN** und gibt das im Hostprofil festgelegte Koop-Passwort ein.
@@ -142,13 +153,15 @@ Bei zwei PCs im selben LAN läuft der Raum auf einem PC. Der andere verbindet si
 ## 6. Prüfungen
 
 ```sh
-make -C 3ds_port verify-coop
+make -C build/upstream/3ds_port verify
 python -m unittest discover -s builder/tests -v
 python tools/release_audit.py --repo . --strict
 git diff --check
 ```
 
-Für den aktuellen Fehler zuerst den Basistest aus `HANDOFF.md` durchführen. Sprint 3 ist noch nicht bestanden.
+Die Patchkette vollständig in Reihenfolge auf einer separaten Kopie des gepinnten Engine-Stands prüfen. Einzelne alte Patches direkt gegen den aktuellen Endstand rückwärts zu prüfen ist unzuverlässig, weil spätere Patches dieselben Funktionen ändern.
+
+Die manuellen Tests stehen in `LOKAL_TESTEN.md`, die Abnahmen in `Status.md`. Die gezielten Sprint-6-/7-Emulatortests sind vom Nutzer bestätigt, mit separat offenen Issues. Für Sprint 8 bleiben reale 3DS-/2DS-, Voxel- und Langzeittests offen; ein erfolgreicher Merge oder Hosttest ersetzt diese Abnahme nicht.
 
 ## Was nicht mit umgezogen wird
 

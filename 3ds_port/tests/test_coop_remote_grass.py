@@ -51,6 +51,8 @@ static void DoGroundEffects_OnBeginStep(struct ObjectEvent*,struct Sprite*);
 static void DoGroundEffects_OnSpawn(struct ObjectEvent*,struct Sprite*);
 static void UpdateObjectEventCurrentMovement(struct ObjectEvent*,struct Sprite*,bool8(*)(struct ObjectEvent*,struct Sprite*));
 static void RemoveRemoteObject(void){sCoop.objectEventId=OBJECT_EVENTS_COUNT;}
+static void CtrCoop_EngineRemoveRemoteObject(u8 id){gObjectEvents[id].active=false;}
+static bool CtrCoop_CatchUpMovement(u8 id){(void)id;return false;}
 static bool SpawnRemoteObject(void){++spawns;return false;}
 static bool CtrCoopBike_SetRemote(u8 graphics,u8 mode){(void)graphics;(void)mode;return false;}
 static void ObjectEventSetGraphicsId(struct ObjectEvent *o,u8 g){o->graphicsId=g;}

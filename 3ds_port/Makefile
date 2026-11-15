@@ -443,6 +443,14 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	"$(PYTHON)" tests/test_coop_scene_hooks.py --source $(STARTER_MENU_ROOT)/src
 	"$(PYTHON)" tests/test_coop_battle_return_hooks.py --source $(STARTER_MENU_ROOT)/src
 	"$(PYTHON)" tests/test_coop_double_hooks.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_wild_escape.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_repeat_battle.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_exp.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_evolution.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_hp_lifecycle.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_hp_commit.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_double_presentation.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
+	"$(PYTHON)" tests/test_coop_double_intro.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)" --check-mutations
 	"$(PYTHON)" tests/test_coop_battle_channel.py --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_sparse_double.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_follow_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
@@ -476,6 +484,7 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	./build/coop_npc_motion_test$(EXESUFFIX)
 	./build/coop_follow_regression_test$(EXESUFFIX)
 	./build/coop_follow_render_test$(EXESUFFIX)
+	"$(PYTHON)" tests/test_coop_presence_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 
 verify-coop: build/coop_scene_regression_test$(EXESUFFIX)
 verify-coop: build/coop_story_regression_test$(EXESUFFIX) build/coop_live_regression_test$(EXESUFFIX)

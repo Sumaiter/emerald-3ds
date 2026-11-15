@@ -1,0 +1,17 @@
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -3594,7 +3594,12 @@
+             }
+         }
+ 
+-        if (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS && GetBattlerPosition(gActiveBattler) == B_POSITION_OPPONENT_RIGHT)
++        /* MULTI already emitted this bank above. Cooperative story battles
++         * combine both flags; a second command has no second completion bit
++         * and can overtake the first acknowledgement on the direct link. */
++        if (!(gBattleTypeFlags & BATTLE_TYPE_MULTI)
++         && (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS)
++         && GetBattlerPosition(gActiveBattler) == B_POSITION_OPPONENT_RIGHT)
+         {
+             BtlController_EmitDrawTrainerPic(B_COMM_TO_CONTROLLER);
+             MarkBattlerForControllerExec(gActiveBattler);

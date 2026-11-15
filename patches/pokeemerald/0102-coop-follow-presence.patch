@@ -1,0 +1,94 @@
+diff --git a/src/event_object_movement.c b/src/event_object_movement.c
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -5498,7 +5498,16 @@
+     TryEnableObjectEventAnim(objectEvent, sprite);
+ 
+     if (ObjectEventIsHeldMovementActive(objectEvent))
++    {
+         ObjectEventExecHeldMovementAction(objectEvent, sprite);
++#ifdef PLATFORM_3DS
++        // At most one additional physics tick, only within this same action.
++        // Complete the native step/ground effects before any queued turn.
++        if (!objectEvent->heldMovementFinished
++         && CtrCoop_CatchUpMovement(objectEvent - gObjectEvents))
++            ObjectEventExecHeldMovementAction(objectEvent, sprite);
++#endif
++    }
+     else if (!objectEvent->frozen)
+         while (callback(objectEvent, sprite));
+ 
+@@ -8717,6 +8726,23 @@
+ }
+ 
+ #ifdef PLATFORM_3DS
++void CtrCoop_EngineRemoveRemoteObject(u8 objectEventId)
++{
++    struct ObjectEvent *object;
++    if (objectEventId >= OBJECT_EVENTS_COUNT)
++        return;
++    object = &gObjectEvents[objectEventId];
++    if (!object->active || object->isPlayer || object->localId != LOCALID_COOP_PLAYER)
++        return;
++    // This session-only actor has no script flag or story removal to publish.
++    // Menus can reuse its sprite slot; never destroy another sprite's storage.
++    if (object->spriteId < MAX_SPRITES && gSprites[object->spriteId].inUse
++     && gSprites[object->spriteId].data[0] == objectEventId)
++        RemoveObjectEvent(object);
++    else
++        object->active = FALSE;
++}
++
+ void CtrCoop_EngineRemoteStepEffects(u8 objectEventId)
+ {
+     struct ObjectEvent *object;
+diff --git a/src/overworld.c b/src/overworld.c
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -596,6 +596,9 @@
+ 
+ void ApplyCurrentWarp(void)
+ {
++#ifdef PLATFORM_3DS
++    CtrCoop_MapLeaving();
++#endif
+     gLastUsedWarp = gSaveBlock1Ptr->location;
+     gSaveBlock1Ptr->location = sWarpDestination;
+     sFixedDiveWarp = sDummyWarpData;
+diff --git a/src/load_save.c b/src/load_save.c
+--- a/src/load_save.c
++++ b/src/load_save.c
+@@ -11,6 +11,7 @@
+ #ifdef PLATFORM_3DS
+ #include "3ds_coop.h"
+ #include "follower_mon.h"
++#include "constants/event_objects.h"
+ #endif
+ #include "save_location.h"
+ #include "trainer_hill.h"
+@@ -223,7 +224,9 @@
+ #ifdef PLATFORM_3DS
+     // The follower is the port's alone: the field brings it back (follower_mon.c).
+     for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+-        if (FollowerMon_IsFollower(&gSaveBlock1Ptr->objectEvents[i]))
++        if (FollowerMon_IsFollower(&gSaveBlock1Ptr->objectEvents[i])
++         || (!gSaveBlock1Ptr->objectEvents[i].isPlayer
++          && gSaveBlock1Ptr->objectEvents[i].localId == LOCALID_COOP_PLAYER))
+             memset(&gSaveBlock1Ptr->objectEvents[i], 0, sizeof(gSaveBlock1Ptr->objectEvents[i]));
+ #endif
+ }
+@@ -233,7 +236,14 @@
+     int i;
+ 
+     for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
++    {
+         gObjectEvents[i] = gSaveBlock1Ptr->objectEvents[i];
++#ifdef PLATFORM_3DS
++        // Also repair saves written before peer actors were excluded.
++        if (!gObjectEvents[i].isPlayer && gObjectEvents[i].localId == LOCALID_COOP_PLAYER)
++            memset(&gObjectEvents[i], 0, sizeof(gObjectEvents[i]));
++#endif
++    }
+ }
+ 
+ void CopyPartyAndObjectsToSave(void)

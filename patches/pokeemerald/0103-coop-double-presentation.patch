@@ -1,0 +1,324 @@
+diff --git a/src/battle_controllers.c b/src/battle_controllers.c
+--- a/src/battle_controllers.c
++++ b/src/battle_controllers.c
+@@ -1100,7 +1100,10 @@
+             memcpy(gBattleBufferA[battler], &BYTE_TO_RECEIVE(LINK_BUFF_DATA), blockSize);
+             MarkBattlerReceivedLinkData(battler);
+ #ifdef PLATFORM_3DS
+-            if (sDirectBattleLink && (gBattleTypeFlags & BATTLE_TYPE_IS_MASTER)
++            /* Both cooperative clients present the same battle. Keep the
++             * native completion barrier before shared animation state changes. */
++            if (sDirectBattleLink && !CtrCoop_IsDoubleBattle()
++             && (gBattleTypeFlags & BATTLE_TYPE_IS_MASTER)
+              && !ControllerCommandNeedsAnswer(gBattleBufferA[battler][0]))
+             {
+                 // Only our own showing of it holds up the battle.
+diff --git a/src/battle_controller_link_opponent.c b/src/battle_controller_link_opponent.c
+--- a/src/battle_controller_link_opponent.c
++++ b/src/battle_controller_link_opponent.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "battle.h"
+ #include "battle_ai_script_commands.h"
+ #include "battle_anim.h"
+@@ -1225,6 +1228,11 @@
+         else // first mon
+             xPos = 200;
+ 
++#ifdef PLATFORM_3DS
++        if (CtrCoop_IsDoubleBattle())
++            trainerPicId = CtrCoop_EngineOpponentTrainerPic();
++        else
++#endif
+         if (gBattleTypeFlags & BATTLE_TYPE_BATTLE_TOWER)
+         {
+             if (gActiveBattler == B_POSITION_OPPONENT_LEFT)
+@@ -1305,6 +1313,11 @@
+ {
+     u32 trainerPicId;
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++        trainerPicId = CtrCoop_EngineOpponentTrainerPic();
++    else
++#endif
+     if (gActiveBattler == 1)
+         trainerPicId = GetFrontierTrainerFrontSpriteId(gTrainerBattleOpponent_A);
+     else
+diff --git a/src/battle_controller_link_partner.c b/src/battle_controller_link_partner.c
+--- a/src/battle_controller_link_partner.c
++++ b/src/battle_controller_link_partner.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop_battle.h"
++#endif
+ #include "battle.h"
+ #include "battle_ai_script_commands.h"
+ #include "battle_anim.h"
+@@ -1138,8 +1141,14 @@
+         trainerPicId = gLinkPlayers[GetBattlerMultiplayerId(gActiveBattler)].gender;
+     }
+ 
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BattlerBackPicId(gActiveBattler, trainerPicId);
++#endif
+     DecompressTrainerBackPic(trainerPicId, gActiveBattler);
+     SetMultiuseSpriteTemplateToTrainerBack(trainerPicId, GetBattlerPosition(gActiveBattler));
++#ifdef PLATFORM_3DS
++    CtrCoopBattle_Apply(gActiveBattler, &gMultiuseSpriteTemplate);
++#endif
+     gBattlerSpriteIds[gActiveBattler] = CreateSprite(&gMultiuseSpriteTemplate, xPos, (8 - gTrainerBackPicCoords[trainerPicId].size) * 4 + 80 + BATTLE_SIDE_SHIFT(B_SIDE_PLAYER), GetBattlerSpriteSubpriority(gActiveBattler));
+ 
+     gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = gActiveBattler;
+@@ -1558,7 +1567,13 @@
+         trainerPicId = gLinkPlayers[GetBattlerMultiplayerId(gActiveBattler)].gender;
+     }
+ 
++#ifdef PLATFORM_3DS
++    trainerPicId = CtrCoopBattle_BattlerBackPicId(gActiveBattler, trainerPicId);
++#endif
+     LoadCompressedPalette(gTrainerBackPicPaletteTable[trainerPicId].data, OBJ_PLTT_ID(paletteNum), PLTT_SIZE_4BPP);
++#ifdef PLATFORM_3DS
++    CtrCoopBattle_LoadBattlerPalette(gActiveBattler, paletteNum);
++#endif
+ 
+     gSprites[gBattlerSpriteIds[gActiveBattler]].oam.paletteNum = paletteNum;
+ 
+diff --git a/src/battle_controller_opponent.c b/src/battle_controller_opponent.c
+--- a/src/battle_controller_opponent.c
++++ b/src/battle_controller_opponent.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "battle.h"
+ #include "battle_ai_script_commands.h"
+ #include "battle_anim.h"
+@@ -1237,10 +1240,9 @@
+ 
+ #define sSpeedX data[0]
+ 
+-static void OpponentHandleDrawTrainerPic(void)
++static u32 GetOpponentTrainerPic(void)
+ {
+     u32 trainerPicId;
+-    s16 xPos;
+ 
+     if (gBattleTypeFlags & BATTLE_TYPE_SECRET_BASE)
+     {
+@@ -1293,6 +1295,23 @@
+     {
+         trainerPicId = gTrainers[gTrainerBattleOpponent_A].trainerPic;
+     }
++
++    return trainerPicId;
++}
++
++#ifdef PLATFORM_3DS
++u32 CtrCoop_EngineOpponentTrainerPic(void)
++{
++    return GetOpponentTrainerPic();
++}
++#endif
++
++static void OpponentHandleDrawTrainerPic(void)
++{
++    u32 trainerPicId;
++    s16 xPos;
++
++    trainerPicId = GetOpponentTrainerPic();
+ 
+     if (gBattleTypeFlags & (BATTLE_TYPE_MULTI | BATTLE_TYPE_TWO_OPPONENTS))
+     {
+@@ -1326,57 +1345,7 @@
+ {
+     u32 trainerPicId;
+ 
+-    if (gBattleTypeFlags & BATTLE_TYPE_SECRET_BASE)
+-    {
+-        trainerPicId = GetSecretBaseTrainerPicIndex();
+-    }
+-    else if (gTrainerBattleOpponent_A == TRAINER_FRONTIER_BRAIN)
+-    {
+-        trainerPicId = GetFrontierBrainTrainerPicIndex();
+-    }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_TRAINER_HILL)
+-    {
+-        if (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS)
+-        {
+-            if (gActiveBattler == 1)
+-                trainerPicId = GetTrainerHillTrainerFrontSpriteId(gTrainerBattleOpponent_A);
+-            else
+-                trainerPicId = GetTrainerHillTrainerFrontSpriteId(gTrainerBattleOpponent_B);
+-        }
+-        else
+-        {
+-            trainerPicId = GetTrainerHillTrainerFrontSpriteId(gTrainerBattleOpponent_A);
+-        }
+-    }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_FRONTIER)
+-    {
+-        if (gBattleTypeFlags & (BATTLE_TYPE_TWO_OPPONENTS | BATTLE_TYPE_TOWER_LINK_MULTI))
+-        {
+-            if (gActiveBattler == 1)
+-                trainerPicId = GetFrontierTrainerFrontSpriteId(gTrainerBattleOpponent_A);
+-            else
+-                trainerPicId = GetFrontierTrainerFrontSpriteId(gTrainerBattleOpponent_B);
+-        }
+-        else
+-        {
+-            trainerPicId = GetFrontierTrainerFrontSpriteId(gTrainerBattleOpponent_A);
+-        }
+-    }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_EREADER_TRAINER)
+-    {
+-        trainerPicId = GetEreaderTrainerFrontSpriteId();
+-    }
+-    else if (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS)
+-    {
+-        if (gActiveBattler != 1)
+-            trainerPicId = gTrainers[gTrainerBattleOpponent_B].trainerPic;
+-        else
+-            trainerPicId = gTrainers[gTrainerBattleOpponent_A].trainerPic;
+-    }
+-    else
+-    {
+-        trainerPicId = gTrainers[gTrainerBattleOpponent_A].trainerPic;
+-    }
++    trainerPicId = GetOpponentTrainerPic();
+ 
+     DecompressTrainerFrontPic(trainerPicId, gActiveBattler);
+     SetMultiuseSpriteTemplateToTrainerBack(trainerPicId, GetBattlerPosition(gActiveBattler));
+diff --git a/src/battle_message.c b/src/battle_message.c
+--- a/src/battle_message.c
++++ b/src/battle_message.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "malloc.h"
+ #include "battle.h"
+ #include "battle_anim.h"
+@@ -1968,6 +1971,10 @@
+ void BufferStringBattle(u16 stringID)
+ {
+     s32 i;
++    bool8 coopAiBattle = FALSE;
++#ifdef PLATFORM_3DS
++    coopAiBattle = CtrCoop_IsDoubleBattle();
++#endif
+     const u8 *stringPtr = NULL;
+ #if defined(PORT_BRIDGE) && GAME_LANGUAGE == LANGUAGE_GERMAN
+     u32 size;
+@@ -1999,7 +2006,7 @@
+     case STRINGID_INTROMSG: // first battle msg
+         if (gBattleTypeFlags & BATTLE_TYPE_TRAINER)
+         {
+-            if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++            if (!coopAiBattle && (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK)))
+             {
+                 if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
+                 {
+@@ -2071,9 +2078,9 @@
+                     stringPtr = sText_TwoTrainersSentPkmn;
+                 else if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
+                     stringPtr = sText_TwoTrainersSentPkmn;
+-                else if (gBattleTypeFlags & BATTLE_TYPE_MULTI)
++                else if (!coopAiBattle && (gBattleTypeFlags & BATTLE_TYPE_MULTI))
+                     stringPtr = sText_TwoLinkTrainersSentOutPkmn;
+-                else if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++                else if (!coopAiBattle && (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK)))
+                     stringPtr = sText_LinkTrainerSentOutTwoPkmn;
+                 else
+                     stringPtr = sText_Trainer1SentOutTwoPkmn;
+@@ -2130,7 +2137,7 @@
+         }
+         else
+         {
+-            if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++            if (!coopAiBattle && (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK)))
+             {
+                 if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
+                 {
+@@ -2207,7 +2214,11 @@
+                 switch (gBattleTextBuff1[0])
+                 {
+                 case B_OUTCOME_WON:
+-                    if (gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
++                    if (coopAiBattle && (gBattleTypeFlags & BATTLE_TYPE_TRAINER)
++                     && !(gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS))
++                        stringPtr = sText_PlayerDefeatedLinkTrainerTrainer1;
++                    else if ((gBattleTypeFlags & BATTLE_TYPE_TOWER_LINK_MULTI)
++                          || (coopAiBattle && (gBattleTypeFlags & BATTLE_TYPE_TWO_OPPONENTS)))
+                         stringPtr = sText_TwoInGameTrainersDefeated;
+                     else
+                         stringPtr = sText_TwoLinkTrainersDefeated;
+diff --git a/src/link_rfu_3.c b/src/link_rfu_3.c
+--- a/src/link_rfu_3.c
++++ b/src/link_rfu_3.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#endif
+ #include "malloc.h"
+ #include "decompress.h"
+ #include "link_rfu.h"
+@@ -751,6 +754,14 @@
+ void CreateWirelessStatusIndicatorSprite(u8 x, u8 y)
+ {
+     u8 sprId;
++#ifdef PLATFORM_3DS
++    /* This icon measures the original RFU adapter, not the cooperative link. */
++    if (CtrCoop_IsDoubleBattle())
++    {
++        gWirelessStatusIndicatorSpriteId = SPRITE_NONE;
++        return;
++    }
++#endif
+ 
+     if (x == 0 && y == 0)
+     {
+@@ -776,7 +787,8 @@
+ 
+ void DestroyWirelessStatusIndicatorSprite(void)
+ {
+-    if (gSprites[gWirelessStatusIndicatorSpriteId].sValidator == STATUS_INDICATOR_ACTIVE)
++    if (gWirelessStatusIndicatorSpriteId < MAX_SPRITES
++     && gSprites[gWirelessStatusIndicatorSpriteId].sValidator == STATUS_INDICATOR_ACTIVE)
+     {
+         gSprites[gWirelessStatusIndicatorSpriteId].sValidator = 0;
+         DestroySprite(&gSprites[gWirelessStatusIndicatorSpriteId]);
+diff --git a/src/pokemon.c b/src/pokemon.c
+--- a/src/pokemon.c
++++ b/src/pokemon.c
+@@ -4551,6 +4551,11 @@
+ 
+ u8 CalculatePlayerPartyCount(void)
+ {
++#ifdef PLATFORM_3DS
++    /* Cooperative halves keep their fixed indices despite empty slots. */
++    if (CtrCoop_UsesDoubleParty())
++        return gPlayerPartyCount = PARTY_SIZE;
++#endif
+     gPlayerPartyCount = 0;
+ 
+     while (gPlayerPartyCount < PARTY_SIZE
+@@ -4564,6 +4569,11 @@
+ 
+ u8 CalculateEnemyPartyCount(void)
+ {
++#ifdef PLATFORM_3DS
++    /* Cooperative halves keep their fixed indices despite empty slots. */
++    if (CtrCoop_UsesDoubleParty())
++        return gEnemyPartyCount = PARTY_SIZE;
++#endif
+     gEnemyPartyCount = 0;
+ 
+     while (gEnemyPartyCount < PARTY_SIZE

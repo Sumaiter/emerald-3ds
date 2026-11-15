@@ -205,6 +205,7 @@ static struct Pokemon sDoubleLocalParty[PARTY_SIZE];
 static struct Pokemon sRemoteParty[PARTY_SIZE];
 static bool sRemotePartyValid;
 static uint32_t sDoubleOriginalFlags;
+static uint8_t sDoubleGraphicsIds[2];
 
 #define EVENT_IDLE 0
 #define EVENT_PENDING 1
@@ -224,6 +225,14 @@ static bool OwnsEncounterNpc(uint8_t group, uint8_t num, uint8_t localId);
 static bool StoryNpcAvailable(uint8_t group, uint8_t num, uint8_t localId);
 static bool PartyPeerReady(void);
 static void FollowReset(void);
+static bool sMapExitPending;
+
+static void SendMapExit(void)
+{
+    const uint8_t packet[] = {CTR_COOP_MAP_EXIT_PACKET, CTR_COOP_PROTOCOL_VERSION};
+    if (sMapExitPending && sCoop.peerId && LocalLink_TrySend(sCoop.peerId, packet, sizeof(packet)))
+        sMapExitPending = false;
+}
 
 /* Preserve individual steps received in one network pump, especially the two
  * sides of a corner. A newer direction must not replace an unfinished step. */
@@ -273,6 +282,7 @@ static void ClearRemote(void)
     CtrCoopMoney_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
     CtrCoopNpcMotion_Reset();
     FollowReset();
+    sMapExitPending = false;
     sRemoteSteps.head = sRemoteSteps.count = 0;
     CtrCoop_ResetStory();
     CtrCoopSpectator_Reset();
@@ -951,15 +961,32 @@ static bool RemoteObjectValid(void)
 static void RemoveRemoteObject(void)
 {
     CtrCoopBike_ClearRemote();
-    /* A host save can restore the special avatar before any session has
-     * assigned its runtime slot. Find that saved object as well. */
-    if (sCoop.objectEventId >= OBJECT_EVENTS_COUNT && gSaveBlock1Ptr != NULL)
-        TryGetObjectEventIdByLocalIdAndMap(LOCALID_COOP_PLAYER,
-            gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup, &sCoop.objectEventId);
-    if (RemoteObjectValid())
-        RemoveObjectEventByLocalIdAndMap(LOCALID_COOP_PLAYER, gSaveBlock1Ptr->location.mapNum, gSaveBlock1Ptr->location.mapGroup);
+    /* Connected maps retain objects from the previous map, and a save from
+     * an older build can contain more than one. The cached slot/current map
+     * cannot identify all of these session-only actors. */
+    for (uint8_t i = 0; i < OBJECT_EVENTS_COUNT; ++i)
+    {
+        struct ObjectEvent *object = &gObjectEvents[i];
+        if (object->active && !object->isPlayer && object->localId == LOCALID_COOP_PLAYER)
+            CtrCoop_EngineRemoveRemoteObject(i);
+    }
     sCoop.objectEventId = OBJECT_EVENTS_COUNT;
     sCoop.haveApplied = false;
+    sRemoteSteps.head = sRemoteSteps.count = 0;
+}
+
+void CtrCoop_MapLeaving(void)
+{
+    /* Sprite storage may already belong to a map loader: only notify here.
+     * The stable field frame removes/recreates the presentation safely. */
+    sCoop.haveLastSent = false;
+    sCoop.haveApplied = false;
+    sRemoteSteps.head = sRemoteSteps.count = 0;
+    if (PartyPeerReady())
+    {
+        sMapExitPending = true;
+        SendMapExit();
+    }
 }
 
 bool CtrCoop_UseCustomGraphicsId(void)
@@ -1004,14 +1031,20 @@ static void SendLocalSnapshot(const CtrCoopSnapshot *local, const struct LocalPe
     uint8_t packet[CTR_COOP_PACKET_SIZE];
     CtrCoopSnapshot sent = *local;
 
-    if (!CtrCoopProtocol_ShouldSend(sCoop.haveLastSent ? &sCoop.lastSent : NULL, local, sCoop.framesSinceLast))
+    /* Do not let a retried exit overtake the first pose on the new map. */
+    if (sMapExitPending)
         return;
+
     if (!CtrCoopProtocol_Encode(local, packet, sizeof(packet)))
     {
         sent.movementActionId = GetFaceDirectionMovementAction(local->facing);
         if (!CtrCoopProtocol_Encode(&sent, packet, sizeof(packet)))
             return;
     }
+    /* Compare the wire pose: native NONE becomes FACE while idle. Comparing
+     * NONE with the previously sent FACE emitted a redundant packet per frame. */
+    if (!CtrCoopProtocol_ShouldSend(sCoop.haveLastSent ? &sCoop.lastSent : NULL, &sent, sCoop.framesSinceLast))
+        return;
     if (!LocalLink_TrySend(peer->id, packet, sizeof(packet)))
         return;
     sCoop.lastSent = sent;
@@ -1165,13 +1198,26 @@ static void UpdateRemoteObject(const CtrCoopSnapshot *local)
     bool alreadyApplied;
     const CtrCoopSnapshot *target;
 
+    /* A connected-map transition does not rebuild the object array. Also
+     * clean duplicates left by earlier builds even if the live slot is valid. */
+    for (uint8_t i = 0; i < OBJECT_EVENTS_COUNT; ++i)
+    {
+        struct ObjectEvent *old = &gObjectEvents[i];
+        if (old->active && !old->isPlayer && old->localId == LOCALID_COOP_PLAYER
+         && (i != sCoop.objectEventId || !RemoteObjectValid()))
+            CtrCoop_EngineRemoveRemoteObject(i);
+    }
+
     if (!sCoop.remoteValid || !CtrCoopProtocol_SameMap(&sCoop.remote, local))
     {
         RemoveRemoteObject();
         return;
     }
     if (!RemoteObjectValid())
+    {
+        RemoveRemoteObject();
         freshSpawn = SpawnRemoteObject();
+    }
     if (!RemoteObjectValid())
         return;
     if (freshSpawn)
@@ -1301,6 +1347,18 @@ bool CtrCoop_IsDoubleBattle(void)
     return sCoop.doubleState == DOUBLE_STATE_ACTIVE;
 }
 
+bool CtrCoop_UsesDoubleParty(void)
+{
+    return CtrCoop_IsDoubleBattle() && !sCoop.doublePartyRestored;
+}
+
+uint16_t CtrCoop_BattlerGraphicsId(uint8_t battler)
+{
+    if (!CtrCoop_UsesDoubleParty() || (battler != 0 && battler != 2))
+        return NUM_OBJ_EVENT_GFX;
+    return sDoubleGraphicsIds[battler / 2];
+}
+
 bool CtrCoop_IsDoubleInitiator(void)
 {
     return sCoop.doubleInitiator;
@@ -1345,6 +1403,18 @@ static uint32_t ReadDouble32(const uint8_t *data, uint32_t offset)
 bool CtrCoop_UsesNpcPartner(void)
 {
     return CtrCoop_IsDoubleBattle() && sCoop.doubleBorrowedPartner;
+}
+
+bool CtrCoop_IsStoryPartnerBattle(void)
+{
+    return CtrCoop_IsDoubleBattle() && sCoop.doubleStoryPartner;
+}
+
+bool CtrCoop_BattleMonEarnsExp(uint8_t partyId)
+{
+    uint8_t npcStart = sCoop.doubleInitiator ? (sCoop.guest ? 0 : 3) : (sCoop.guest ? 3 : 0);
+    return partyId < PARTY_SIZE && (!CtrCoop_IsDoubleBattle() || !sCoop.doubleStoryPartner
+        || partyId < npcStart || partyId >= npcStart + MULTI_PARTY_SIZE);
 }
 
 static void SendDoubleRequest(void)
@@ -1435,7 +1505,11 @@ static void ConfigureDoubleBattle(const uint8_t *data)
     sCoop.doubleBorrowedPartner = sCoop.doubleStoryPartner && !sCoop.doubleInitiator;
     memcpy(gEnemyParty, data + DOUBLE_HEADER_SIZE, sizeof(gEnemyParty));
     memcpy(gPlayerParty, data + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty), sizeof(gPlayerParty));
-    gPlayerPartyCount = CalculatePlayerPartyCount();
+    /* The native counter stops at the first empty slot. A one-Pokemon host
+     * must not hide the guest's fixed half starting at slot three. */
+    gPlayerPartyCount = PARTY_SIZE;
+    sDoubleGraphicsIds[0] = data[28];
+    sDoubleGraphicsIds[1] = data[29];
     gBattleTypeFlags = flags;
     if (!sCoop.guest)
         gBattleTypeFlags |= BATTLE_TYPE_IS_MASTER;
@@ -1498,6 +1572,8 @@ static void PrepareDoubleSetup(void)
     sDoubleSendData[18] = sCoop.guest;
     WriteDouble32(sDoubleSendData, 20, originalFlags);
     WriteDouble32(sDoubleSendData, 24, sFollow.token);
+    sDoubleSendData[28] = sCoop.guest ? sCoop.remote.graphicsId : CtrCoop_LocalGraphicsId();
+    sDoubleSendData[29] = sCoop.guest ? CtrCoop_LocalGraphicsId() : sCoop.remote.graphicsId;
     memcpy(sDoubleSendData + DOUBLE_HEADER_SIZE, gEnemyParty, sizeof(gEnemyParty));
     BuildDoubleParty(sDoubleSendData + DOUBLE_HEADER_SIZE + sizeof(gEnemyParty));
     sCoop.doubleSendOffset = 0;
@@ -1601,7 +1677,8 @@ static void HandleDoubleChunk(uint16_t from, const uint8_t *data, uint16_t len)
     }
     if (ReadDouble32(sDoubleReceiveData, 24) != sFollow.token
      || sFollow.state != FOLLOW_FOLLOWER || sDoubleReceiveData[17] > 1
-     || sDoubleReceiveData[18] != !sCoop.guest)
+     || sDoubleReceiveData[18] != !sCoop.guest
+     || sDoubleReceiveData[28] >= NUM_OBJ_EVENT_GFX || sDoubleReceiveData[29] >= NUM_OBJ_EVENT_GFX)
         return;
     /* Acceptance must not overwrite a PC/menu opened during the transfer,
      * or an updated local party. Leave the initiator its solo encounter. */
@@ -1979,9 +2056,9 @@ static void RestoreDoubleParty(void)
             sRemoteParty[i] = gPlayerParty[remoteStart + i];
     }
     memcpy(gPlayerParty, sDoubleLocalParty, sizeof(gPlayerParty));
+    sCoop.doublePartyRestored = true;
     gPlayerPartyCount = CalculatePlayerPartyCount();
     sRemotePartyValid = true;
-    sCoop.doublePartyRestored = true;
 }
 
 void CtrCoop_PrepareDoubleReturn(void)
@@ -3626,6 +3703,7 @@ void CtrCoop_OverworldFrame(void)
     int peerCount;
 
     CtrCoop_CheckHostConnection();
+    SendMapExit();
     TickSpectator();
     UpdateInventorySession();
     FollowTick();
@@ -3741,7 +3819,7 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
      && data[0] != 75 && data[0] != CTR_COOP_NPC_MOTION_PACKET && data[0] != CTR_COOP_NPC_MOTION_END_PACKET
      && (data[0]<CTR_COOP_INVENTORY_REQUEST || data[0]>CTR_COOP_INVENTORY_CONTROL)
      && (data[0]<CTR_COOP_MONEY_FIRST_PACKET || data[0]>CTR_COOP_MONEY_LAST_PACKET)
-     && data[0] != CTR_COOP_FOLLOW_PACKET)
+     && data[0] != CTR_COOP_FOLLOW_PACKET && data[0] != CTR_COOP_MAP_EXIT_PACKET)
         return false;
     if (len < 2)
         return true;
@@ -4221,6 +4299,15 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
             ApplyRemoteVar(id, value);
             if (!sCoop.guest)
                 SendVarUpdate(from, id, value);
+        }
+        return true;
+    }
+    if (data[0] == CTR_COOP_MAP_EXIT_PACKET)
+    {
+        if (len == CTR_COOP_MAP_EXIT_SIZE && data[1] == CTR_COOP_PROTOCOL_VERSION && PartyPeerReady())
+        {
+            sCoop.remoteValid = false;
+            sRemoteSteps.head = sRemoteSteps.count = 0;
         }
         return true;
     }

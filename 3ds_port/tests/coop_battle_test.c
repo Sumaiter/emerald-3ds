@@ -4,7 +4,7 @@
 
 u32 gBattleTypeFlags;
 static uint8_t sHostGraphics = 12, sGuestGraphics = 13;
-static bool sGuest, sAllowed = true;
+static bool sGuest, sAllowed = true, sDouble;
 static unsigned sPaletteLoads, sErrors;
 static uint16_t sPaletteSlot;
 static uint8_t sPaletteFirst;
@@ -15,6 +15,10 @@ static int sFailures;
 
 bool CtrCoop_UseCustomGraphicsId(void) { return sAllowed; }
 uint8_t CtrCoop_LocalGraphicsId(void) { return sGuest ? sGuestGraphics : sHostGraphics; }
+bool CtrCoop_IsDoubleBattle(void) { return sDouble; }
+uint8_t CtrCoop_LocalMultiplayerId(void) { return sGuest ? 1 : 0; }
+uint16_t CtrCoop_BattlerGraphicsId(uint8_t battler)
+{ return battler == 0 ? sHostGraphics : battler == 2 ? sGuestGraphics : 255; }
 void CtrLog_Write(CtrLogCategory c, const char *f, ...) { (void)c; (void)f; ++sErrors; }
 void LoadPalette(const void *p, u16 offset, u16 size)
 {
@@ -40,6 +44,7 @@ static void Reset(void)
     sArt = NULL;
     sTried = false;
     sGuest = false;
+    sDouble = false;
     sAllowed = true;
     gBattleTypeFlags = 0;
     sPaletteLoads = sErrors = 0;
@@ -90,6 +95,31 @@ int main(void)
     gBattleTypeFlags = 0;
     sAllowed = false;
     CHECK(!CtrCoopBattle_Active(), "unauthenticated guest cannot use host graphics");
+    Reset();
+    gBattleTypeFlags = BATTLE_TYPE_LINK | BATTLE_TYPE_MULTI | BATTLE_TYPE_DOUBLE;
+    sHostGraphics = 12; sGuestGraphics = 13; sDouble = true;
+    for (unsigned role = 0; role < 2; ++role)
+    {
+        struct SpriteTemplate host = {0}, guest = {0};
+        sGuest = role;
+        CHECK(CtrCoopBattle_Active(), "cooperative link uses profile art on both consoles");
+        CtrCoopBattle_Apply(0, &host);
+        CtrCoopBattle_Apply(2, &guest);
+        CHECK(host.images != guest.images && *(const uint8_t *)host.images[4].data == 0x11
+           && *(const uint8_t *)guest.images[4].data == 0x22,
+              "simultaneous host and guest keep independent frame tables on either console");
+        CtrCoopBattle_LoadBattlerPalette(0, 8);
+        CHECK(sPaletteFirst == 0x11 && sPaletteSlot == OBJ_PLTT_ID(8), "host throw palette is host's");
+        CtrCoopBattle_LoadBattlerPalette(2, 9);
+        CHECK(sPaletteFirst == 0x22 && sPaletteSlot == OBJ_PLTT_ID(9), "partner throw palette is guest's");
+        host.images = NULL;
+        CtrCoopBattle_Apply(1, &host);
+        CHECK(!host.images, "NPC front cannot inherit a player back");
+    }
+    sGuestGraphics = 11;
+    CHECK(CtrCoopBattle_BattlerBackPicId(2, 0) == 2, "native partner Red keeps native animated back");
+    sDouble = false;
+    CHECK(!CtrCoopBattle_Active(), "real competitive link retains original identities");
     Reset();
     Put32(20, sizeof(sFile) - 1);
     CHECK(!CtrCoopBattle_Active() && sErrors == 1, "truncated frame rejected safely");

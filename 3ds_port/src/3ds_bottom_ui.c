@@ -2282,6 +2282,7 @@ typedef struct
     u8 dock, dockLocked;
     /* Party: SAVE's and NUZLOCKE's icons. */
     MonView party[PARTY_SIZE];
+    bool8 multiParty;
     /* Region map, and the header's clock. Zoomed in, the view's top left in
      * map pixels; the picked section's kind (MAPSECTYPE_*), the cell's place
      * in it and the landmarks its panel lists. The Fly map: the towns
@@ -3206,6 +3207,8 @@ static void SnapshotNative(ViewState *s)
 {
     u8 kind = NativeKind(s);
     bool8 got = FALSE;
+
+    s->multiParty = kind == NATIVE_PARTY && CtrCoop_UsesDoubleParty();
 
     /* No native view now: one still shown is stale too, until redrawn. */
     sNativeStale = kind == NATIVE_NONE && sShown.native != NATIVE_NONE;

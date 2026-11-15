@@ -108,6 +108,16 @@ bool CtrCoopSpectator_HandlePacket(uint16_t from,const uint8_t *data,uint16_t le
 void CtrCoopSpectator_Reset(void) { sWatching=false; }
 
 void CtrCoop_EngineRemoteStepEffects(uint8_t objectEventId) { (void)objectEventId; }
+void CtrCoop_EngineRemoveRemoteObject(uint8_t objectEventId)
+{
+    if (objectEventId < OBJECT_EVENTS_COUNT && !gObjectEvents[objectEventId].isPlayer
+     && gObjectEvents[objectEventId].localId == LOCALID_COOP_PLAYER)
+    {
+        RemoveObjectEventByLocalIdAndMap(LOCALID_COOP_PLAYER,
+            gObjectEvents[objectEventId].mapNum, gObjectEvents[objectEventId].mapGroup);
+        gObjectEvents[objectEventId].active = false;
+    }
+}
 
 static void ResetLiveFixture(void)
 {

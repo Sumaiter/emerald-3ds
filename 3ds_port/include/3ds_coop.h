@@ -60,12 +60,22 @@ void CtrCoop_StopFollowing(void);
 void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held);
 /* Match a visited leader step independently of either player's B/run setting. */
 bool CtrCoop_FollowRunning(void);
+/* One extra native animation tick only while a received trail is behind. */
+bool CtrCoop_CatchUpMovement(uint8_t objectEventId);
+/* Called before every warp/connected-map location change. */
+void CtrCoop_MapLeaving(void);
+void CtrCoop_EngineRemoveRemoteObject(uint8_t objectEventId);
 /* Native helper receives only bounded map coordinates, never a save pointer. */
 bool CtrCoop_EngineFollowWarp(uint8_t group, uint8_t num, uint16_t layout, int16_t x, int16_t y);
 bool CtrCoop_EnginePrepareFollowBattle(void);
 /* A repeatable debug encounter has a RAM-only, capped team until return. */
 bool CtrCoop_EngineTestPartyActive(void);
+uint8_t CtrCoop_EnginePrepareEvolutionParty(uint8_t levelBits);
+void CtrCoop_EngineFinishEvolutionParty(void);
 bool CtrCoop_UsesNpcPartner(void);
+bool CtrCoop_IsStoryPartnerBattle(void);
+/* Fixed composite battle slot: borrowed NPC monsters earn no player EXP. */
+bool CtrCoop_BattleMonEarnsExp(uint8_t partyId);
 bool CtrCoop_RestrictStoryParty(void);
 bool CtrCoop_IsWatching(void);
 const uint8_t *CtrCoop_WatchingName(void);
@@ -92,6 +102,12 @@ const uint8_t *CtrCoop_NoticeName(void);
 bool CtrCoop_NoticeIsInteraction(void);
 void CtrCoop_DismissNotice(void);
 bool CtrCoop_IsDoubleBattle(void);
+/* Six fixed battle slots, including empty entries between the two teams.
+ * False once the original full local party has been restored. */
+bool CtrCoop_UsesDoubleParty(void);
+uint16_t CtrCoop_BattlerGraphicsId(uint8_t battler);
+/* Native trainer art shared by authoritative AI and guest presentation. */
+uint32_t CtrCoop_EngineOpponentTrainerPic(void);
 bool CtrCoop_IsDoubleInitiator(void);
 /* Restore the original full party before native defeat/field callbacks. */
 void CtrCoop_PrepareDoubleReturn(void);

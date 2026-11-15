@@ -1,0 +1,156 @@
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -4150,6 +4150,11 @@
+     u8 side;
+     s32 i;
+ 
++#ifdef PLATFORM_3DS
++    // Cooperative trainers use link transport but retain trainer rules.
++    if (CtrCoop_IsDoubleBattle() && (gBattleTypeFlags & BATTLE_TYPE_TRAINER))
++        return BATTLE_RUN_FORBIDDEN;
++#endif
+     if (gBattleMons[gActiveBattler].item == ITEM_ENIGMA_BERRY)
+         holdEffect = gEnigmaBerries[gActiveBattler].holdEffect;
+     else
+@@ -4517,7 +4522,11 @@
+                     return;
+                 }
+                 else if (gBattleTypeFlags & BATTLE_TYPE_TRAINER
+-                         && !(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++                         && (!(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++#ifdef PLATFORM_3DS
++                             || CtrCoop_IsDoubleBattle()
++#endif
++                            )
+                          && gBattleBufferB[gActiveBattler][1] == B_ACTION_RUN)
+                 {
+                     BattleScriptExecute(BattleScript_PrintCantRunFromTrainer);
+--- a/src/battle_util.c
++++ b/src/battle_util.c
+@@ -515,6 +515,17 @@
+ {
+     gBattlerAttacker = gBattlerByTurnOrder[gCurrentTurnActionNumber];
+ 
++#ifdef PLATFORM_3DS
++    // Defence for an already queued/stale RUN: never turn a cooperative
++    // trainer encounter into the competitive link battle's forfeit path.
++    if (CtrCoop_IsDoubleBattle() && (gBattleTypeFlags & BATTLE_TYPE_TRAINER))
++    {
++        gBattleCommunication[MULTISTRING_CHOOSER] = B_MSG_CANT_ESCAPE_2;
++        gBattlescriptCurrInstr = BattleScript_PrintFailedToRunString;
++        gCurrentActionFuncId = B_ACTION_EXEC_SCRIPT;
++        return;
++    }
++#endif
+     if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK)
+ #ifdef PLATFORM_3DS
+         && !(CtrCoop_IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
+--- a/src/battle_gfx_sfx_util.c
++++ b/src/battle_gfx_sfx_util.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "reshow_battle_screen.h"
++#endif
+ #include "battle.h"
+ #include "battle_controllers.h"
+ #include "battle_ai_script_commands.h"
+@@ -828,6 +831,9 @@
+     {
+     case 0:
+         ClearSpritesBattlerHealthboxAnimData();
++#ifdef PLATFORM_3DS
++        CtrCoop_BeginIntroHealthboxes();
++#endif
+         (*state1)++;
+         break;
+     case 1:
+--- a/src/reshow_battle_screen.c
++++ b/src/reshow_battle_screen.c
+@@ -1,4 +1,8 @@
+ #include "global.h"
++#ifdef PLATFORM_3DS
++#include "3ds_coop.h"
++#include "3ds_log.h"
++#endif
+ #include "reshow_battle_screen.h"
+ #include "battle.h"
+ #include "palette.h"
+@@ -22,6 +26,41 @@
+ static void CreateBattlerSprite(u8 battler);
+ static void CreateHealthboxSprite(u8 battler);
+ static void ClearBattleBgCntBaseBlocks(void);
++
++#ifdef PLATFORM_3DS
++static bool8 sCoopIntroHealthboxesPending;
++
++void CtrCoop_BeginIntroHealthboxes(void)
++{
++    sCoopIntroHealthboxesPending = CtrCoop_IsDoubleBattle();
++}
++
++void CtrCoop_CommitIntroHealthboxes(void)
++{
++    u32 battler;
++
++    if (!sCoopIntroHealthboxesPending || !CtrCoop_IsDoubleBattle())
++        return;
++    sCoopIntroHealthboxesPending = FALSE;
++    // CHOOSEACTION follows every intro completion on both endpoints. Use
++    // the same native reconstruction that restores both boxes after a menu,
++    // after the trainer/ball/shiny sprite lifetimes have all finished.
++    for (battler = 0; battler < gBattlersCount; battler++)
++    {
++        u8 id = gHealthboxSpriteIds[battler];
++        CtrLog_Write(CTR_LOG_GAME,
++            "coop: intro HP %lu old=%u used=%u xy=%d/%d offset=%d/%d tile=%u hidden=%u",
++            (unsigned long)battler, id, id < MAX_SPRITES && gSprites[id].inUse,
++            id < MAX_SPRITES ? gSprites[id].x : 0, id < MAX_SPRITES ? gSprites[id].y : 0,
++            id < MAX_SPRITES ? gSprites[id].x2 : 0, id < MAX_SPRITES ? gSprites[id].y2 : 0,
++            id < MAX_SPRITES ? gSprites[id].oam.tileNum : 0, id < MAX_SPRITES && gSprites[id].invisible);
++        if (id < MAX_SPRITES && gSprites[id].inUse)
++            DestoryHealthboxSprite(id);
++    }
++    for (battler = 0; battler < gBattlersCount; battler++)
++        CreateHealthboxSprite(battler);
++}
++#endif
+ 
+ void ReshowBattleScreenDummy(void)
+ {
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -2818,6 +2818,9 @@
+ {
+     s32 i;
+ 
++#ifdef PLATFORM_3DS
++    CtrCoop_CommitIntroHealthboxes();
++#endif
+     gBattlerControllerFuncs[gActiveBattler] = HandleChooseActionAfterDma3;
+     BattleTv_ClearExplosionFaintCause();
+ #ifdef PLATFORM_3DS
+--- a/src/battle_controller_link_partner.c
++++ b/src/battle_controller_link_partner.c
+@@ -1333,6 +1333,9 @@
+ 
+ static void LinkPartnerHandleChooseAction(void)
+ {
++#ifdef PLATFORM_3DS
++    CtrCoop_CommitIntroHealthboxes();
++#endif
+     LinkPartnerBufferExecCompleted();
+ }
+ 
+--- a/include/reshow_battle_screen.h
++++ b/include/reshow_battle_screen.h
+@@ -3,5 +3,9 @@
+ 
+ void ReshowBattleScreenDummy(void);
+ void ReshowBattleScreenAfterMenu(void);
++#ifdef PLATFORM_3DS
++void CtrCoop_BeginIntroHealthboxes(void);
++void CtrCoop_CommitIntroHealthboxes(void);
++#endif
+ 
+ #endif // GUARD_RESHOW_BATTLE_SCREEN_H

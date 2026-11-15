@@ -972,7 +972,9 @@ static Slot *SlotOf(unsigned char healthboxSpriteId)
     return NULL;
 }
 
-void CtrBattleHud_BoxCreated(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind)
+static bool SlotAlive(int i);
+
+static void RegisterHealthbox(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind)
 {
     const struct Sprite *left = &gSprites[healthboxSpriteId];
     Slot *slot;
@@ -980,12 +982,6 @@ void CtrBattleHud_BoxCreated(unsigned char healthboxSpriteId, unsigned char batt
 
     if (battler >= CTR_HUD_BOXES)
         return;
-    /* The first box of a battle: the last battle's are gone. */
-    if (battler == 0)
-    {
-        CtrBattleHud_Clear();
-        CtrBattleHud_Prepare();
-    }
     slot = &sSlots[battler];
     box = &sBoxes[battler];
     memset(slot, 0, sizeof(*slot));
@@ -1015,6 +1011,25 @@ void CtrBattleHud_BoxCreated(unsigned char healthboxSpriteId, unsigned char batt
     box->changedTop = 0;
     box->changedBottom = CTR_HUD_H;
     box->version++;
+}
+
+void CtrBattleHud_BoxCreated(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind)
+{
+    /* The first box of a battle: the last battle's are gone. */
+    if (battler == 0)
+    {
+        CtrBattleHud_Clear();
+        CtrBattleHud_Prepare();
+    }
+    RegisterHealthbox(healthboxSpriteId, battler, kind);
+}
+
+void CtrBattleHud_RefreshBox(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind)
+{
+    if (battler >= CTR_HUD_BOXES || healthboxSpriteId >= MAX_SPRITES)
+        return;
+    if (!sBoxes[battler].used || sSlots[battler].sprite != healthboxSpriteId || !SlotAlive(battler))
+        RegisterHealthbox(healthboxSpriteId, battler, kind);
 }
 
 void CtrBattleHud_SetName(unsigned char id, const unsigned char *name, unsigned char gender)

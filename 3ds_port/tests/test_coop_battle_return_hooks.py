@@ -53,6 +53,10 @@ static u8 gPlayerPartyCount;
 static unsigned pyramid, hill, pike, ends, checks, frozenCount, frozenMoney, trainerFlags;
 static bool applyBlackoutMoney=true;
 static bool CtrCoop_ApplyBlackoutMoney(void) { return applyBlackoutMoney; }
+static bool CtrCoop_IsDoubleBattle(void) { return false; }
+static void CtrCoop_PrepareDoubleReturn(void) {}
+static void CtrCoop_EngineFinishEvolutionParty(void) {}
+static void CB2_InitEndLinkBattle(void) {}
 static void CB2_WhiteOut(void);
 static void CtrCoop_ResetBattleReturn(void);
 static void CB2_Overworld(void) {}

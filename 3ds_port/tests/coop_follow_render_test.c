@@ -6,7 +6,7 @@
 #undef main
 
 static unsigned starts, snaps, remaining;
-static uint8_t actions[32];
+static uint8_t actions[256];
 void ObjectEventClearHeldMovementIfFinished(struct ObjectEvent *o) { (void)o; }
 bool ObjectEventIsHeldMovementActive(struct ObjectEvent *o) { return o->heldMovementActive; }
 void ObjectEventSetHeldMovement(struct ObjectEvent *o,uint8_t action)
@@ -28,6 +28,84 @@ static void ReceivePose(int x,int y,unsigned direction)
     pose.movementActionId=CTR_COOP_ACTION_PLAYER_RUN_DOWN+direction-1;
     CHECK(CtrCoopProtocol_Encode(&pose,p,sizeof(p)),"encode visited run tile");
     CtrCoop_HandlePacket(PEER_ID,p,sizeof(p));
+}
+
+static void TestPresence(bool guest)
+{
+    ReadyHost();gMain.callback2=CB2_Overworld;
+    if(guest){sCoop.guest=true;sCoop.authenticated=true;sCoop.saveReady=true;
+        sCoop.initialTeamCommitted=true;sCoop.joinInfoReceived=true;}
+    CtrCoopSnapshot local;CHECK(LocalSnapshot(&local),"presence local snapshot");
+    sCoop.remoteValid=true;sCoop.remote=RemoteAt(27,23);UpdateRemoteObject(&local);
+    unsigned slot=sCoop.objectEventId;
+    gObjectEvents[8]=gObjectEvents[slot];UpdateRemoteObject(&local);
+    CHECK(gObjectEvents[slot].active && !gObjectEvents[8].active,"same-map duplicate removed without deleting the valid live slot");
+    /* Connected map retains old actors and reuses the remembered slot for an NPC. */
+    gObjectEvents[slot].mapNum++;
+    gObjectEvents[8]=gObjectEvents[slot];gObjectEvents[8].mapNum++;
+    gObjectEvents[9]=gObjectEvents[slot];gObjectEvents[9].localId=7;
+    sCoop.objectEventId=9;
+    sCoop.remoteValid=false;UpdateRemoteObject(&local);
+    CHECK(!gObjectEvents[slot].active && !gObjectEvents[8].active,"all old-map guest objects removed despite stale/reused cached slot");
+    CHECK(gObjectEvents[9].active && gObjectEvents[0].active,"NPC and local player preserved");
+    sCoop.remoteValid=true;UpdateRemoteObject(&local);
+    slot=sCoop.objectEventId;
+    uint8_t exitPacket[]={CTR_COOP_MAP_EXIT_PACKET,CTR_COOP_PROTOCOL_VERSION};
+    CtrCoop_HandlePacket(PEER_ID+1,exitPacket,sizeof(exitPacket));
+    CHECK(sCoop.remoteValid,"foreign peer cannot hide avatar");
+    --exitPacket[1];CtrCoop_HandlePacket(PEER_ID,exitPacket,sizeof(exitPacket));
+    CHECK(sCoop.remoteValid,"wrong protocol cannot hide avatar");
+    ++exitPacket[1];CtrCoop_HandlePacket(PEER_ID,exitPacket,1);
+    CHECK(sCoop.remoteValid,"short exit ignored");
+    CtrCoop_HandlePacket(PEER_ID,exitPacket,sizeof(exitPacket));UpdateRemoteObject(&local);
+    CHECK(!sCoop.remoteValid && !gObjectEvents[slot].active,"map exit immediately hides peer before new-map position arrives");
+    ReceivePose(27,23,4);UpdateRemoteObject(&local);
+    CHECK(RemoteObjectValid(),"new field pose restores exactly one avatar");
+    ClearPackets();sStoryTrySendBlocked=true;CtrCoop_MapLeaving();
+    CHECK(sMapExitPending && !sCoop.haveLastSent,"map exit retries a full transport queue");
+    struct LocalPeer peer={.id=PEER_ID};
+    sStoryTrySendBlocked=false;SendLocalSnapshot(&local,&peer);
+    CHECK(!sSentCount,"new pose cannot overtake pending exit");
+    SendMapExit();SendLocalSnapshot(&local,&peer);
+    CHECK(sSentCount==2 && sSent[0].data[0]==CTR_COOP_MAP_EXIT_PACKET
+        && sSent[1].data[0]==CTR_COOP_PEER_PACKET,"retried exit precedes new-map pose");
+    ClearPackets();local.movementActionId=0xFF;sCoop.haveLastSent=false;
+    SendLocalSnapshot(&local,&peer);SendLocalSnapshot(&local,&peer);
+    CHECK(sSentCount==1,"native idle NONE normalizes once instead of flooding every frame");
+}
+
+static void TestCatchUp(void)
+{
+    ReadyHost();gMain.callback2=CB2_Overworld;
+    CtrCoopSnapshot local;CHECK(LocalSnapshot(&local),"catch-up local snapshot");
+    sCoop.remoteValid=true;sCoop.remote=RemoteAt(27,23);UpdateRemoteObject(&local);
+    struct ObjectEvent *remote=&gObjectEvents[sCoop.objectEventId];
+    starts=snaps=remaining=0;
+    ReceivePose(28,23,4);ReceivePose(28,24,1);ReceivePose(29,24,4);
+    for(unsigned frame=0;frame<64;++frame)
+    {
+        /* Native action ticks are bounded at two; next action starts only
+         * after completion. New source steps continue every eight frames. */
+        if(frame && frame%8==0)ReceivePose(29+frame/8,24,4);
+        if(remaining)
+        {
+            unsigned ticks=CtrCoop_CatchUpMovement(sCoop.objectEventId)?2:1;
+            remaining=remaining>ticks?remaining-ticks:0;
+            if(!remaining)remote->heldMovementActive=false;
+        }
+        UpdateRemoteObject(&local);
+        if(frame>=32)CHECK(sCoop.remote.x-remote->currentCoords.x<=1,"initial three-step backlog converges during continuous movement");
+    }
+    CHECK(!snaps && actions[0]==0x38 && actions[1]==0x35 && actions[2]==0x38,"catch-up preserves complete corner actions without relocation");
+    sFollow.state=FOLLOW_FOLLOWER;sFollow.haveLast=true;sFollow.last=sCoop.remote;
+    sFollow.last.mapNum=gObjectEvents[0].mapNum;sFollow.last.mapGroup=gObjectEvents[0].mapGroup;
+    sFollow.head=0;sFollow.count=4;sFollow.trail[0]=RemoteAt(25,23);
+    gObjectEvents[0].heldMovementActive=true;
+    CHECK(CtrCoop_CatchUpMovement(0),"native follower also catches up when multiple free trail tiles are behind");
+    sFollow.count=2;
+    CHECK(!CtrCoop_CatchUpMovement(0),"normal follower gap keeps source speed");
+    gMain.inBattle=true;
+    CHECK(!CtrCoop_CatchUpMovement(sCoop.objectEventId),"battle sprites never advanced by field catch-up");
 }
 
 int main(void)
@@ -72,6 +150,7 @@ int main(void)
     CHECK(!sCoop.haveLastSent && sCoop.framesSinceLast==60,"queue rejection does not acknowledge an unsent position");
     sStoryTrySendBlocked=false;SendLocalSnapshot(&local,&peer);
     CHECK(sCoop.haveLastSent && !sCoop.framesSinceLast,"position retries immediately when the queue resumes");
+    TestPresence(false);TestPresence(true);TestCatchUp();
     if(sFailures)return 1;
     puts("burst turns: exact tile trail, native step completion, run matching, no teleports and one-tile follow gap passed");return 0;
 }

@@ -55,6 +55,8 @@ static unsigned GetMonData(const struct Pokemon *p,unsigned field){
 }
 static void InitTrainerBattleVariables(void){++inits;}
 static void FlagClear(unsigned flag){assert(clears<4);clearIds[clears++]=flag;}
+/* The real flag-to-reservation chain is covered by test_coop_repeat_battle. */
+static void SetBattledTrainersFlags(void){}
 static void CreateMon(struct Pokemon *p,unsigned species,unsigned level,unsigned iv,bool fixed,unsigned personality,unsigned ot,unsigned id){
     (void)iv;(void)fixed;(void)personality;assert(ot==OT_ID_PRESET && id==61226);
     *p=(struct Pokemon){.species=species,.hp=20,.level=level,.identity=species};

@@ -1,0 +1,141 @@
+--- a/src/battle_util.c
++++ b/src/battle_util.c
+@@ -413,6 +413,26 @@
+     u8 holdEffect;
+     u8 pyramidMultiplier;
+     u8 speedVar;
++    u8 opponent = BATTLE_OPPOSITE(battler);
++    bool8 coopWild = FALSE;
++
++#ifdef PLATFORM_3DS
++    coopWild = CtrCoop_IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_TRAINER);
++    if (coopWild)
++    {
++        u8 i;
++        // The opposite slot may already be fainted in a wild double battle.
++        // Use the fastest remaining opponent for the normal escape roll.
++        opponent = MAX_BATTLERS_COUNT;
++        for (i = 0; i < gBattlersCount; i++)
++        {
++            if (GetBattlerSide(i) != GetBattlerSide(battler)
++                && !(gAbsentBattlerFlags & gBitTable[i]) && gBattleMons[i].hp != 0
++                && (opponent == MAX_BATTLERS_COUNT || gBattleMons[i].speed > gBattleMons[opponent].speed))
++                opponent = i;
++        }
++    }
++#endif
+ 
+     if (gBattleMons[battler].item == ITEM_ENIGMA_BERRY)
+         holdEffect = gEnigmaBerries[battler].holdEffect;
+@@ -433,7 +453,7 @@
+         {
+             gBattleStruct->runTries++;
+             pyramidMultiplier = GetPyramidRunMultiplier();
+-            speedVar = (gBattleMons[battler].speed * pyramidMultiplier) / (gBattleMons[BATTLE_OPPOSITE(battler)].speed) + (gBattleStruct->runTries * 30);
++            speedVar = (gBattleMons[battler].speed * pyramidMultiplier) / (gBattleMons[opponent].speed) + (gBattleStruct->runTries * 30);
+             if (speedVar > (Random() & 0xFF))
+             {
+                 gLastUsedAbility = ABILITY_RUN_AWAY;
+@@ -454,18 +474,22 @@
+     }
+     else
+     {
+-        if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE))
+-        {
+-            if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE)
++        if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE) || coopWild)
++        {
++            if (opponent == MAX_BATTLERS_COUNT)
++            {
++                effect++;
++            }
++            else if (CurrentBattlePyramidLocation() != PYRAMID_LOCATION_NONE)
+             {
+                 pyramidMultiplier = GetPyramidRunMultiplier();
+-                speedVar = (gBattleMons[battler].speed * pyramidMultiplier) / (gBattleMons[BATTLE_OPPOSITE(battler)].speed) + (gBattleStruct->runTries * 30);
++                speedVar = (gBattleMons[battler].speed * pyramidMultiplier) / (gBattleMons[opponent].speed) + (gBattleStruct->runTries * 30);
+                 if (speedVar > (Random() & 0xFF))
+                     effect++;
+             }
+-            else if (gBattleMons[battler].speed < gBattleMons[BATTLE_OPPOSITE(battler)].speed)
+-            {
+-                speedVar = (gBattleMons[battler].speed * 128) / (gBattleMons[BATTLE_OPPOSITE(battler)].speed) + (gBattleStruct->runTries * 30);
++            else if (gBattleMons[battler].speed < gBattleMons[opponent].speed)
++            {
++                speedVar = (gBattleMons[battler].speed * 128) / (gBattleMons[opponent].speed) + (gBattleStruct->runTries * 30);
+                 if (speedVar > (Random() & 0xFF))
+                     effect++;
+             }
+@@ -491,7 +515,11 @@
+ {
+     gBattlerAttacker = gBattlerByTurnOrder[gCurrentTurnActionNumber];
+ 
+-    if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK))
++    if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK)
++#ifdef PLATFORM_3DS
++        && !(CtrCoop_IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
++#endif
++       )
+     {
+         gCurrentTurnActionNumber = gBattlersCount;
+ 
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -4159,7 +4159,11 @@
+ 
+     if (holdEffect == HOLD_EFFECT_CAN_ALWAYS_RUN)
+         return BATTLE_RUN_SUCCESS;
+-    if (gBattleTypeFlags & BATTLE_TYPE_LINK)
++    if (gBattleTypeFlags & BATTLE_TYPE_LINK
++#ifdef PLATFORM_3DS
++        && !(CtrCoop_IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_TRAINER))
++#endif
++       )
+         return BATTLE_RUN_SUCCESS;
+     if (gBattleMons[gActiveBattler].ability == ABILITY_RUN_AWAY)
+         return BATTLE_RUN_SUCCESS;
+--- a/data/battle_scripts_1.s
++++ b/data/battle_scripts_1.s
+@@ -3051,22 +3051,41 @@
+ 	playanimation BS_ATTACKER, B_ANIM_SMOKEBALL_ESCAPE
+ 	printstring STRINGID_PKMNFLEDUSINGITS
+ 	waitmessage B_WAIT_TIME_LONG
++#if defined(PLATFORM_3DS) || defined(PORT_BRIDGE)
++	jumpifbattletype BATTLE_TYPE_LINK, BattleScript_LinkWildEscapeEnd
++#endif
+ 	end2
+ 
+ BattleScript_RanAwayUsingMonAbility::
+ 	printstring STRINGID_PKMNFLEDUSING
+ 	waitmessage B_WAIT_TIME_LONG
++#if defined(PLATFORM_3DS) || defined(PORT_BRIDGE)
++	jumpifbattletype BATTLE_TYPE_LINK, BattleScript_LinkWildEscapeEnd
++#endif
+ 	end2
+ 
+ BattleScript_GotAwaySafely::
+ 	printstring STRINGID_GOTAWAYSAFELY
+ 	waitmessage B_WAIT_TIME_LONG
++#if defined(PLATFORM_3DS) || defined(PORT_BRIDGE)
++	jumpifbattletype BATTLE_TYPE_LINK, BattleScript_LinkWildEscapeEnd
++#endif
+ 	end2
+ 
+ BattleScript_WildMonFled::
+ 	printstring STRINGID_WILDPKMNFLED
+ 	waitmessage B_WAIT_TIME_LONG
+-	end2
++#if defined(PLATFORM_3DS) || defined(PORT_BRIDGE)
++	jumpifbattletype BATTLE_TYPE_LINK, BattleScript_LinkWildEscapeEnd
++#endif
++	end2
++
++#if defined(PLATFORM_3DS) || defined(PORT_BRIDGE)
++// Wild co-op uses link controllers; both peers must finish with RAN/MON_FLED.
++BattleScript_LinkWildEscapeEnd:
++	endlinkbattle
++	end2
++#endif
+ 
+ BattleScript_PrintCantRunFromTrainer::
+ 	printstring STRINGID_NORUNNINGFROMTRAINERS

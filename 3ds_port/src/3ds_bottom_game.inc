@@ -97,6 +97,22 @@ static const u8 *HpText(u16 hp, u16 maxHp)
  * frame while the second is on its way, and its place kept from frame to
  * frame (centred on the first's pixels). */
 #define PARTY_ICON_R 20
+/* Native multi party order puts the local three at 0,2,3 and the partner's
+ * at 1,4,5, on both consoles. Touch still delegates ownership to the engine. */
+static bool8 PartyGroupRect(const ViewState *s, int slot, int *x, int *y, int *w, int *h)
+{
+    static const u8 column[PARTY_SIZE] = {0, 1, 0, 0, 1, 1};
+    static const u8 row[PARTY_SIZE] = {0, 0, 1, 2, 1, 2};
+    if (!s->multiParty || s->pv.state != CTR_PARTY_VIEW_LIST || s->pv.message || s->pv.yesNo
+     || slot < 0 || slot >= PARTY_SIZE)
+        return FALSE;
+    *w = (AREA_W - 4) / 2;
+    *h = 39;
+    *x = AREA_X + column[slot] * (*w + 4);
+    *y = AREA_Y + row[slot] * 42;
+    return TRUE;
+}
+
 static void PartyIconAt(const ViewState *s, int slot, int cx, int cy)
 {
     const MonView *mon = &s->party[slot];
@@ -132,8 +148,14 @@ static bool8 PartyIconRect(const ViewState *s, int slot, int *x0, int *y0, int *
     int lead = (v->state == CTR_PARTY_VIEW_MENU || v->state == CTR_PARTY_VIEW_STATS) && v->chosen >= 0
             && v->chosen < PARTY_SIZE ? v->chosen : 0;
     int cx, cy;
+    int gx, gy, gw, gh;
 
-    if (slot == lead)
+    if (PartyGroupRect(s, slot, &gx, &gy, &gw, &gh))
+    {
+        cx = gx + 18;
+        cy = gy + 19;
+    }
+    else if (slot == lead)
     {
         cx = AREA_X + 19;
         cy = AREA_Y + 20;
@@ -377,11 +399,53 @@ static void DrawPartyStats(const ViewState *s)
     AddHit(x, AREA_Y, w, AREA_H, HIT_NAT_MSG);
 }
 
+static void DrawGroupedParty(const ViewState *s)
+{
+    const struct CtrPartyView *v = &s->pv;
+    int x, y, w, h, oy;
+    for (int slot = 0; slot < PARTY_SIZE; ++slot)
+    {
+        const MonView *mon = &s->party[slot];
+        if (!PartyGroupRect(s, slot, &x, &y, &w, &h))
+            continue;
+        if (!mon->species)
+        {
+            Plate(x, y, w, h, sGroupOff, PLATE_STATE_NORMAL);
+            continue;
+        }
+        oy = PlateEx(x, y, w, h, PartyBoxColour(s, slot), PartyBoxState(s, slot), 36, 30, PlateCut(h), 0);
+        PartyIconAt(s, slot, x + 18, oy + 19);
+        PartyHeldSign(s, slot, x + 18, oy + 19);
+        StyledStr(FitFont(&sNormal, mon->nick, w - 64), mon->nick, x + 40, oy + 2, STYLE_WHITE);
+        if (!mon->isEgg)
+        {
+            StyledStr(&sSmall, LevelText(mon->level), x + 40, oy + 17, STYLE_WHITE);
+            GenderSign(x + w - 14, oy + 2, mon->gender);
+            HpBar(x + 72, oy + 22, w - 82, mon->hp, mon->maxHp);
+            StyledRight(&sSmall, HpText(mon->hp, mon->maxHp), x + w - 8, oy + 28, STYLE_WHITE);
+        }
+        AddHit(x, y, w, h, HIT_NAT_SLOT + slot);
+    }
+    oy = Plate(AREA_X, AREA_Y + 129, AREA_W - 100, 35, sCreamPlate, PLATE_STATE_NORMAL);
+    TextLines(v->prompt, AREA_X + 8, oy + 4, AREA_W - 116, PARTY_LINE, 2, &sNormal, STYLE_INK, TRUE);
+    bool8 pressed = s->pressed == HIT_CANCEL;
+    oy = Plate(AREA_X + AREA_W - 96, AREA_Y + 129, 96, 35, pressed ? sEmerald : sSlate,
+               pressed ? PLATE_STATE_PRESSED : PLATE_STATE_NORMAL);
+    TextIn(gText_Cancel2, AREA_X + AREA_W - 96, oy, 96, 35, &sNormal, 'c', STYLE_WHITE, 4);
+    AddHit(AREA_X + AREA_W - 96, AREA_Y + 129, 96, 35, HIT_CANCEL);
+}
+
 static void DrawGameParty(const ViewState *s)
 {
     const struct CtrPartyView *v = &s->pv;
     bool8 menu = v->state == CTR_PARTY_VIEW_MENU, stats = v->state == CTR_PARTY_VIEW_STATS;
     int lead = (menu || stats) && v->chosen >= 0 && v->chosen < PARTY_SIZE ? v->chosen : 0, oy, bottom;
+
+    if (s->multiParty && v->state == CTR_PARTY_VIEW_LIST && !v->message && !v->yesNo)
+    {
+        DrawGroupedParty(s);
+        return;
+    }
 
     DrawPartyLead(s, lead);
     oy = Plate(AREA_X, AREA_Y + 87, PARTY_LEFT_W, 44, sCreamPlate, PLATE_STATE_NORMAL);

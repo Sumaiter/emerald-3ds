@@ -69,6 +69,8 @@ typedef struct
 
 /* ---- Told by battle_interface.c (PLATFORM_3DS), by healthbox sprite. ---- */
 void CtrBattleHud_BoxCreated(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind);
+/* Repair a stale registration without clearing the other three live boxes. */
+void CtrBattleHud_RefreshBox(unsigned char healthboxSpriteId, unsigned char battler, unsigned char kind);
 void CtrBattleHud_SetName(unsigned char healthboxSpriteId, const unsigned char *name, unsigned char gender);
 void CtrBattleHud_SetLevel(unsigned char healthboxSpriteId, unsigned char level);
 void CtrBattleHud_SetHp(unsigned char healthboxSpriteId, short value, bool max);

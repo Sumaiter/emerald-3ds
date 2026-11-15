@@ -1,0 +1,764 @@
+--- a/src/battle_setup.c
++++ b/src/battle_setup.c
+@@ -1976,6 +1976,73 @@
+     return sRoute101TestPartyActive;
+ }
+ 
++#ifdef PLATFORM_3DS
++static bool8 sCoopEvolutionPartyFull;
++static bool8 sCoopEvolutionPartySelected;
++
++u8 CtrCoop_EnginePrepareEvolutionParty(u8 levelBits)
++{
++    u32 i;
++    u8 fullLevelBits = 0;
++
++    sCoopEvolutionPartyFull = FALSE;
++    sCoopEvolutionPartySelected = FALSE;
++    if (!CtrCoop_IsDoubleInitiator())
++        return levelBits;
++    if (!sRoute101TestPartyActive)
++    {
++        if (!CtrCoop_IsStoryPartnerBattle()
++         || gBattleScripting.specialTrainerBattleType != SPECIAL_BATTLE_STEVEN)
++            return levelBits;
++        sCoopEvolutionPartySelected = TRUE;
++    }
++    // These authored encounters replaced the reserves before coop setup.
++    // Their native full-party RAM backup is the owner's canonical basis.
++    for (i = 0; i < MULTI_PARTY_SIZE; i++)
++    {
++        u8 slot = sCoopEvolutionPartySelected
++            ? gSaveBlock2Ptr->frontier.selectedPartyMons[i] - 1 : (s32)i;
++        if (slot < PARTY_SIZE)
++        {
++            gSaveBlock1Ptr->playerParty[slot] = gPlayerParty[i];
++            if (levelBits & (1 << i))
++                fullLevelBits |= 1 << slot;
++        }
++    }
++    memcpy(gPlayerParty, gSaveBlock1Ptr->playerParty, sizeof(gPlayerParty));
++    gPlayerPartyCount = CalculatePlayerPartyCount();
++    sCoopEvolutionPartyFull = TRUE;
++    return fullLevelBits;
++}
++
++void CtrCoop_EngineFinishEvolutionParty(void)
++{
++    u32 i;
++
++    if (!sCoopEvolutionPartyFull)
++        return;
++    sCoopEvolutionPartyFull = FALSE;
++    // Preserve evolved mons and a possible Shedinja before the encounter's
++    // native callback/script restores the temporary party a second time.
++    SavePlayerParty();
++    if (sCoopEvolutionPartySelected)
++    {
++        // frontier_saveparty still expects selected mons in compact order.
++        // It writes them to the same saved slots, leaving new/reserve mons.
++        for (i = 0; i < PARTY_SIZE; i++)
++            ZeroMonData(&gPlayerParty[i]);
++        for (i = 0; i < MULTI_PARTY_SIZE; i++)
++        {
++            u8 slot = gSaveBlock2Ptr->frontier.selectedPartyMons[i] - 1;
++            if (slot < PARTY_SIZE)
++                gPlayerParty[i] = gSaveBlock1Ptr->playerParty[slot];
++        }
++        gPlayerPartyCount = CalculatePlayerPartyCount();
++    }
++    sCoopEvolutionPartySelected = FALSE;
++}
++#endif
++
+ static void CB2_EndRoute101TestBattle(void)
+ {
+     u32 i;
+@@ -1991,6 +2058,10 @@
+         SetMainCallback2(CB2_WhiteOut);
+     else
+     {
++        // Release the same trainer lease as a normal trainer victory. These
++        // dedicated test flags are cleared when the next test starts.
++        if (gBattleOutcome == B_OUTCOME_WON)
++            SetBattledTrainersFlags();
+ #ifdef PLATFORM_3DS
+         CtrCoop_BattleEnd();
+ #endif
+--- a/src/battle_script_commands.c
++++ b/src/battle_script_commands.c
+@@ -42,6 +42,9 @@
+ #include "battle_pyramid.h"
+ #include "field_specials.h"
+ #include "pokemon_summary_screen.h"
++#ifdef PLATFORM_3DS
++#include "link.h"
++#endif
+ #include "pokenav.h"
+ #include "menu_specialized.h"
+ #include "data.h"
+@@ -3273,6 +3276,26 @@
+ #define PARTY_EXP_SHARE() (CtrExtras_Get("exp_share") != 0)
+ #endif
+ 
++// The guest shares the world trainer ID, but keeps its own trainer name.
++// Compare a monster against its owner's identity, not the host's name.
++static bool8 CoopIsTradedExpMon(u8 monId)
++{
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        u8 otName[PLAYER_NAME_LENGTH + 1];
++        u32 id = gSaveBlock2Ptr->playerTrainerId[0]
++            | (gSaveBlock2Ptr->playerTrainerId[1] << 8)
++            | (gSaveBlock2Ptr->playerTrainerId[2] << 16)
++            | ((u32)gSaveBlock2Ptr->playerTrainerId[3] << 24);
++        GetMonData(&gPlayerParty[monId], MON_DATA_OT_NAME, otName);
++        return GetMonData(&gPlayerParty[monId], MON_DATA_OT_ID) != id
++            || StringCompare(otName, gLinkPlayers[monId < MULTI_PARTY_SIZE ? 0 : 1].name) != 0;
++    }
++#endif
++    return IsTradedMon(&gPlayerParty[monId]);
++}
++
+ static void Cmd_getexp(void)
+ {
+     u16 item;
+@@ -3288,9 +3311,13 @@
+     switch (gBattleScripting.getexpState)
+     {
+     case 0: // check if should receive exp at all
+-        if (GetBattlerSide(gBattlerFainted) != B_SIDE_OPPONENT || (gBattleTypeFlags &
+-             (BATTLE_TYPE_LINK
+-              | BATTLE_TYPE_RECORDED_LINK
++#ifdef PLATFORM_3DS
++        u32 excluded = (gBattleTypeFlags & BATTLE_TYPE_LINK) && !CtrCoop_IsDoubleBattle();
++#else
++        u32 excluded = gBattleTypeFlags & BATTLE_TYPE_LINK;
++#endif
++        if (excluded || GetBattlerSide(gBattlerFainted) != B_SIDE_OPPONENT || (gBattleTypeFlags &
++             (BATTLE_TYPE_RECORDED_LINK
+               | BATTLE_TYPE_TRAINER_HILL
+               | BATTLE_TYPE_FRONTIER
+               | BATTLE_TYPE_SAFARI
+@@ -3326,6 +3353,10 @@
+ 
+             for (viaSentIn = 0, i = 0; i < PARTY_SIZE; i++)
+             {
++#ifdef PLATFORM_3DS
++                if (!CtrCoop_BattleMonEarnsExp(i))
++                    continue;
++#endif
+                 if (GetMonData(&gPlayerParty[i], MON_DATA_SPECIES) == SPECIES_NONE || GetMonData(&gPlayerParty[i], MON_DATA_HP) == 0)
+                     continue;
+                 if (gBitTable[i] & sentIn)
+@@ -3394,11 +3425,12 @@
+ 
+ #ifdef PLATFORM_3DS
+             // Modern Exp Share: everyone but eggs and the fainted.
+-            if (PARTY_EXP_SHARE()
++            if ((CtrCoop_IsDoubleBattle() && !CtrCoop_BattleMonEarnsExp(gBattleStruct->expGetterMonId))
++             || (PARTY_EXP_SHARE()
+              ? (GetMonData(&gPlayerParty[gBattleStruct->expGetterMonId], MON_DATA_IS_EGG)
+                 || GetMonData(&gPlayerParty[gBattleStruct->expGetterMonId], MON_DATA_HP) == 0
+                 || GetMonData(&gPlayerParty[gBattleStruct->expGetterMonId], MON_DATA_SPECIES) == SPECIES_NONE)
+-             : (holdEffect != HOLD_EFFECT_EXP_SHARE && !(gBattleStruct->sentInPokes & 1)))
++             : (holdEffect != HOLD_EFFECT_EXP_SHARE && !(gBattleStruct->sentInPokes & 1))))
+ #else
+             if (holdEffect != HOLD_EFFECT_EXP_SHARE && !(gBattleStruct->sentInPokes & 1))
+ #endif
+@@ -3446,7 +3478,7 @@
+                     if (gBattleTypeFlags & BATTLE_TYPE_TRAINER)
+                         gBattleMoveDamage = (gBattleMoveDamage * 150) / 100;
+ 
+-                    if (IsTradedMon(&gPlayerParty[gBattleStruct->expGetterMonId]))
++                    if (CoopIsTradedExpMon(gBattleStruct->expGetterMonId))
+                     {
+                         // check if the PokÃ©mon doesn't belong to the player
+                         if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER && gBattleStruct->expGetterMonId >= 3)
+@@ -3465,6 +3497,11 @@
+                     }
+ 
+                     // get exp getter battler
++#ifdef PLATFORM_3DS
++                    if (CtrCoop_IsDoubleBattle())
++                        gBattleStruct->expGetterBattlerId = gBattleStruct->expGetterMonId < MULTI_PARTY_SIZE ? 0 : 2;
++                    else
++#endif
+                     if (gBattleTypeFlags & BATTLE_TYPE_DOUBLE)
+                     {
+                         if (gBattlerPartyIndexes[2] == gBattleStruct->expGetterMonId && !(gAbsentBattlerFlags & gBitTable[2]))
+@@ -3480,7 +3517,7 @@
+                     }
+ 
+ #ifdef PLATFORM_3DS
+-                    if (PARTY_EXP_SHARE() && !(gBattleStruct->sentInPokes & 1))
++                    if (PARTY_EXP_SHARE() && !CtrCoop_IsDoubleBattle() && !(gBattleStruct->sentInPokes & 1))
+                     {
+                         // Not in the fight: one line for all of them, and the
+                         // rest gain silently.
+@@ -3592,6 +3629,18 @@
+         }
+         else
+         {
++#ifdef PLATFORM_3DS
++            if (CtrCoop_IsDoubleBattle())
++            {
++                // Friendship and learned moves are authoritative too. Serialize
++                // before advancing to another slot or resuming the turn.
++                gActiveBattler = gBattleStruct->expGetterMonId < MULTI_PARTY_SIZE ? 0 : 2;
++                CtrCoop_EmitPartyProgress(gBattleStruct->expGetterMonId);
++                MarkBattlerForControllerExec(gActiveBattler);
++                gBattleScripting.getexpState = 7;
++                break;
++            }
++#endif
+             gBattleStruct->expGetterMonId++;
+             if (gBattleStruct->expGetterMonId < PARTY_SIZE)
+                 gBattleScripting.getexpState = 2; // loop again
+@@ -3599,6 +3648,15 @@
+                 gBattleScripting.getexpState = 6; // we're done
+         }
+         break;
++#ifdef PLATFORM_3DS
++    case 7:
++        if (gBattleControllerExecFlags == 0)
++        {
++            gBattleStruct->expGetterMonId++;
++            gBattleScripting.getexpState = gBattleStruct->expGetterMonId < PARTY_SIZE ? 2 : 6;
++        }
++        break;
++#endif
+     case 6: // increment instruction
+         if (gBattleControllerExecFlags == 0)
+         {
+@@ -5509,8 +5567,71 @@
+     }
+ }
+ 
++#ifdef PLATFORM_3DS
++static void CoopLearnMove(void)
++{
++    u8 monId = gBattleStruct->expGetterMonId;
++    u8 owner = monId < MULTI_PARTY_SIZE ? 0 : 2;
++    gActiveBattler = owner;
++    switch (gBattleScripting.learnMoveState)
++    {
++    case 0:
++        if (gBattleControllerExecFlags) return;
++        gBattleBufferB[owner][0] = 0;
++        // Free-slot learning also changes the master's party before this
++        // prompt; give the owner an exact view before its summary opens.
++        CtrCoop_EmitPartyProgress(monId);
++        MarkBattlerForControllerExec(owner);
++        gBattleScripting.learnMoveState = 1;
++        break;
++    case 1:
++        if (gBattleControllerExecFlags) return;
++        CtrCoop_EmitLearnMove(monId, gMoveToLearn);
++        MarkBattlerForControllerExec(owner);
++        gBattleScripting.learnMoveState = 2;
++        break;
++    case 2:
++        if (gBattleControllerExecFlags) return;
++        if (gBattleBufferB[owner][0] == CONTROLLER_ONERETURNVALUE)
++        {
++            u8 slot = gBattleBufferB[owner][1];
++            if (slot < MAX_MON_MOVES)
++            {
++                u16 move = GetMonData(&gPlayerParty[monId], MON_DATA_MOVE1 + slot);
++                if (IsHMMove2(move))
++                {
++                    PrepareStringBattle(STRINGID_HMMOVESCANTBEFORGOTTEN, owner);
++                    gBattleScripting.learnMoveState = 0;
++                    return;
++                }
++                PREPARE_MOVE_BUFFER(gBattleTextBuff2, move)
++                RemoveMonPPBonus(&gPlayerParty[monId], slot);
++                SetMonMoveSlot(&gPlayerParty[monId], gMoveToLearn, slot);
++                if (gBattlerPartyIndexes[owner] == monId && MOVE_IS_PERMANENT(owner, slot))
++                {
++                    RemoveBattleMonPPBonus(&gBattleMons[owner], slot);
++                    SetBattleMonMoveSlot(&gBattleMons[owner], gMoveToLearn, slot);
++                }
++                gBattlescriptCurrInstr = T1_READ_PTR(gBattlescriptCurrInstr + 1);
++                return;
++            }
++            // Cancelling the owner's summary explicitly declines this move.
++            gBattlescriptCurrInstr += 5;
++        }
++        break;
++    }
++}
++#endif
++
+ static void Cmd_yesnoboxlearnmove(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        CoopLearnMove();
++        return;
++    }
++#endif
+     gActiveBattler = 0;
+ 
+     switch (gBattleScripting.learnMoveState)
+@@ -5627,6 +5748,13 @@
+ 
+ static void Cmd_yesnoboxstoplearningmove(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        gBattlescriptCurrInstr += 5; // owner already declined in the summary
++        return;
++    }
++#endif
+     switch (gBattleScripting.learnMoveState)
+     {
+     case 0:
+@@ -6040,6 +6168,15 @@
+ 
+ static void Cmd_drawlvlupbox(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        // The normal stat pages read only the master's raw keys. The shared
++        // level-up message/animation still run; stats are in each owner's party.
++        gBattlescriptCurrInstr++;
++        return;
++    }
++#endif
+     if (gBattleScripting.drawlvlupboxState == 0)
+     {
+         // If the PokÃ©mon getting exp is not in-battle then
+--- a/src/battle_controllers.c
++++ b/src/battle_controllers.c
+@@ -994,6 +994,8 @@
+ {
+     switch (command)
+     {
++    case CONTROLLER_SETRAWMONDATA:
++        return CtrCoop_IsDoubleBattle();
+     case CONTROLLER_GETMONDATA:
+     case CONTROLLER_GETRAWMONDATA:
+     case CONTROLLER_CHOOSEACTION:
+@@ -1522,8 +1524,75 @@
+     sBattleBuffersTransferData[1] = partyId;
+     sBattleBuffersTransferData[2] = (s16)expPoints;
+     sBattleBuffersTransferData[3] = ((s16)expPoints & 0xFF00) >> 8;
+-    PrepareBufferDataTransfer(bufferId, sBattleBuffersTransferData, 4);
+-}
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle() && partyId < PARTY_SIZE)
++    {
++        // Includes the EVs awarded by the authoritative battle script.
++        memcpy(sBattleBuffersTransferData + 4, &gPlayerParty[partyId], sizeof(struct Pokemon));
++        PrepareBufferDataTransfer(bufferId, sBattleBuffersTransferData, 4 + sizeof(struct Pokemon));
++        return;
++    }
++#endif
++    PrepareBufferDataTransfer(bufferId, sBattleBuffersTransferData, 4);
++}
++
++#ifdef PLATFORM_3DS
++void CtrCoop_EmitPartyProgress(u8 partyId)
++{
++    sBattleBuffersTransferData[0] = CONTROLLER_SETRAWMONDATA;
++    sBattleBuffersTransferData[1] = 0xFF; // cooperative full-party-slot record
++    sBattleBuffersTransferData[2] = sizeof(struct Pokemon);
++    sBattleBuffersTransferData[3] = partyId;
++    memcpy(sBattleBuffersTransferData + 4, &gPlayerParty[partyId], sizeof(struct Pokemon));
++    PrepareBufferDataTransfer(B_COMM_TO_CONTROLLER, sBattleBuffersTransferData, 4 + sizeof(struct Pokemon));
++}
++
++bool8 CtrCoop_ApplyPartyProgress(void)
++{
++    u8 monId = gBattleBufferA[gActiveBattler][3];
++    u32 battler, slot;
++    struct Pokemon *mon;
++    if (!CtrCoop_IsDoubleBattle() || gBattleBufferA[gActiveBattler][1] != 0xFF)
++        return FALSE;
++    if (monId >= PARTY_SIZE || gBattleBufferA[gActiveBattler][2] != sizeof(struct Pokemon))
++        return TRUE;
++    mon = &gPlayerParty[monId];
++    memcpy(mon, gBattleBufferA[gActiveBattler] + 4, sizeof(*mon));
++    for (battler = 0; battler < MAX_BATTLERS_COUNT; battler += 2)
++    {
++        struct BattlePokemon *battleMon = &gBattleMons[battler];
++        if (gBattlerPartyIndexes[battler] != monId || !battleMon->hp)
++            continue;
++        battleMon->level = GetMonData(mon, MON_DATA_LEVEL);
++        battleMon->hp = GetMonData(mon, MON_DATA_HP);
++        battleMon->maxHP = GetMonData(mon, MON_DATA_MAX_HP);
++        battleMon->attack = GetMonData(mon, MON_DATA_ATK);
++        battleMon->defense = GetMonData(mon, MON_DATA_DEF);
++        battleMon->speed = GetMonData(mon, MON_DATA_SPEED);
++        battleMon->spAttack = GetMonData(mon, MON_DATA_SPATK);
++        battleMon->spDefense = GetMonData(mon, MON_DATA_SPDEF);
++        for (slot = 0; slot < MAX_MON_MOVES; slot++)
++            if (MOVE_IS_PERMANENT(battler, slot))
++            {
++                // A learned move is permanent; Transform/Mimic stay temporary.
++                battleMon->moves[slot] = GetMonData(mon, MON_DATA_MOVE1 + slot);
++                battleMon->pp[slot] = GetMonData(mon, MON_DATA_PP1 + slot);
++            }
++        battleMon->ppBonuses = GetMonData(mon, MON_DATA_PP_BONUSES);
++    }
++    return TRUE;
++}
++
++void CtrCoop_EmitLearnMove(u8 partyId, u16 move)
++{
++    sBattleBuffersTransferData[0] = CONTROLLER_YESNOBOX;
++    sBattleBuffersTransferData[1] = 0xFF;
++    sBattleBuffersTransferData[2] = partyId;
++    sBattleBuffersTransferData[3] = move;
++    sBattleBuffersTransferData[4] = move >> 8;
++    PrepareBufferDataTransfer(B_COMM_TO_CONTROLLER, sBattleBuffersTransferData, 5);
++}
++#endif
+ 
+ void BtlController_EmitStatusIconUpdate(u8 bufferId, u32 status1, u32 status2)
+ {
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -19,6 +19,9 @@
+ #include "party_menu.h"
+ #include "pokeball.h"
+ #include "pokemon.h"
++#ifdef PLATFORM_3DS
++#include "pokemon_summary_screen.h"
++#endif
+ #include "random.h"
+ #include "recorded_battle.h"
+ #include "reshow_battle_screen.h"
+@@ -205,6 +208,10 @@
+ 
+ static void PlayerBufferExecCompleted(void)
+ {
++#ifdef PLATFORM_3DS
++    if (gBattleBufferA[gActiveBattler][0] == CONTROLLER_INTROTRAINERBALLTHROW)
++        CtrCoop_FinalizeIntroHealthbox();
++#endif
+     gBattlerControllerFuncs[gActiveBattler] = PlayerBufferRunCommand;
+     if (gBattleTypeFlags & BATTLE_TYPE_LINK)
+     {
+@@ -1044,9 +1051,10 @@
+             {
+                 if (CtrCoop_IsDoubleBattle())
+                 {
+-                    CtrCoop_PrepareDoubleReturn();
+-                    /* The native encounter callback owns victory flags,
+-                     * loss healing, and (Steven) full-party restoration. */
++                    // Finish native level-up evolutions for this owner's half
++                    // before restoring the full team and encounter callback.
++                    CtrCoop_BeginBattleEvolutions();
++                    return;
+                 }
+                 else if (gWirelessCommType == 0)
+                 {
+@@ -1322,7 +1330,16 @@
+ static void CompleteOnInactiveTextPrinter(void)
+ {
+     if (!IsTextPrinterActive(B_WIN_MSG))
++#ifdef PLATFORM_3DS
++    {
++        if (CtrCoop_IsDoubleBattle() && GetBattlerMultiplayerId(gActiveBattler) != GetMultiplayerId())
++            CtrCoop_LinkPartnerComplete();
++        else
++            PlayerBufferExecCompleted();
++    }
++#else
+         PlayerBufferExecCompleted();
++#endif
+ }
+ 
+ #define tExpTask_monId      data[0]
+@@ -1353,7 +1370,14 @@
+             gainedExp -= nextLvlExp - currExp;
+             savedActiveBattler = gActiveBattler;
+             gActiveBattler = battler;
++#ifdef PLATFORM_3DS
++            if (!CtrCoop_IsDoubleBattle() || GetBattlerMultiplayerId(battler) == GetMultiplayerId())
++#endif
+             BtlController_EmitTwoReturnValues(B_COMM_TO_ENGINE, RET_VALUE_LEVELED_UP, gainedExp);
++#ifdef PLATFORM_3DS
++            if (CtrCoop_IsDoubleBattle() && GetBattlerMultiplayerId(battler) == GetMultiplayerId())
++                gLeveledUpInBattle |= gBitTable[monId];
++#endif
+             gActiveBattler = savedActiveBattler;
+ 
+             if (IsDoubleBattle() == TRUE
+@@ -2351,6 +2375,13 @@
+ 
+ static void PlayerHandleSetRawMonData(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_ApplyPartyProgress())
++    {
++        PlayerBufferExecCompleted();
++        return;
++    }
++#endif
+     u8 *dst = (u8 *)&gPlayerParty[gBattlerPartyIndexes[gActiveBattler]] + gBattleBufferA[gActiveBattler][1];
+     u8 i;
+ 
+@@ -2811,8 +2842,47 @@
+     BattlePutTextOnWindow(gDisplayedStringBattle, B_WIN_ACTION_PROMPT);
+ }
+ 
++#ifdef PLATFORM_3DS
++static u8 sCoopLearnMoveState;
++
++static void CoopChooseLearnMove(void)
++{
++    if (gPaletteFade.active)
++        return;
++    if (sCoopLearnMoveState == 0)
++    {
++        u8 monId = gBattleBufferA[gActiveBattler][2];
++        u16 move = T1_READ_16(&gBattleBufferA[gActiveBattler][3]);
++        FreeAllWindowBuffers();
++        ShowSelectMovePokemonSummaryScreen(gPlayerParty, monId, PARTY_SIZE - 1, ReshowBattleScreenAfterMenu, move);
++        sCoopLearnMoveState = 1;
++    }
++    else if (gMain.callback2 == BattleMainCB2)
++    {
++        BtlController_EmitOneReturnValue(B_COMM_TO_ENGINE, GetMoveSlotToReplace());
++        PlayerBufferExecCompleted();
++    }
++}
++#endif
++
+ static void PlayerHandleYesNoBox(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle() && gBattleBufferA[gActiveBattler][1] == 0xFF)
++    {
++        if (gBattleBufferA[gActiveBattler][2] >= PARTY_SIZE)
++        {
++            BtlController_EmitOneReturnValue(B_COMM_TO_ENGINE, MAX_MON_MOVES);
++            PlayerBufferExecCompleted();
++            return;
++        }
++        sCoopLearnMoveState = 0;
++        gBattlerInMenuId = gActiveBattler;
++        BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
++        gBattlerControllerFuncs[gActiveBattler] = CoopChooseLearnMove;
++        return;
++    }
++#endif
+     if (GetBattlerSide(gActiveBattler) == B_SIDE_PLAYER)
+     {
+         HandleBattleWindow(YESNOBOX_X_Y, 0);
+@@ -2991,9 +3061,20 @@
+ {
+     u8 monId = gBattleBufferA[gActiveBattler][1];
+ 
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        if (monId >= PARTY_SIZE)
++        {
++            CompleteOnInactiveTextPrinter();
++            return;
++        }
++        memcpy(&gPlayerParty[monId], gBattleBufferA[gActiveBattler] + 4, sizeof(struct Pokemon));
++    }
++#endif
+     if (GetMonData(&gPlayerParty[monId], MON_DATA_LEVEL) >= MAX_LEVEL)
+     {
+-        PlayerBufferExecCompleted();
++        CompleteOnInactiveTextPrinter();
+     }
+     else
+     {
+@@ -3011,6 +3092,13 @@
+     }
+ }
+ 
++#ifdef PLATFORM_3DS
++void CtrCoop_HandleExpUpdate(void)
++{
++    PlayerHandleExpUpdate();
++}
++#endif
++
+ #undef tExpTask_monId
+ #undef tExpTask_gainedExp
+ #undef tExpTask_battler
+--- a/src/battle_controller_link_partner.c
++++ b/src/battle_controller_link_partner.c
+@@ -1,6 +1,7 @@
+ #include "global.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_coop_battle.h"
++#include "3ds_coop.h"
+ #endif
+ #include "battle.h"
+ #include "battle_ai_script_commands.h"
+@@ -398,6 +399,10 @@
+ 
+ static void LinkPartnerBufferExecCompleted(void)
+ {
++#ifdef PLATFORM_3DS
++    if (gBattleBufferA[gActiveBattler][0] == CONTROLLER_INTROTRAINERBALLTHROW)
++        CtrCoop_FinalizeIntroHealthbox();
++#endif
+     gBattlerControllerFuncs[gActiveBattler] = LinkPartnerBufferRunCommand;
+     if (gBattleTypeFlags & BATTLE_TYPE_LINK)
+     {
+@@ -1002,6 +1007,13 @@
+ 
+ static void LinkPartnerHandleSetRawMonData(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_ApplyPartyProgress())
++    {
++        LinkPartnerBufferExecCompleted();
++        return;
++    }
++#endif
+     u8 *dst = (u8 *)&gPlayerParty[gBattlerPartyIndexes[gActiveBattler]] + gBattleBufferA[gActiveBattler][1];
+     u8 i;
+ 
+@@ -1375,8 +1387,22 @@
+ 
+ static void LinkPartnerHandleExpUpdate(void)
+ {
+-    LinkPartnerBufferExecCompleted();
+-}
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        CtrCoop_HandleExpUpdate();
++        return;
++    }
++#endif
++    LinkPartnerBufferExecCompleted();
++}
++
++#ifdef PLATFORM_3DS
++void CtrCoop_LinkPartnerComplete(void)
++{
++    LinkPartnerBufferExecCompleted();
++}
++#endif
+ 
+ static void LinkPartnerHandleStatusIconUpdate(void)
+ {
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -5418,8 +5418,50 @@
+         gBattleMainFunc = TryEvolvePokemon;
+ }
+ 
++#ifdef PLATFORM_3DS
++void CtrCoop_BeginBattleEvolutions(void)
++{
++    u32 i;
++    u32 start = CtrCoop_LocalMultiplayerId() ? MULTI_PARTY_SIZE : 0;
++    u8 ownerLevelBits = 0;
++    for (i = 0; i < MULTI_PARTY_SIZE; i++)
++        if (CtrCoop_BattleMonEarnsExp(start + i)
++         && (gLeveledUpInBattle & gBitTable[start + i]))
++            ownerLevelBits |= gBitTable[i];
++    // Evolution works on the owner's complete party, not the six-slot battle
++    // composite. This preserves reserves and gives CreateShedinja a real free
++    // owner slot without ever overwriting the other player's half.
++    CtrCoop_PrepareDoubleReturn();
++    gLeveledUpInBattle = CtrCoop_EnginePrepareEvolutionParty(ownerLevelBits);
++    if (gBattleOutcome != B_OUTCOME_WON && gBattleOutcome != B_OUTCOME_CAUGHT)
++        gLeveledUpInBattle = 0;
++    for (i = 0; i < MAX_BATTLERS_COUNT; i++)
++        gBattlerControllerFuncs[i] = BattleControllerDummy;
++    FreeAllWindowBuffers();
++    ResetSpriteData();
++    // EvolutionScene allocates its own mon graphics. Release the battle's
++    // allocation first, as the ordinary post-battle evolution path does.
++    FreeMonSpritesGfx();
++    gCB2_AfterEvolution = BattleMainCB2;
++    gBattleMainFunc = gLeveledUpInBattle ? TryEvolvePokemon : ReturnFromBattleToOverworld;
++}
++#endif
++
+ static void ReturnFromBattleToOverworld(void)
+ {
++#ifdef PLATFORM_3DS
++    if (CtrCoop_IsDoubleBattle())
++    {
++        // Each endpoint evolves only its own real monsters. Result streaming
++        // happens after that owner's native encounter callback restores parties.
++        CtrCoop_EngineFinishEvolutionParty();
++        CtrCoop_PrepareDoubleReturn();
++        gMain.inBattle = FALSE;
++        gMain.callback1 = gPreBattleCallback1;
++        SetMainCallback2(CB2_InitEndLinkBattle);
++        return;
++    }
++#endif
+     if (!(gBattleTypeFlags & BATTLE_TYPE_LINK))
+     {
+         RandomlyGivePartyPokerus(gPlayerParty);
+--- a/src/battle_interface.c
++++ b/src/battle_interface.c
+@@ -27,6 +27,7 @@
+ #include "constants/songs.h"
+ #ifdef PLATFORM_3DS
+ #include "3ds_battle_hud.h"
++#include "3ds_coop.h"
+ #endif
+ #ifdef PORT_BRIDGE
+ #include "port_platform.h"
+@@ -1061,6 +1062,23 @@
+     gSprites[gSprites[healthboxSpriteId].oam.affineParam].invisible = FALSE;
+ }
+ 
++#ifdef PLATFORM_3DS
++void CtrCoop_FinalizeIntroHealthbox(void)
++{
++    u8 battler = gActiveBattler;
++    u8 id = gHealthboxSpriteIds[battler];
++    if (!CtrCoop_IsDoubleBattle() || GetBattlerSide(battler) != B_SIDE_PLAYER
++     || (gAbsentBattlerFlags & gBitTable[battler]) || id >= MAX_SPRITES || !gSprites[id].inUse
++     || !GetMonData(&gPlayerParty[gBattlerPartyIndexes[battler]], MON_DATA_HP))
++        return;
++    // Both controllers commit their own box after their send-out has finished.
++    // Refresh one HD slot without the "first box" reset of BoxCreated(0).
++    CtrBattleHud_RefreshBox(id, battler, CTR_HUD_DOUBLE_PLAYER);
++    UpdateHealthboxAttribute(id, &gPlayerParty[gBattlerPartyIndexes[battler]], HEALTHBOX_ALL);
++    SetHealthboxSpriteVisible(id);
++}
++#endif
++
+ static void UpdateSpritePos(u8 spriteId, s16 x, s16 y)
+ {
+     gSprites[spriteId].x = x;
+--- a/include/battle_controllers.h
++++ b/include/battle_controllers.h
+@@ -335,6 +335,12 @@
+ void SetControllerToLinkPartner(void);
+ 
+ #ifdef PLATFORM_3DS
++void CtrCoop_EmitPartyProgress(u8 partyId);
++bool8 CtrCoop_ApplyPartyProgress(void);
++void CtrCoop_EmitLearnMove(u8 partyId, u16 move);
++void CtrCoop_HandleExpUpdate(void);
++void CtrCoop_LinkPartnerComplete(void);
++void CtrCoop_BeginBattleEvolutions(void);
+ // 3DS bottom screen (3ds_port/src/3ds_bottom_ui.c): the action, move and
+ // target menus live there. The controllers keep their logic; these turn the
+ // bottom screen's taps and its own button order into the keys they read.
+--- a/include/battle_interface.h
++++ b/include/battle_interface.h
+@@ -81,4 +81,7 @@
+ u8 GetScaledHPFraction(s16 hp, s16 maxhp, u8 scale);
+ u8 GetHPBarLevel(s16 hp, s16 maxhp);
+ 
++#ifdef PLATFORM_3DS
++void CtrCoop_FinalizeIntroHealthbox(void);
++#endif
+ #endif // GUARD_BATTLE_INTERFACE_H

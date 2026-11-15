@@ -210,6 +210,12 @@ void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held)
     CtrCoopSnapshot local;
     sFollow.stepAction = 0;
     if (!CtrCoop_IsFollowing()) return;
+    /* A battle/menu or the follower's own NPC dialogue owns B. In particular,
+     * closing the post-battle test message must not also leave the group.
+     * The leader's separate dialogue does not lock this follower's controls. */
+    if (gMain.inBattle || sCoop.doubleState == DOUBLE_STATE_ACTIVE
+     || (sCoop.doubleState == DOUBLE_STATE_IDLE && ArePlayerFieldControlsLocked()))
+        return;
     if (*pressed & 2) /* B_BUTTON */
     {
         CtrCoop_StopFollowing();
@@ -259,4 +265,33 @@ bool CtrCoop_FollowRunning(void)
     return sFollow.state == FOLLOW_FOLLOWER
         && sFollow.stepAction >= CTR_COOP_ACTION_PLAYER_RUN_DOWN
         && sFollow.stepAction <= CTR_COOP_ACTION_PLAYER_RUN_DOWN + 3;
+}
+
+bool CtrCoop_CatchUpMovement(uint8_t objectEventId)
+{
+    if (objectEventId >= OBJECT_EVENTS_COUNT || gMain.callback2 != CB2_Overworld || gMain.inBattle)
+        return false;
+    const struct ObjectEvent *object = &gObjectEvents[objectEventId];
+    if (!object->active || !object->heldMovementActive)
+        return false;
+    if (objectEventId == gPlayerAvatar.objectEventId)
+    {
+        /* The last tile belongs to the leader. Only accelerate when at least
+         * two unvisited free tiles remain; the normal one-tile gap stays. */
+        unsigned remaining = sFollow.count;
+        if (remaining && sFollow.trail[sFollow.head].x == object->currentCoords.x
+         && sFollow.trail[sFollow.head].y == object->currentCoords.y)
+            --remaining;
+        return sFollow.state == FOLLOW_FOLLOWER && FollowFieldReady() && remaining > 2
+            && sFollow.haveLast && sFollow.last.mapGroup == object->mapGroup
+            && sFollow.last.mapNum == object->mapNum;
+    }
+    if (object->localId != LOCALID_COOP_PLAYER || !sCoop.remoteValid
+     || sCoop.remote.mapGroup != object->mapGroup || sCoop.remote.mapNum != object->mapNum)
+        return false;
+    /* A later tile is already available: finish the current step in bounded
+     * native ticks instead of replaying an ever older path at wall-clock speed.
+     * Never replace an action midway or cut a corner. */
+    return sRemoteSteps.count && (sCoop.remote.x != object->currentCoords.x
+                              || sCoop.remote.y != object->currentCoords.y);
 }

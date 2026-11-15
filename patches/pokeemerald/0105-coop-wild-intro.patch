@@ -1,0 +1,16 @@
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -3586,8 +3586,11 @@
+ 
+         if (gBattleTypeFlags & BATTLE_TYPE_MULTI)
+         {
++            /* Wild multi battles have two player trainers, but no opponent
++             * trainer. The opposing banks already received LOADMONSPRITE. */
+             if (GetBattlerPosition(gActiveBattler) == B_POSITION_PLAYER_RIGHT
+-             || GetBattlerPosition(gActiveBattler) == B_POSITION_OPPONENT_RIGHT)
++             || ((gBattleTypeFlags & BATTLE_TYPE_TRAINER)
++              && GetBattlerPosition(gActiveBattler) == B_POSITION_OPPONENT_RIGHT))
+             {
+                 BtlController_EmitDrawTrainerPic(B_COMM_TO_CONTROLLER);
+                 MarkBattlerForControllerExec(gActiveBattler);

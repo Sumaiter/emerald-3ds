@@ -19,7 +19,7 @@
 static uint8_t *sArt;
 static uint32_t sArtSize;
 static bool sTried;
-static struct SpriteFrameImage sFrames[5];
+static struct SpriteFrameImage sFrames[MAX_BATTLERS_COUNT][5];
 
 static uint16_t Read16(const uint8_t *p)
 {
@@ -96,21 +96,43 @@ bad:
     return false;
 }
 
-static const uint8_t *LocalRecord(void)
+static const uint8_t *Record(uint16_t graphicsId)
 {
-    /* Link opponents, recordings and Wally's scripted tutorial retain their
-     * own identities. Host and guest otherwise use their own profile slot. */
-    if (!CtrCoop_UseCustomGraphicsId()
-     || (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED | BATTLE_TYPE_WALLY_TUTORIAL))
+    if ((gBattleTypeFlags & (BATTLE_TYPE_RECORDED | BATTLE_TYPE_WALLY_TUTORIAL))
+     || ((gBattleTypeFlags & BATTLE_TYPE_LINK) && !CtrCoop_IsDoubleBattle())
      || !LoadArt())
         return NULL;
     for (unsigned i = 0; i < Read16(sArt + 6); ++i)
     {
         const uint8_t *record = sArt + HEADER_BYTES + i * RECORD_BYTES;
-        if (Read16(record) == CtrCoop_LocalGraphicsId())
+        if (Read16(record) == graphicsId)
             return record;
     }
     return NULL;
+}
+
+static const uint8_t *LocalRecord(void)
+{
+    if (!CtrCoop_UseCustomGraphicsId())
+        return NULL;
+    if (CtrCoop_IsDoubleBattle())
+        return Record(CtrCoop_BattlerGraphicsId(CtrCoop_LocalMultiplayerId() * 2));
+    return Record(CtrCoop_LocalGraphicsId());
+}
+
+static const uint8_t *BattlerRecord(uint8_t battler)
+{
+    if (battler >= MAX_BATTLERS_COUNT)
+        return NULL;
+    if (CtrCoop_IsDoubleBattle())
+        return Record(CtrCoop_BattlerGraphicsId(battler));
+    return LocalRecord();
+}
+
+uint16_t CtrCoopBattle_BattlerBackPicId(uint8_t battler, uint16_t original)
+{
+    const uint8_t *record = BattlerRecord(battler);
+    return record != NULL && record[2] != CUSTOM_BACK ? record[2] : original;
 }
 
 uint16_t CtrCoopBattle_BackPicId(uint16_t original)
@@ -131,24 +153,31 @@ void CtrCoopBattle_LoadPalette(uint8_t paletteNum)
         LoadPalette(sArt + Read32(record + 4), OBJ_PLTT_ID(paletteNum), PALETTE_BYTES);
 }
 
+void CtrCoopBattle_LoadBattlerPalette(uint8_t battler, uint8_t paletteNum)
+{
+    const uint8_t *record = BattlerRecord(battler);
+    if (record != NULL && record[2] == CUSTOM_BACK && paletteNum < 16)
+        LoadPalette(sArt + Read32(record + 4), OBJ_PLTT_ID(paletteNum), PALETTE_BYTES);
+}
+
 void CtrCoopBattle_Apply(uint8_t battler, struct SpriteTemplate *template)
 {
-    const uint8_t *record = LocalRecord();
+    const uint8_t *record = BattlerRecord(battler);
     const uint8_t *pixels;
 
     if (record == NULL || record[2] != CUSTOM_BACK || battler >= MAX_BATTLERS_COUNT || template == NULL)
         return;
     pixels = sArt + Read32(record + 4);
-    CtrCoopBattle_LoadPalette(battler);
-    for (unsigned i = 0; i < ARRAY_COUNT(sFrames); ++i)
+    CtrCoopBattle_LoadBattlerPalette(battler, battler);
+    for (unsigned i = 0; i < ARRAY_COUNT(sFrames[battler]); ++i)
     {
-        sFrames[i].data = pixels + PALETTE_BYTES;
-        sFrames[i].size = BACK_BYTES;
+        sFrames[battler][i].data = pixels + PALETTE_BYTES;
+        sFrames[battler][i].size = BACK_BYTES;
 #ifdef PORT_BRIDGE
-        sFrames[i].offset = 0;
+        sFrames[battler][i].offset = 0;
 #endif
     }
     /* The game's throw/slide animation can request frames 0..4. Repeating
      * the static drawing keeps every frame valid without reading past it. */
-    template->images = sFrames;
+    template->images = sFrames[battler];
 }

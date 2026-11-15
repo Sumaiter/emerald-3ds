@@ -49,6 +49,11 @@ static void TestJoinAndLeave(void)
     FollowPacket(FOLLOW_ACCEPT,token,true);
     CHECK(!CtrCoop_IsFollowing(),"late acceptance after B cannot rejoin");
     JoinFollower();
+    sControlsLocked=true;pressed=held=2;CtrCoop_FollowKeys(&pressed,&held);
+    CHECK(CtrCoop_IsFollowing() && pressed==2 && held==2,"B dismisses follower's own post-battle dialogue without leaving group");
+    sControlsLocked=false;sCoop.doubleState=DOUBLE_STATE_ACTIVE;pressed=held=2;CtrCoop_FollowKeys(&pressed,&held);
+    CHECK(CtrCoop_IsFollowing() && pressed==2 && held==2,"battle cancellation keys do not dismiss travelling group");
+    sCoop.doubleState=DOUBLE_STATE_IDLE;
     sStoryTrySendBlocked=true;pressed=held=2;CtrCoop_FollowKeys(&pressed,&held);
     CHECK(!CtrCoop_IsFollowing() && sFollow.dirtyStop,"B works under transport backpressure");
     sStoryTrySendBlocked=false;FollowTick();
@@ -140,10 +145,13 @@ static void TestStoryNpcOwnership(void)
         static uint8_t payload[DOUBLE_SETUP_SIZE];
         struct Pokemon followerBefore[PARTY_SIZE],remoteBefore[PARTY_SIZE];
         FreeField();sCoop.guest=leaderGuest;sCoop.doubleInitiator=true;
+        sProfile.hostGraphicsId=21;sProfile.guestGraphicsId=14;
+        sCoop.remote.graphicsId=leaderGuest?21:14;
         for(unsigned i=0;i<PARTY_SIZE;++i){SetMon(&gPlayerParty[i],10+i);SetMon(&sRemoteParty[i],30+i);}
         sRemotePartyValid=true;
         gBattleTypeFlags=BATTLE_TYPE_TRAINER|BATTLE_TYPE_DOUBLE|BATTLE_TYPE_TWO_OPPONENTS|BATTLE_TYPE_MULTI|BATTLE_TYPE_INGAME_PARTNER;
         PrepareDoubleSetup();memcpy(payload,sDoubleSendData,sizeof(payload));
+        CHECK(payload[28]==21 && payload[29]==14,"NPC party borrowing retains both player identities");
         const struct Pokemon *composite=(const struct Pokemon *)(payload+DOUBLE_HEADER_SIZE+sizeof(gEnemyParty));
         CHECK(composite[leaderGuest?0:3].box.species==13,"follower receives native NPC team in role %u",leaderGuest);
         memcpy(remoteBefore,sRemoteParty,sizeof(remoteBefore));ConfigureDoubleBattle(payload);
@@ -152,6 +160,9 @@ static void TestStoryNpcOwnership(void)
         for(unsigned i=0;i<PARTY_SIZE;++i)SetMon(&gPlayerParty[i],90+i);
         memcpy(followerBefore,gPlayerParty,sizeof(followerBefore));memcpy(sDoubleLocalParty,gPlayerParty,sizeof(sDoubleLocalParty));
         ConfigureDoubleBattle(payload);
+        CHECK(gPlayerPartyCount==6 && CtrCoop_UsesDoubleParty(),"borrowed NPC half is visible despite gaps");
+        CHECK(CtrCoop_BattlerGraphicsId(0)==21 && CtrCoop_BattlerGraphicsId(2)==14
+           && CtrCoop_BattlerGraphicsId(1)==NUM_OBJ_EVENT_GFX,"fixed player graphics on either console; NPC excluded");
         CHECK(CtrCoop_UsesNpcPartner(),"follower uses temporary NPC party");
         gPlayerParty[leaderGuest?0:3].hp=1;
         RestoreDoubleParty();
@@ -165,10 +176,54 @@ static void TestStoryNpcOwnership(void)
     }
 }
 
+static void TestSparseDoubleParty(void)
+{
+    for(unsigned role=0;role<2;++role)for(unsigned own=1;own<=3;++own)for(unsigned peer=1;peer<=3;++peer)
+    {
+        struct Pokemon original[PARTY_SIZE];
+        FreeField();sCoop.guest=role;sCoop.doubleInitiator=true;
+        memset(gPlayerParty,0,sizeof(gPlayerParty));memset(sRemoteParty,0,sizeof(sRemoteParty));
+        for(unsigned i=0;i<own;++i)SetMon(&gPlayerParty[i],10+i);
+        for(unsigned i=0;i<peer;++i)SetMon(&sRemoteParty[i],30+i);
+        memcpy(original,gPlayerParty,sizeof(original));sRemotePartyValid=true;
+        gBattleTypeFlags=BATTLE_TYPE_TRAINER;
+        PrepareDoubleSetup();ConfigureDoubleBattle(sDoubleSendData);
+        CHECK(gPlayerPartyCount==6 && CtrCoop_UsesDoubleParty(),"both fixed halves visible with %u+%u Pokemon role %u",own,peer,role);
+        CHECK(gPlayerParty[role?3:0].box.species==10 && gPlayerParty[role?0:3].box.species==30,"own and peer battle halves retain role");
+        gPlayerParty[role?3:0].hp=0;original[0].hp=0;
+        RestoreDoubleParty();
+        CHECK(!CtrCoop_UsesDoubleParty() && gPlayerPartyCount==own && !memcmp(original,gPlayerParty,sizeof(original)),
+              "restore leaves battle layout, original team length and fainted HP intact");
+    }
+}
+
+static void TestWildEscapeRestoresWithoutWhiteOut(void)
+{
+    for(unsigned role=0;role<2;++role)
+    {
+        struct Pokemon expected[PARTY_SIZE];
+        FreeField();sCoop.guest=role;sCoop.doubleInitiator=false;
+        for(unsigned i=0;i<PARTY_SIZE;++i){SetMon(&gPlayerParty[i],10+i);SetMon(&sRemoteParty[i],30+i);}
+        memcpy(expected,gPlayerParty,sizeof(expected));sRemotePartyValid=true;
+        gBattleTypeFlags=0;PrepareDoubleSetup();ConfigureDoubleBattle(sDoubleSendData);
+        unsigned own=role?3:0;
+        gPlayerParty[own].hp=7;gPlayerParty[own].status=1;
+        gPlayerParty[own].box.data[7]=3; /* changed opaque PP/secure payload */
+        expected[0]=gPlayerParty[own];
+        gSaveBlock1Ptr->money=12345;gSaveBlock1Ptr->pos.x=11;gSaveBlock1Ptr->pos.y=17;
+        gBattleOutcome=B_OUTCOME_RAN;
+        ReturnFromRemoteDoubleBattle();
+        CHECK(sMainCallback==CB2_ReturnToFieldFadeFromBlack,"wild escape returns role %u to field instead of WhiteOut",role);
+        CHECK(!memcmp(gPlayerParty,expected,sizeof(expected)),"escape preserves all six Pokemon including HP/status/PP and reserves role %u",role);
+        CHECK(gSaveBlock1Ptr->money==12345 && gSaveBlock1Ptr->pos.x==11 && gSaveBlock1Ptr->pos.y==17,
+              "escape neither charges defeat money nor changes field position role %u",role);
+    }
+}
+
 int main(void)
 {
     setvbuf(stdout,NULL,_IONBF,0);
-    TestJoinAndLeave();TestNoFollowingCycle();TestVisitedTrail();TestExplicitBattleGrouping();TestStoryNpcOwnership();
+    TestJoinAndLeave();TestNoFollowingCycle();TestVisitedTrail();TestExplicitBattleGrouping();TestStoryNpcOwnership();TestSparseDoubleParty();TestWildEscapeRestoresWithoutWhiteOut();
     FreeField();sCoop.doubleState=DOUBLE_STATE_ACTIVE;sCoop.doubleInitiator=false;
     CHECK(!CtrCoop_ApplyBlackoutMoney(),"non-initiator does not halve shared money again");
     sCoop.doubleInitiator=true;CHECK(CtrCoop_ApplyBlackoutMoney(),"initiator owns one shared defeat debit");

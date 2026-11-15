@@ -1,5 +1,199 @@
 # Host und Gast auf diesem PC starten
 
+## Sprint 6 vom Nutzer abgenommen (2026-11-15)
+
+Rueckmeldung: "ansonsten klappt jetzt alles von sprint 6" fuer Build
+fb72074e4a979dff. Die bisherigen KP-/EP-/Trainerflucht-/Reentry-Nachtests
+gelten damit als bestanden. Bekannte Issues #1..4 und #6..8 bleiben separat
+offen; #5 ist bestaetigt behoben. Untenstehende Resttestlisten sind Historie.
+Nicht genannte Spezialfaelle bleiben ohne separate Abnahme; regulaeres
+Trainerpreisgeld ist noch eine dokumentierte Implementierungsluecke.
+
+## Aktueller Nachtest: beide KP-Boxen und Trainer-Fluchtsperre (2026-11-15)
+
+Build **fb72074e4a979dff**, Boot **E3ID-1de947bbc289d035**, ABI **52daf884**, Protokoll 20.
+
+Gesamtverify, ARM-Release und passendes PAK fertig. Ueber **Host und Gast
+starten** beide Instanzen mit dem neuen Paar neu laden; F6 installiert es nicht.
+
+1. TEST A mit eigenen Pokemon frisch beginnen, Host und danach Gast als
+   Anfuehrer. OHNE vorher Team/Beutel zu oeffnen muessen Gewaldro UND Lohgock
+   ihre KP-Box haben. Der Aufbau erfolgt nun bei der ersten Aktionsauswahl
+   einmalig ueber den nach Menue-Rueckkehr funktionierenden nativen Pfad.
+   Auch Gast/Host, wilder Doppel- und Troy-Kampf sowie erneuter Kampf pruefen.
+2. Im Trainerkampf zuerst Host, dann Gast FLUCHT waehlen: normale Ablehnung,
+   Kampf bleibt offen, kein Flucht-/Aufgabe-/Niederlageabschluss oder WhiteOut.
+   Auch mit Rauchball/Angsthase nicht fliehen. Anschliessend normal angreifen.
+3. Treffer/Faint/Wechsel und Menue-Rueckkehr gegenpruefen: beide lebenden
+   Pokemon behalten die richtige Anzeige; ein besiegtes wird normal ausgeblendet.
+4. Wildflucht bleibt erlaubt: normale Fluchtchance/Sperren, bei erfolgreicher
+   Flucht wieder im Gras, keine Heilung/Geldstrafe. Das ist keine Trainerflucht.
+
+Die Rueckmeldung zum vorherigen Build ist dokumentiert: Box fehlt anfangs,
+erscheint nach Menue-Rueckkehr. Die neue KP-Rekonstruktion ist nativ geprueft,
+der urspruengliche konkrete Stoerschritt jedoch noch nicht isoliert; sichtbare
+Abnahme offen. Einmalige Logzeilen "coop: intro HP" helfen bei Restfehlern.
+
+Storybarriere am Weg nach Route 102 separat als [Issue #6](https://github.com/Sumaiter/emerald-3ds/issues/6)
+erfasst. Noch nicht behoben; soll fuer alle entsprechenden Storysperren gelten.
+Vorherige Nutzerabnahmen bleiben dokumentiert, neue EP-/Troy-Reentry-Nachtests
+aus dem vorherigen Abschnitt gelten weiterhin, soweit noch nicht bestaetigt.
+Nachfolgende Anleitungen und Buildkennungen sind historische Staende.
+
+## Aktueller Nachtest: KP, EP und erneuter Troy-Einstieg (2026-11-15)
+
+Build **56417c3a94f30a61**, Boot **E3ID-86d537e6d7603887**, ABI **e8ef3639**, Protokoll 20.
+
+Gesamtverify, ARM-Release und passendes PAK sind fertig. Beide Instanzen ueber
+**Host und Gast starten** neu laden; F6 installiert keinen neuen Build.
+Die laufenden Emulatoren und ihre SAVs wurden fuer diese Aenderung nicht bedient.
+
+1. Eigenen Koop-Doppelkampf starten, zuerst Host und dann Gast als Anfuehrer:
+   Direkt nach dem Aussenden muessen BEIDE eigenen KP-Boxen sowie beide
+   Gegnerboxen erscheinen. Treffer, Beutel/Team und Wechsel kontrollieren.
+   Die neue native Wiederherstellungsprobe besteht; der urspruengliche
+   Ausloeser der fehlenden Box ist noch nicht aus dem alten Lauf isoliert.
+2. Einen Gegner besiegen: individuelle EP-Meldungen fuer beide echten Owner
+   kontrollieren. Mit Pokemon nahe am naechsten Level auch Levelaufstieg,
+   Attacken ersetzen/ablehnen jeweils auf dem Geraet des Besitzers pruefen.
+   Danach stimmen EP/Level/Attacken/AP auch nach erneutem Kampf und Rejoin.
+   Zahlen-Statistikseiten beim Levelaufstieg entfallen im Koop; die normalen
+   Levelmeldungen/Animationen und Besitzer-Attackenwahl bleiben aktiv.
+3. Sieg -> eigenen Nachkampfdialog mit B schliessen -> Anfuehrer weiterlaufen:
+   Gast bleibt in der Gruppe. Sofort TEST B/Troy ansprechen, bis zur bedienbaren
+   Runde und anschliessend erneut spielen. Mit beiden Anfuehrerrollen pruefen.
+   Geliehene NPC-Pokemon erhalten keine EP; das eigene urspruengliche Team und
+   Reserven muessen nach Rueckkehr erhalten bleiben.
+4. Bei Gelegenheit Entwicklung pruefen (Besitzer kann abbrechen). Nincada
+   auf Level 20: mit freiem echten Teamplatz Ninjatom, bei sechs Pokemon keines.
+   Dies ist nativ automatisiert inklusive Troy-Auswahl/Reserven geprueft.
+
+Vorher vom Nutzer bestanden: Wild-/andere Doppelkaempfe, besiegte Teams,
+Troys grundlegender Leihteamkampf, Speichern/Wiederbeitritt und Disconnect.
+Issue #5 (Trainerbild im Wildkampf) bestaetigt behoben. Die neue Sieg-/Reentry-
+Folge oben braucht eigene Abnahme. Noch nicht einzeln bestaetigte Wildflucht,
+Fangzuordnung und 1/2/6-Teamgrenzen aus dem vorherigen Abschnitt bleiben offen.
+Regulaeres Trainerpreisgeld ist separate Implementierungsarbeit.
+Nachlaufen #3, Touch-Zielauswahl #4, Gras #1 und Zuschauen #2 bleiben offen.
+Alle nachfolgenden Anleitungen und Buildkennungen sind historische Staende.
+
+## Aktuelle Resttests fuer Sprint 6 (2026-11-15)
+
+Build **7cd1b68323ee18b7**, Boot **E3ID-6ff528623f015338**, ABI **5becd2e8**, Protokoll 20.
+
+Hintergrundtests, ARM-Release und PAK sind fertig. Beide Instanzen ueber
+**Host und Gast starten** neu laden; F6 installiert keinen neuen Build.
+
+Vom Nutzer bestaetigt bestanden: Wild-/andere Doppelkaempfe, besiegte Teams,
+Troys Leihteam, Speichern/Wiederbeitritt und Verbindungsabbruch. Issue #5
+(Trainerbild im Wildkampf) ist manuell als behoben bestaetigt.
+
+Neue Wildflucht-Korrektur (0106) braucht noch sichtbare Abnahme:
+
+1. Gemeinsam im Gras kaempfen; erst Host, dann Gast fluechten lassen.
+   Erfolgreiche Flucht muss beide an ihre bisherige Position zurueckbringen.
+   HP/AP/Status bleiben wie vor der Flucht, keine Heilung oder Geldstrafe.
+   Auch nach einem gescheiterten Fluchtversuch und mit nur einem wilden
+   Gegner pruefen; danach erneut laufen/kaempfen koennen.
+2. Teamgrenzen mit 1, 2 und 6 Pokemon: nur erste drei pro Spieler waehlbar,
+   ausschliesslich eigene wechseln; Plaetze 4..6 nach Kampf unveraendert.
+   Dafuer liegen in gemeinsamem PC Box 1, Plaetze 1..12, je zweimal
+   Gewaldro/Lohgock/Sumpex/Guardevoir/Voltenso/Stolloss auf Level 50.
+   Je sechs entnehmen, Reserven 4..6 unterscheidbar lassen und vor/nach
+   dem Kampf HP/AP/Status/Items vergleichen. Kein bestehendes Pokemon ersetzt.
+3. Fang bei einem verbliebenen Gegner: Zuordnung zu Team/Box, keine Duplikate.
+4. Falls noch nicht mit beiden Rollen erfolgt: ohne Folgen solo, mit Folgen
+   gemeinsam; B trennt. TEST A/B allein mit nur einem kampffaehigen Pokemon;
+   B waehrend Gruppenbeitritt darf keinen Wartezustand hinterlassen.
+
+Besiegte Teams, Leihteam, Speichern/Rejoin und Disconnect nicht pauschal
+erneut als offen behandeln. Die explizite Rueckmeldung ersetzt keine
+Aussage zu ungenannten Einzelvarianten.
+
+Touch-Zielauswahl #4 ist ein bekannter Fehler; nach Korrektur separat abnehmen.
+EP/EV/Levelaufstieg/Attackenlernen und regulaeres Trainerpreisgeld sind noch
+Implementierungsarbeit, daher erst nach deren Ergaenzung abnehmen. Nachlaufen
+#3 ist zurueckgestellt; Gras #1 und Zuschauen #2 bleiben separat offen.
+Nachfolgende Testanleitungen sind aeltere Staende.
+
+## Nachtest: wilde Doppelfaelle ohne Gegner-Trainer (2026-11-15)
+
+Build **064fbe57f391508b**, Boot **E3ID-6432b8729065aab9**, ABI **896a4be9**, Protokoll 20.
+
+ARM-Release und passendes PAK sind neu gebaut. Beide Instanzen ueber
+**Host und Gast starten** neu laden; F6 installiert keinen neuen Build.
+
+1. Host fuehrt/Gast folgt: wilden Doppelkampf im Gras ausloesen. Auf beiden
+   Geraeten duerfen auf der Gegnerseite nur die beiden wilden Pokemon stehen,
+   kein Trainer. Intro, erste Runde und Flucht/Sieg kontrollieren.
+2. Gast fuehrt/Host folgt wiederholen. Auch nach einem vorangegangenen
+   Trainer-/Troy-Kampf pruefen, dass kein Gegner-Trainer im Wildkampf erscheint.
+3. TEST A und TEST B/Troy kurz gegenpruefen: Spieler-Rueckenbilder, echte
+   NPC-Trainerbilder und deren Sendouts muessen weiterhin vorhanden sein.
+
+[Issue #5](https://github.com/Sumaiter/emerald-3ds/issues/5) bleibt bis zur
+sichtbaren Bestaetigung offen. Touch-Zielauswahl #4 und Nachlaufen #3 sind
+weiter bekannte offene Fehler. Nachfolgende Anleitungen sind aeltere Staende.
+
+## Nachtest: NPC-Partnerkampf / Nachlaufen zurueckgestellt (2026-11-15)
+
+Build **b0897187b8da4250**, Boot **E3ID-3d4d9019241c1602**, ABI **aac449b6**, Protokoll 20.
+
+Neuer ARM-Release und PAK sind gebaut. Die laufenden Emulatoren enthalten
+weiter den alten Boot E3ID-68d0d5a414085f28 und wurden nicht bedient.
+Zum Nachtesten beide Instanzen ueber **Host und Gast starten** mit dem neuen
+Build neu laden; F6 installiert keinen neuen Build.
+
+1. TEST B/Troy gemeinsam starten, zuerst Host, dann Gast als Anfuehrer:
+   beide Geraete muessen ueber Trainerintro und Ballwurf bis zur ersten
+   bedienbaren Runde kommen, ohne doppelte/liegengebliebene Trainersprites.
+2. Der folgende Spieler steuert STOLLUNIOR/PUPPANCE/TANHEL aus dem NPC-Team;
+   der Anfuehrer behaelt seine ersten bis zu drei Pokemon. Wechsel und
+   mindestens eine komplette Runde von beiden Spielern ausfuehren.
+3. Sieg und Niederlage/Rueckkehr pruefen. Das eigene urspruengliche Team
+   des NPC-Team-Steuernden muss danach unveraendert zurueckkehren; Reserven
+   ausserhalb der ersten drei duerfen nicht ersetzt werden.
+4. TEST B solo mit einem kampffaehigen Pokemon und TEST A sowie Wild-Doppel
+   kurz gegenpruefen. Die vorhandenen Sprint-6-Abnahmepunkte bleiben offen.
+
+Das noch asynchrone Nachlaufen ist als
+[Issue #3](https://github.com/Sumaiter/emerald-3ds/issues/3) bewusst verschoben.
+Keine weitere Bewegungskorrektur in dieser Runde. Nachfolgende Anleitungen
+beschreiben aeltere Staende und gelten nicht als neue Laufzeitfreigabe.
+
+## Nachtest: Bewegung, Gebietswechsel und Kampfansichten (2026-11-15)
+
+Build **cc52f03a239453b8**, Boot **E3ID-68d0d5a414085f28**, ABI **3ab38ed2**, Protokoll 20.
+
+Hintergrundtests, ARM-Release und PAK bestanden; sichtbare Abnahme noch offen.
+Die vom Nutzer laufend gelassenen Emulatoren wurden nicht veraendert. Fuer
+diesen neuen Stand beide Fenster selbst schliessen und das Paseo-Script
+**Host und Gast starten** ausfuehren; F6 installiert keinen neuen Build.
+
+1. Beide Fuehrungsrollen testen: gehen, rennen, schnelle Richtungswechsel und
+   laengere Strecken. Ein empfangener Rueckstand soll sich abbauen; volle
+   Schritte, besuchte Kurven und moeglichst ein Feld Abstand muessen bleiben.
+   B bei weiter gehaltener Richtung soll sofortiges Weiterlaufen erlauben.
+2. Haus/Tuer und verbundene Gebiete wechseln, waehrend der andere Spieler auf
+   der alten Karte bleibt: dort darf keine alte/zweite Koop-Figur stehenbleiben.
+   Wieder zusammenkommen, speichern/neuladen und ohne Gast kontrollieren.
+3. TEST A mit beiden Spielern und je einem Pokemon: beide Hydropi muessen in
+   den beiden Dreiergruppen sichtbar sein. Host und Gast sehen ihr eigenes
+   Team links, den Partner rechts; nur eigene Pokemon duerfen eingewechselt
+   werden. Mit verschiedenen ausgewaehlten Figuren erneut starten und die
+   Rueckenbilder/Paletten inklusive Wurf kontrollieren. Kein rotes Funkkaestchen.
+4. TEST B/Troy mit beiden moeglichen Anfuehrern: der Folgespieler steuert das
+   NPC-Team STOLLUNIOR/PUPPANCE/TANHEL. Echte Gegnerbilder, erster Zug auf beiden
+   Seiten, Wechsel, Sieg/Niederlage und Rueckkehr pruefen. Das gesamte eigene
+   Team des Folgespielers darf danach weder ersetzt noch geheilt worden sein.
+5. Beide Tests auch solo ab einem kampffaehigen Pokemon wiederholen. Mit mehr
+   als drei eigenen Pokemon muessen Reserveplaetze 4..6 unveraendert bleiben.
+   Im gemeinsamen Kampf: ein Dreierteam besiegen lassen, Partner spielt weiter;
+   verloren ist erst bei beiden. Wild-Doppel mit erster Runde und Flucht testen.
+
+Weitere Sprint-6-Abnahme (EP/EV/Level/Attacken/Preisgeld) bleibt separat offen.
+Die nachfolgenden Testanleitungen sind historische Staende.
+
 ## Nachtest der Sprint-6-Fixes vom 2026-11-15
 
 Build **6fd2556e4194dce4**, Boot **E3ID-16c4628f404bb3f4**, ABI **837d59ef**, Protokoll 20.

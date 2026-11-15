@@ -19,6 +19,7 @@ static struct
     CtrCoopSnapshot trail[FOLLOW_TRAIL_SIZE], last;
     uint8_t head, count;
     bool haveLast;
+    uint8_t stepAction;
 } sFollow;
 
 static bool FollowFieldReady(void)
@@ -207,6 +208,7 @@ static void FollowTick(void)
 void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held)
 {
     CtrCoopSnapshot local;
+    sFollow.stepAction = 0;
     if (!CtrCoop_IsFollowing()) return;
     if (*pressed & 2) /* B_BUTTON */
     {
@@ -243,6 +245,18 @@ void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held)
         else if (target->x > local.x) *held = 0x10;
         else if (target->y < local.y) *held = 0x40;
         else if (target->y > local.y) *held = 0x80;
+        sFollow.stepAction = target->movementActionId;
+        /* The initial occupied tile may have been recorded while standing.
+         * Start at the speed with which the leader is now leaving it. */
+        if (sFollow.stepAction <= CTR_COOP_ACTION_FACE_RIGHT && sFollow.count > 1)
+            sFollow.stepAction = sFollow.trail[(sFollow.head + 1) % FOLLOW_TRAIL_SIZE].movementActionId;
         return;
     }
+}
+
+bool CtrCoop_FollowRunning(void)
+{
+    return sFollow.state == FOLLOW_FOLLOWER
+        && sFollow.stepAction >= CTR_COOP_ACTION_PLAYER_RUN_DOWN
+        && sFollow.stepAction <= CTR_COOP_ACTION_PLAYER_RUN_DOWN + 3;
 }

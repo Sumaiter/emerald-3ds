@@ -132,6 +132,47 @@ int main(void){
 }
 '''
 
+WILD = r'''
+#define HEADER_NONE 65535
+#define PLAYER_AVATAR_FLAG_SURFING 1
+#define WILD_SPECIES(s) (s)
+#define USE_RANDOM_IVS 32
+#define OT_ID_PLAYER_ID 0
+static struct {unsigned species,minLevel,maxLevel;} landMons[12],waterMons[5];
+static struct WildPokemonInfo {typeof(landMons[0]) *wildPokemon;} land={landMons},water={waterMons};
+static struct {struct WildPokemonInfo *waterMonsInfo;} gWildMonHeaders[1];
+static struct {unsigned flags;} gPlayerAvatar;
+static unsigned header,index,created;
+static u16 GetCurrentMapWildMonHeaderId(void){return header;}
+static struct WildPokemonInfo *GetLandMonsInfo(u16 h){assert(!h);return &land;}
+static u8 ChooseWildMonIndex_WaterRock(void){return index%5;}
+static u8 ChooseWildMonIndex_Land(void){return index%12;}
+static unsigned ChooseWildMonLevel(const typeof(landMons[0]) *p){return p->minLevel;}
+static void CreateMon(struct Pokemon *p,unsigned species,unsigned level,unsigned iv,bool fixed,unsigned personality,unsigned ot,unsigned id){
+    (void)fixed;(void)personality;(void)ot;(void)id;assert(iv==32);++created;*p=(struct Pokemon){species,12,0,level,0};
+}
+'''
+WILD_TEST = r'''
+int main(void){
+    (void)gPlayerParty;(void)gBattleTypeFlags;(void)CtrCoop_IsDoubleBattle;
+    for(unsigned i=0;i<12;++i)landMons[i]=(typeof(landMons[0])){261+i%3,2+i%3,4};
+    for(unsigned i=0;i<5;++i)waterMons[i]=(typeof(waterMons[0])){72+i%2,5+i,9};
+    gWildMonHeaders[0].waterMonsInfo=&water;
+    for(unsigned surf=0;surf<2;++surf)for(index=0;index<12;++index){
+        memset(gEnemyParty,0,sizeof(gEnemyParty));gEnemyParty[0]=(struct Pokemon){258,7,0,3,15};
+        struct Pokemon original=gEnemyParty[0];created=0;gPlayerAvatar.flags=surf;
+        assert(CtrCoop_EngineCreateWildPartner() && created==1);
+        assert(!memcmp(&original,&gEnemyParty[0],sizeof(original)));
+        assert(gEnemyParty[1].species==(surf?waterMons[index%5].species:landMons[index].species));
+        assert(gEnemyParty[1].hp && !gEnemyParty[2].species);
+        assert(CtrCoop_EngineCreateWildPartner() && created==1);
+    }
+    memset(&gEnemyParty[1],0,sizeof(gEnemyParty[1]));header=HEADER_NONE;
+    assert(!CtrCoop_EngineCreateWildPartner());
+    puts("real wild helper: second independently created map-table land/water opponent, first opponent unchanged, no trainer flags");return 0;
+}
+'''
+
 WARP = r'''
 #define MAP_OFFSET 7
 #define WARP_ID_NONE -1
@@ -213,6 +254,7 @@ def main():
     variants={
         'party-loss':COMMON+LOSS+loss+LOSS_TEST,
         'trainer-preparation':COMMON+TRAINER+'#include "3ds_coop_trainer_teams.h"\n'+function(read('battle_main.c'),'CtrCoop_EnginePrepareFollowBattle')+TRAINER_TEST,
+        'wild-pair':COMMON+WILD+function(read('wild_encounter.c'),'CtrCoop_EngineCreateWildPartner')+WILD_TEST,
         'map-transfer':COMMON.split('struct Pokemon')[0]+WARP+function(read('overworld.c'),'CtrCoop_EngineFollowWarp')+WARP_TEST,
         'story-selection':COMMON+ENTRY+function(read('party_menu.c'),'GetBattleEntryEligibility')+ENTRY_TEST,
     }

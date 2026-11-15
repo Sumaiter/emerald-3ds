@@ -1,6 +1,12 @@
 # Status: Emerald 3DS Koop-Mod
 
-Stand: 2026-11-14
+Sprint-6-Fixes vom 2026-11-15: nativer Koop-Linkkampfempfang korrigiert,
+Nachlaufen bei Kurven/Paketbursts samt Lauftempo ueberarbeitet, beide Route101-
+Tests solo ab einem Pokemon und maximal den ersten drei. Hintergrundabnahme,
+102-Patchkette und ARM-Release/PAK bestanden. Manueller Nachtest steht aus;
+laufende Emulatoren und SAVs unangetastet. Build **6fd2556e4194dce4**, Boot **E3ID-16c4628f404bb3f4**, ABI **837d59ef**, Protokoll 20.
+
+Stand: 2026-11-15
 
 Upstream-PR-Pruefung abgeschlossen: 12 uebernommen, 7 bewusst ausgelassen oder hier
 nicht anwendbar. Entscheidungen mit Commit-IDs stehen dauerhaft in

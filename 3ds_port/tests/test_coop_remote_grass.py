@@ -40,6 +40,7 @@ static const struct ObjectEventGraphicsInfo info={16,32};
 #define OBJECT_GRAPHICS_INFO(o) (&info)
 struct {struct {u8 mapGroup,mapNum;} location;} save,*gSaveBlock1Ptr=&save;
 static struct {bool remoteValid,haveApplied;u8 objectEventId;CtrCoopSnapshot remote,applied;} sCoop;
+static struct {CtrCoopSnapshot pose[64];u8 head,count;} sRemoteSteps;
 static u32 gFieldEffectArguments[8];
 static unsigned effects,animated,relocations,spawns,heldStarts;
 static u8 terrain;

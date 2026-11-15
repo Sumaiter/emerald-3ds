@@ -1426,10 +1426,12 @@ uint8_t SpawnSpecialObjectEvent(const struct ObjectEventTemplate *objectEventTem
     return OBJECT_EVENTS_COUNT;
 }
 void ObjectEventTurn(struct ObjectEvent *objectEvent, uint8_t direction) { objectEvent->facingDirection = direction; }
+#ifndef CTR_COOP_CUSTOM_MOVEMENT
 void ObjectEventClearHeldMovementIfFinished(struct ObjectEvent *objectEvent) { (void)objectEvent; }
 bool ObjectEventIsHeldMovementActive(struct ObjectEvent *objectEvent) { (void)objectEvent; return false; }
 void ObjectEventSetHeldMovement(struct ObjectEvent *objectEvent, uint8_t movementActionId) { (void)objectEvent; (void)movementActionId; }
 void MoveObjectEventToMapCoords(struct ObjectEvent *objectEvent, int16_t x, int16_t y) { objectEvent->currentCoords.x = x; objectEvent->currentCoords.y = y; }
+#endif
 void ShowPokemonStorageSystemPC(void) { sPcOpenCount++; }
 void PlaySE(uint16_t song) { (void)song; }
 void CB2_Overworld(void) {}

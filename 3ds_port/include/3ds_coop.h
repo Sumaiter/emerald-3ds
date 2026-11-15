@@ -58,9 +58,13 @@ bool CtrCoop_TryFollowAt(int16_t x, int16_t y);
 bool CtrCoop_IsFollowing(void);
 void CtrCoop_StopFollowing(void);
 void CtrCoop_FollowKeys(uint16_t *pressed, uint16_t *held);
+/* Match a visited leader step independently of either player's B/run setting. */
+bool CtrCoop_FollowRunning(void);
 /* Native helper receives only bounded map coordinates, never a save pointer. */
 bool CtrCoop_EngineFollowWarp(uint8_t group, uint8_t num, uint16_t layout, int16_t x, int16_t y);
 bool CtrCoop_EnginePrepareFollowBattle(void);
+/* A repeatable debug encounter has a RAM-only, capped team until return. */
+bool CtrCoop_EngineTestPartyActive(void);
 bool CtrCoop_UsesNpcPartner(void);
 bool CtrCoop_RestrictStoryParty(void);
 bool CtrCoop_IsWatching(void);

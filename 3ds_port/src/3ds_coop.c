@@ -225,6 +225,34 @@ static bool StoryNpcAvailable(uint8_t group, uint8_t num, uint8_t localId);
 static bool PartyPeerReady(void);
 static void FollowReset(void);
 
+/* Preserve individual steps received in one network pump, especially the two
+ * sides of a corner. A newer direction must not replace an unfinished step. */
+static struct {
+    CtrCoopSnapshot pose[64];
+    uint8_t head, count;
+} sRemoteSteps;
+
+static void RememberRemoteStep(const CtrCoopSnapshot *pose)
+{
+    /* Returning from a menu/battle should show the peer's current position,
+     * not play back seconds of footsteps that nobody could see. */
+    if (gMain.callback2 != CB2_Overworld || gMain.inBattle)
+    {
+        sRemoteSteps.head = sRemoteSteps.count = 0;
+        return;
+    }
+    if (sRemoteSteps.count)
+    {
+        CtrCoopSnapshot *last = &sRemoteSteps.pose[(sRemoteSteps.head + sRemoteSteps.count - 1) % 64];
+        if (CtrCoopProtocol_SameMap(last, pose) && last->x == pose->x && last->y == pose->y)
+            return; /* latest standing/facing pose is applied after the steps */
+        if (!CtrCoopProtocol_SameMap(last, pose) || sRemoteSteps.count == 64)
+            sRemoteSteps.head = sRemoteSteps.count = 0;
+    }
+    sRemoteSteps.pose[(sRemoteSteps.head + sRemoteSteps.count) % 64] = *pose;
+    ++sRemoteSteps.count;
+}
+
 static bool SnapshotsEqual(const CtrCoopSnapshot *a, const CtrCoopSnapshot *b)
 {
     return !CtrCoopProtocol_ShouldSend(a, b, 0);
@@ -245,6 +273,7 @@ static void ClearRemote(void)
     CtrCoopMoney_Session(false,sCoop.guest,0,sCoop.guestWorldLoaded);
     CtrCoopNpcMotion_Reset();
     FollowReset();
+    sRemoteSteps.head = sRemoteSteps.count = 0;
     CtrCoop_ResetStory();
     CtrCoopSpectator_Reset();
     if (!sCoop.guest && sCoop.peerAuthenticated && sCoop.peerSaveReady)
@@ -973,22 +1002,19 @@ static bool LocalSnapshot(CtrCoopSnapshot *out)
 static void SendLocalSnapshot(const CtrCoopSnapshot *local, const struct LocalPeer *peer)
 {
     uint8_t packet[CTR_COOP_PACKET_SIZE];
+    CtrCoopSnapshot sent = *local;
 
     if (!CtrCoopProtocol_ShouldSend(sCoop.haveLastSent ? &sCoop.lastSent : NULL, local, sCoop.framesSinceLast))
         return;
     if (!CtrCoopProtocol_Encode(local, packet, sizeof(packet)))
     {
-        CtrCoopSnapshot stationary = *local;
-        stationary.movementActionId = GetFaceDirectionMovementAction(local->facing);
-        if (!CtrCoopProtocol_Encode(&stationary, packet, sizeof(packet)))
+        sent.movementActionId = GetFaceDirectionMovementAction(local->facing);
+        if (!CtrCoopProtocol_Encode(&sent, packet, sizeof(packet)))
             return;
-        sCoop.lastSent = stationary;
     }
-    else
-    {
-        sCoop.lastSent = *local;
-    }
-    LocalLink_Send(peer->id, packet, sizeof(packet));
+    if (!LocalLink_TrySend(peer->id, packet, sizeof(packet)))
+        return;
+    sCoop.lastSent = sent;
     sCoop.haveLastSent = true;
     sCoop.framesSinceLast = 0;
 }
@@ -1137,6 +1163,7 @@ static void UpdateRemoteObject(const CtrCoopSnapshot *local)
     CtrCoopApply apply;
     bool freshSpawn = false;
     bool alreadyApplied;
+    const CtrCoopSnapshot *target;
 
     if (!sCoop.remoteValid || !CtrCoopProtocol_SameMap(&sCoop.remote, local))
     {
@@ -1147,6 +1174,9 @@ static void UpdateRemoteObject(const CtrCoopSnapshot *local)
         freshSpawn = SpawnRemoteObject();
     if (!RemoteObjectValid())
         return;
+    if (freshSpawn)
+        sRemoteSteps.head = sRemoteSteps.count = 0;
+    target = sRemoteSteps.count ? &sRemoteSteps.pose[sRemoteSteps.head] : &sCoop.remote;
     objectEvent = &gObjectEvents[sCoop.objectEventId];
     if (objectEvent->graphicsId != sCoop.remote.graphicsId)
     {
@@ -1154,37 +1184,47 @@ static void UpdateRemoteObject(const CtrCoopSnapshot *local)
         return;
     }
     ObjectEventClearHeldMovementIfFinished(objectEvent);
-    if (sCoop.haveApplied && sCoop.applied.bikeMode != sCoop.remote.bikeMode
+    if (sCoop.haveApplied && sCoop.applied.bikeMode != target->bikeMode
      && ObjectEventIsHeldMovementActive(objectEvent))
         return;
-    if (CtrCoopBike_SetRemote(sCoop.remote.graphicsId, sCoop.remote.bikeMode))
+    if (CtrCoopBike_SetRemote(target->graphicsId, target->bikeMode))
     {
         /* The base identity stays the same while mounting/dismounting.
          * Rebind its sprite and palette in place, without losing the actor. */
         ObjectEventSetGraphicsId(objectEvent, sCoop.remote.graphicsId);
         sCoop.haveApplied = false;
     }
-    alreadyApplied = !freshSpawn && sCoop.haveApplied && SnapshotsEqual(&sCoop.applied, &sCoop.remote);
-    apply = CtrCoopProtocol_PlanMovement(&sCoop.remote, objectEvent->currentCoords.x, objectEvent->currentCoords.y,
+    alreadyApplied = !freshSpawn && sCoop.haveApplied && SnapshotsEqual(&sCoop.applied, target);
+    apply = CtrCoopProtocol_PlanMovement(target, objectEvent->currentCoords.x, objectEvent->currentCoords.y,
         freshSpawn, alreadyApplied, ObjectEventIsHeldMovementActive(objectEvent));
     switch (apply)
     {
     case CTR_COOP_APPLY_START:
-        ObjectEventSetHeldMovement(objectEvent, sCoop.remote.movementActionId);
+        ObjectEventSetHeldMovement(objectEvent, target->movementActionId);
         break;
     case CTR_COOP_APPLY_SNAP:
-        MoveObjectEventToMapCoords(objectEvent, sCoop.remote.x, sCoop.remote.y);
-        ObjectEventTurn(objectEvent, sCoop.remote.facing);
+        MoveObjectEventToMapCoords(objectEvent, target->x, target->y);
+        ObjectEventTurn(objectEvent, target->facing);
         CtrCoop_EngineRemoteStepEffects(sCoop.objectEventId);
         break;
     case CTR_COOP_APPLY_FACE:
-        ObjectEventTurn(objectEvent, sCoop.remote.facing);
+        ObjectEventTurn(objectEvent, target->facing);
         break;
     case CTR_COOP_APPLY_NOTHING:
+        if (alreadyApplied && sRemoteSteps.count)
+        {
+            sRemoteSteps.head = (sRemoteSteps.head + 1) % 64;
+            --sRemoteSteps.count;
+        }
         return;
     }
-    sCoop.applied = sCoop.remote;
+    sCoop.applied = *target;
     sCoop.haveApplied = true;
+    if (sRemoteSteps.count)
+    {
+        sRemoteSteps.head = (sRemoteSteps.head + 1) % 64;
+        --sRemoteSteps.count;
+    }
 }
 
 void CtrCoop_ReleasePC(void)
@@ -1420,6 +1460,8 @@ static void ConfigureDoubleBattle(const uint8_t *data)
     memcpy(gLinkPlayers[sCoop.guest ? 0 : 1].name, CtrCoop_WatchingName(), CTR_COOP_PLAYER_NAME_SIZE);
     sCoop.doubleState = DOUBLE_STATE_ACTIVE;
     sCoop.doublePartyRestored = false;
+    CtrLog_Write(CTR_LOG_GAME, "coop: double configured for %s, trainer %u, flags %08lx",
+        sCoop.guest ? "guest" : "host", gTrainerBattleOpponent_A, (unsigned long)gBattleTypeFlags);
     SetMainCallback2(CB2_InitBattle);
 }
 
@@ -1592,6 +1634,8 @@ static void SyncParty(void)
     uint32_t checksum;
 
     if (!CoopStorageReady() || (sCoop.guest && !PartyPeerReady()))
+        return;
+    if (CtrCoop_EngineTestPartyActive())
         return;
     /* Normal combat updates HP/PP/status as it happens. Temporary facility,
      * tutorial and partner teams must never replace the canonical full team. */
@@ -4193,6 +4237,10 @@ bool CtrCoop_HandlePacket(uint16_t from, const uint8_t *data, uint16_t len)
     sCoop.peerId = from;
     sCoop.remote = remote;
     sCoop.remoteValid = true;
+    RememberRemoteStep(&remote);
+    /* A network pump can receive several steps before the next field frame.
+     * Record every visited tile, not just the final coordinate after a turn. */
+    FollowRecord(&remote);
     return true;
 }
 

@@ -1,5 +1,36 @@
 # Host und Gast auf diesem PC starten
 
+## Nachtest der Sprint-6-Fixes vom 2026-11-15
+
+Build **6fd2556e4194dce4**, Boot **E3ID-16c4628f404bb3f4**, ABI **837d59ef**, Protokoll 20.
+Gesamtpruefung, ARM-Build und PAK bestanden; Emulatornachtest noch offen.
+Die laufenden Instanzen verwenden weiterhin E3ID-58cdf81623cdba8b.
+Erst zum Nachtesten beide Fenster schliessen und das vorhandene Paseo-Script
+**Host und Gast starten** manuell ausfuehren. F6 installiert keinen neuen Build.
+
+- Host fuehrt, Gast folgt: gerade laufen, wiederholt enge Rechts-/Links-/
+  Oben-/Unten-Kurven, gehen/rennen und unterschiedliche eigene Laufoptionen.
+  Erwartung: gleiche Wegpunkte, moeglichst ein Feld Abstand, keine seitlichen
+  Spruenge; B loest die Gruppe. Danach Rollen tauschen.
+- In der Folgegruppe mit je einem Pokemon ins Gras: zwei wilde Gegner,
+  beide Spieler koennen im ersten Zug waehlen, mindestens eine volle Runde,
+  dann Sieg/Flucht und Rueckkehr ohne schwarzen Bildschirm pruefen.
+- Ohne Folgegruppe TEST A (linker Junge) und TEST B (rechter Troy) auf Route101
+  jeweils solo mit nur einem kampffaehigen Pokemon starten, einen Zug spielen,
+  beenden und wiederholen. TEST A zeigt keinen erfundenen zweiten Spieler-Mon;
+  TEST B hat Troys NPC-Team. Keine automatische Testheilung.
+- Beide Tests in der Folgegruppe ausloesen, mit beiden moeglichen Anfuehrern.
+  Bei Troy steuert der Folgespieler STOLLUNIOR/PUPPANCE/TANHEL und bekommt danach
+  sein eigenes unveraendertes Team zurueck.
+- Mit sechs eigenen Pokemon pruefen: pro Spieler nur Plaetze eins bis drei
+  verwendbar, Plaetze vier bis sechs nach dem Kampf unveraendert. Ein bis zwei
+  Pokemon genuegen ebenfalls. Nach KO des einen Spielers kaempft der Partner
+  weiter; Niederlage erst, wenn beide Teams erschoepft sind.
+
+Diese Checks sind **noch nicht manuell bestanden**. EP/EV/Lernen/Trainerpreisgeld
+bleiben eigene offene Sprint-6-Arbeit. Grasanimation #1 und Zuschauerruckeln #2
+bleiben getrennt offen. Aeltere Buildangaben unten sind Historie.
+
 **Neuester Entwicklungsstand: Sprint 6 mit aktiver Folgegruppe**, Protokoll 20,
 Build **7e5dc28033a62d97**, Boot **E3ID-58cdf81623cdba8b**, ABI **bcdc1bb8**.
 Hintergrundtests und ARM-Release/PAK bestanden. Noch kein Emulatornachtest.

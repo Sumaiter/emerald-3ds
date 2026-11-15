@@ -1,0 +1,238 @@
+diff --git a/src/battle_main.c b/src/battle_main.c
+--- a/src/battle_main.c
++++ b/src/battle_main.c
+@@ -3485,6 +3485,23 @@
+     }
+ }
+ 
++#ifdef PLATFORM_3DS
++static void InitSparseDoubleBattlers(void)
++{
++    u8 right = GetBattlerAtPosition(B_POSITION_PLAYER_RIGHT);
++    u8 left = GetBattlerAtPosition(B_POSITION_PLAYER_LEFT);
++    if (!(gBattleTypeFlags & BATTLE_TYPE_DOUBLE) || (gBattleTypeFlags & BATTLE_TYPE_MULTI))
++        return;
++    if (!gBattleMons[right].species || !gBattleMons[right].hp
++     || gBattlerPartyIndexes[right] == gBattlerPartyIndexes[left])
++    {
++        gAbsentBattlerFlags |= gBitTable[right];
++        gBattleMons[right].species = SPECIES_NONE;
++        gBattleMons[right].hp = 0;
++    }
++}
++#endif
++
+ static void BattleIntroDrawTrainersOrMonsSprites(void)
+ {
+     u8 *ptr;
+@@ -3493,8 +3510,14 @@
+     if (gBattleControllerExecFlags)
+         return;
+ 
++#ifdef PLATFORM_3DS
++    InitSparseDoubleBattlers();
++#endif
++
+     for (gActiveBattler = 0; gActiveBattler < gBattlersCount; gActiveBattler++)
+     {
++        if (gAbsentBattlerFlags & gBitTable[gActiveBattler])
++            continue;
+         if ((gBattleTypeFlags & BATTLE_TYPE_SAFARI)
+             && GetBattlerSide(gActiveBattler) == B_SIDE_PLAYER)
+         {
+diff --git a/src/battle_setup.c b/src/battle_setup.c
+--- a/src/battle_setup.c
++++ b/src/battle_setup.c
+@@ -1969,19 +1969,23 @@
+ 
+ 
+ static const u8 sRoute101TestDefeated[] = _("Der Test ist beendet! Bereit fuer mehr?");
++static bool8 sRoute101TestPartyActive;
++
++bool CtrCoop_EngineTestPartyActive(void)
++{
++    return sRoute101TestPartyActive;
++}
+ 
+ static void CB2_EndRoute101TestBattle(void)
+ {
+     u32 i;
+ 
+-    if (gBattleTypeFlags & BATTLE_TYPE_INGAME_PARTNER)
+-    {
+-        // Keep the leader's real combat changes, restore reserves verbatim,
+-        // and discard the temporary NPC triplet before any co-op result/save.
+-        for (i = 0; i < MULTI_PARTY_SIZE; i++)
+-            gSaveBlock1Ptr->playerParty[i] = gPlayerParty[i];
+-        LoadPlayerParty();
+-    }
++    // Keep real combat changes; restore reserves and discard any NPC triplet
++    // before serializing a result or invoking native defeat/healing callbacks.
++    for (i = 0; i < MULTI_PARTY_SIZE; i++)
++        gSaveBlock1Ptr->playerParty[i] = gPlayerParty[i];
++    LoadPlayerParty();
++    sRoute101TestPartyActive = FALSE;
+ 
+     if (IsPlayerDefeated(gBattleOutcome))
+         SetMainCallback2(CB2_WhiteOut);
+@@ -2011,7 +2015,7 @@
+          && GetMonData(&gPlayerParty[i], MON_DATA_HP))
+             alive++;
+     }
+-    if (alive < (withPartner ? 1 : 2))
++    if (alive == 0)
+         return FALSE;
+ 
+     gApproachingTrainerId = 0;
+@@ -2034,9 +2038,14 @@
+     gBattleTypeFlags = BATTLE_TYPE_TRAINER | BATTLE_TYPE_DOUBLE;
+     gPartnerTrainerId = 0;
+     gBattleScripting.specialTrainerBattleType = 0;
++    SavePlayerParty();
++    sRoute101TestPartyActive = TRUE;
++    // Test fixtures obey the same maximum of three, including solo mode.
++    for (i = MULTI_PARTY_SIZE; i < PARTY_SIZE; i++)
++        ZeroMonData(&gPlayerParty[i]);
++    gPlayerPartyCount = CalculatePlayerPartyCount();
+     if (withPartner)
+     {
+-        SavePlayerParty();
+         for (i = 0; i < MULTI_PARTY_SIZE; i++)
+         {
+             CreateMon(&gPlayerParty[MULTI_PARTY_SIZE + i], partnerSpecies[i],
+diff --git a/src/battle_controller_player.c b/src/battle_controller_player.c
+--- a/src/battle_controller_player.c
++++ b/src/battle_controller_player.c
+@@ -1102,12 +1102,20 @@
+     }
+ }
+ 
++// An authored double may have only one usable player Pokemon. The other
++// battler remains absent; do not start or await its ball/healthbox/shiny tasks.
++static bool8 PlayerHasTwoIntroMons(void)
++{
++    return IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_MULTI)
++        && !(gAbsentBattlerFlags & gBitTable[BATTLE_PARTNER(gActiveBattler)]);
++}
++
+ static void Intro_WaitForShinyAnimAndHealthbox(void)
+ {
+     bool8 healthboxAnimDone = FALSE;
+ 
+     // Check if healthbox has finished sliding in
+-    if (!IsDoubleBattle() || (IsDoubleBattle() && (gBattleTypeFlags & BATTLE_TYPE_MULTI)))
++    if (!PlayerHasTwoIntroMons())
+     {
+         if (gSprites[gHealthboxSpriteIds[gActiveBattler]].callback == SpriteCallbackDummy)
+             healthboxAnimDone = TRUE;
+@@ -1133,7 +1141,7 @@
+ 
+         HandleLowHpMusicChange(&gPlayerParty[gBattlerPartyIndexes[gActiveBattler]], gActiveBattler);
+ 
+-        if (IsDoubleBattle())
++        if (IsDoubleBattle() && !(gAbsentBattlerFlags & gBitTable[BATTLE_PARTNER(gActiveBattler)]))
+             HandleLowHpMusicChange(&gPlayerParty[gBattlerPartyIndexes[BATTLE_PARTNER(gActiveBattler)]], BATTLE_PARTNER(gActiveBattler));
+ 
+         gBattleSpritesDataPtr->healthBoxesData[gActiveBattler].introEndDelay = 3;
+@@ -1145,6 +1153,12 @@
+ {
+     bool32 bgmRestored = FALSE;
+     bool32 battlerAnimsDone = FALSE;
++
++    if (gAbsentBattlerFlags & gBitTable[BATTLE_PARTNER(gActiveBattler)])
++    {
++        gBattleSpritesDataPtr->healthBoxesData[BATTLE_PARTNER(gActiveBattler)].triedShinyMonAnim = TRUE;
++        gBattleSpritesDataPtr->healthBoxesData[BATTLE_PARTNER(gActiveBattler)].finishedShinyMonAnim = TRUE;
++    }
+ 
+     // Start shiny animation if applicable for 1st Pokémon
+     if (!gBattleSpritesDataPtr->healthBoxesData[gActiveBattler].triedShinyMonAnim
+@@ -1162,7 +1176,7 @@
+     {
+         if (!gBattleSpritesDataPtr->healthBoxesData[gActiveBattler].healthboxSlideInStarted)
+         {
+-            if (IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_MULTI))
++            if (PlayerHasTwoIntroMons())
+             {
+                 UpdateHealthboxAttribute(gHealthboxSpriteIds[BATTLE_PARTNER(gActiveBattler)], &gPlayerParty[gBattlerPartyIndexes[BATTLE_PARTNER(gActiveBattler)]], HEALTHBOX_ALL);
+                 StartHealthboxSlideIn(BATTLE_PARTNER(gActiveBattler));
+@@ -1193,7 +1207,7 @@
+     }
+ 
+     // Wait for battler anims
+-    if (!IsDoubleBattle() || (IsDoubleBattle() && (gBattleTypeFlags & BATTLE_TYPE_MULTI)))
++    if (!PlayerHasTwoIntroMons())
+     {
+         if (gSprites[gBattleControllerData[gActiveBattler]].callback == SpriteCallbackDummy
+             && gSprites[gBattlerSpriteIds[gActiveBattler]].callback == SpriteCallbackDummy)
+@@ -1215,7 +1229,7 @@
+     // Clean up
+     if (bgmRestored && battlerAnimsDone)
+     {
+-        if (IsDoubleBattle() && !(gBattleTypeFlags & BATTLE_TYPE_MULTI))
++        if (PlayerHasTwoIntroMons())
+             DestroySprite(&gSprites[gBattleControllerData[BATTLE_PARTNER(gActiveBattler)]]);
+         DestroySprite(&gSprites[gBattleControllerData[gActiveBattler]]);
+ 
+@@ -3258,7 +3272,7 @@
+         u8 savedActiveBattler = gActiveBattler;
+ 
+         gActiveBattler = gTasks[taskId].tBattlerId;
+-        if (!IsDoubleBattle() || (gBattleTypeFlags & BATTLE_TYPE_MULTI))
++        if (!PlayerHasTwoIntroMons())
+         {
+             gBattleBufferA[gActiveBattler][1] = gBattlerPartyIndexes[gActiveBattler];
+             StartSendOutAnim(gActiveBattler, FALSE);
+diff --git a/src/field_player_avatar.c b/src/field_player_avatar.c
+--- a/src/field_player_avatar.c
++++ b/src/field_player_avatar.c
+@@ -590,7 +590,11 @@
+ {
+     if (direction == DIR_NONE)
+         return gPlayerAvatar.runningState = NOT_MOVING;
+-    else if (direction != GetPlayerMovementDirection() && gPlayerAvatar.runningState != MOVING)
++    else if (direction != GetPlayerMovementDirection() && gPlayerAvatar.runningState != MOVING
++#ifdef PLATFORM_3DS
++        && !CtrCoop_IsFollowing()
++#endif
++        )
+         return gPlayerAvatar.runningState = TURN_DIRECTION;
+     else
+         return gPlayerAvatar.runningState = MOVING;
+@@ -657,7 +661,12 @@
+     }
+ 
+ #ifdef PLATFORM_3DS
+-    if (CtrPlayer_RunAlways())
++    if (CtrCoop_IsFollowing())
++    {
++        if (CtrCoop_FollowRunning()) heldKeys |= B_BUTTON;
++        else heldKeys &= ~B_BUTTON;
++    }
++    else if (CtrPlayer_RunAlways())
+         heldKeys ^= B_BUTTON;
+ #endif
+     if (!(gPlayerAvatar.flags & PLAYER_AVATAR_FLAG_UNDERWATER) && (heldKeys & B_BUTTON) && FlagGet(FLAG_SYS_B_DASH)
+diff --git a/data/maps/Route101/scripts.inc b/data/maps/Route101/scripts.inc
+--- a/data/maps/Route101/scripts.inc
++++ b/data/maps/Route101/scripts.inc
+@@ -33,8 +33,8 @@
+     .string "Meine vier POKEMON sind auf Level 5.\p"
+     .string "Im Koop zuerst dem Spieler folgen,\n"
+     .string "dann spricht der Anfuehrer mich an.\p"
+-    .string "Du brauchst zwei kampffaehige\n"
+-    .string "POKEMON auf den ersten drei Plaetzen.\p"
++    .string "Ein kampffaehiges POKEMON reicht.\n"
++    .string "Es zaehlen hoechstens die ersten drei.\p"
+     .string "Der Test ist beliebig wiederholbar.\n"
+     .string "Moechtest du jetzt kaempfen?$"
+ 
+@@ -54,7 +54,7 @@
+ 
+ Route101_Text_TestNotReady:
+     .string "Bitte zuerst POKEMON heilen.\n"
+-    .string "TEST A braucht zwei, TEST B eines\l"
++    .string "Beide Tests brauchen nur eines\l"
+     .string "auf den ersten drei Teamplaetzen.$"
+ 
+ Route101_MapScripts::

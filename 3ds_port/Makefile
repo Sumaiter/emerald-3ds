@@ -443,7 +443,10 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	"$(PYTHON)" tests/test_coop_scene_hooks.py --source $(STARTER_MENU_ROOT)/src
 	"$(PYTHON)" tests/test_coop_battle_return_hooks.py --source $(STARTER_MENU_ROOT)/src
 	"$(PYTHON)" tests/test_coop_double_hooks.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_battle_channel.py --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_sparse_double.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_follow_engine.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
+	"$(PYTHON)" tests/test_coop_follow_input.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_route101_battles.py --source $(STARTER_MENU_ROOT)/src --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_spectator.py --cc "$(HOSTCC)"
 	"$(PYTHON)" tests/test_coop_spectator_video.py --cc "$(HOSTCC)"
@@ -472,6 +475,7 @@ verify-coop: build/coop_protocol_test$(EXESUFFIX) build/coop_profile_test$(EXESU
 	./build/coop_live_regression_test$(EXESUFFIX)
 	./build/coop_npc_motion_test$(EXESUFFIX)
 	./build/coop_follow_regression_test$(EXESUFFIX)
+	./build/coop_follow_render_test$(EXESUFFIX)
 
 verify-coop: build/coop_scene_regression_test$(EXESUFFIX)
 verify-coop: build/coop_story_regression_test$(EXESUFFIX) build/coop_live_regression_test$(EXESUFFIX)
@@ -479,6 +483,11 @@ verify-coop: build/coop_inventory_test$(EXESUFFIX) build/coop_money_test$(EXESUF
 verify-coop: build/coop_guest_disconnect_test$(EXESUFFIX)
 verify-coop: build/coop_npc_motion_test$(EXESUFFIX)
 verify-coop: build/coop_follow_regression_test$(EXESUFFIX)
+verify-coop: build/coop_follow_render_test$(EXESUFFIX)
+
+build/coop_follow_render_test$(EXESUFFIX): tests/coop_follow_render_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_follow.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h
+	@mkdir -p build
+	$(HOSTCC) -std=gnu99 -O2 -Wall -Wextra -Werror -DCTR_COOP_TEST_MAX_SPRINT=6 -Itests/coop_host -Iinclude tests/coop_follow_render_test.c src/3ds_coop_protocol.c src/3ds_coop_storage.c -o $@
 
 build/coop_follow_regression_test$(EXESUFFIX): tests/coop_follow_regression_test.c tests/coop_session_test.c tests/coop_live_fixture.inc tests/coop_battle_regressions.inc tests/coop_host/global.h src/3ds_coop.c src/3ds_coop_follow.inc src/3ds_coop_protocol.c src/3ds_coop_storage.c include/3ds_coop.h include/3ds_coop_protocol.h
 	@mkdir -p build

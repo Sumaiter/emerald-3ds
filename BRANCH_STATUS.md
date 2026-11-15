@@ -1,5 +1,47 @@
 # Upstream-PR-Integration auf Main und Sprint 6
 
+## Sprint-6-Laufzeitfixes: Nachlaufen und Kampfeinstieg (2026-11-15)
+
+Build **6fd2556e4194dce4**, Boot **E3ID-16c4628f404bb3f4**, ABI **837d59ef**, Protokoll 20.
+
+Die gesicherten Nutzerlogs stammen vom vorherigen Boot E3ID-58cdf81623cdba8b.
+Beide Emulatoren blieben in BattleMainCB2 aktiv; der beobachtete schwarze
+Bildschirm war kein vollstaendiger Prozessstillstand. Der echte Adapterpfad
+verwarf Koop-Kampfmeldungen, weil keine klassische RFU-CONNECT-Verbindung
+besteht. Der aktuelle authentifizierte Koop-Teilnehmer darf jetzt denselben
+nativen Linkkampfkanal verwenden; fremde Teilnehmer und falsche Sitzungen
+bleiben ausgeschlossen. Der neue Test reproduziert den alten Fehler rot.
+
+Nachlaufen zeichnet jeden empfangenen Wegpunkt sofort auf. Die Anzeige spielt
+Schritte bis zum Ende ab, bevor sie eine Kurve beginnt, und behaelt alle Ecken
+eines Paketbursts. Die native Folgebewegung spart die stationaere Drehpause und
+uebernimmt das Lauftempo des Anfuehrers unabhaengig vom eigenen B-/Laufmodus.
+Nach Menue/Kampf wird kein unsichtbarer alter Bewegungsverlauf nachgespielt.
+Abgewiesene Positionssendungen werden sofort erneut versucht.
+
+Beide Route101-Testkaempfe sind solo mit einem kampffaehigen Pokemon moeglich.
+Es gelten hoechstens die ersten drei, nicht drei Pflicht-Pokemon. Bei TEST A
+bleibt ein fehlender zweiter Spielerplatz leer; Ball-, Shiny- und KP-Animationen
+warten darauf nicht. Beide Tests stellen Reserveplaetze vier bis sechs aus der
+RAM-Sicherung wieder her, behalten echte Kampfveraenderungen an den ersten drei
+und synchronisieren das temporaer gekuerzte Team nicht als dauerhaftes Team.
+Wild-Doppel erzeugt den zweiten Gegner eigenstaendig aus der Karten-Begegnungstabelle.
+Story-/Troy-Partnerteams bleiben die Originalteams des NPCs.
+
+Hintergrundabnahme bestanden: vollstaendiges verify, Koop-Regressionen,
+Burst-/Kurven-/Tempo-/Queue-Retry-Proben, echte native Wild- und Solo-Intro-
+Bodies, Route101 mit Teamgroessen eins bis sechs, ARM11-Hardfloat/Link/Assets
+und Release/PAK. Alle 102 Patches auf frischem gepinntem Quellstand angewandt;
+0101 vorwaerts/rueckwaerts bytegleich, geaenderte Funktionskoerper und Testtexte
+stimmen mit dem gebauten Sprachstand ueberein.
+Evidenz lokal unter build/coop-sprint6-runtime-fixes/.
+
+**Manueller Nachtest offen.** Laufende Emulatoren, Profile und SAVs wurden nicht
+veraendert und verwenden weiter den alten Build. Nicht als Emulator-PASS werten.
+Sprint 6 bleibt in Arbeit: gemeinsame EP/EV/Levelup/Attackenlernen und normales
+Trainerpreisgeld sind weiterhin offen; Gras-Issue #1 und Zuschauer-Issue #2
+werden durch diesen Kampfeinstiegsfix nicht als erledigt markiert.
+
 Build **7e5dc28033a62d97**, Boot **E3ID-58cdf81623cdba8b**, ABI **bcdc1bb8**, Protokoll 20.
 12 PRs uebernommen, 7 bewusst ausgelassen/nicht anwendbar. Dauerhafte Merkliste:
 docs/UPSTREAM_PR_REVIEW.md und tools/upstream_pr_decisions.json.

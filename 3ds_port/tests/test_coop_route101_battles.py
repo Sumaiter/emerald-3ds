@@ -42,6 +42,7 @@ static struct {void (*savedCallback)(void);} gMain;
 static struct {unsigned specialTrainerBattleType;} gBattleScripting;
 static struct {u8 trainerName[12];} gTrainers[TRAINERS_COUNT];
 static u32 gBattleTypeFlags,gBattleOutcome;
+static bool sRoute101TestPartyActive;
 static u16 gSpecialVar_0x8004,gTrainerBattleOpponent_A,gTrainerBattleOpponent_B,gPartnerTrainerId;
 static u8 gApproachingTrainerId,sNoOfPossibleTrainerRetScripts,gNoOfApproachingTrainers,gWhichTrainerToFaceAfterBattle;
 static bool sShouldCheckTrainerBScript;
@@ -59,6 +60,8 @@ static void CreateMon(struct Pokemon *p,unsigned species,unsigned level,unsigned
     *p=(struct Pokemon){.species=species,.hp=20,.level=level,.identity=species};
 }
 static void SetMonData(struct Pokemon *p,unsigned field,const void *value){(void)p;assert(field==MON_DATA_OT_NAME);assert(value==gTrainers[TRAINER_STEVEN].trainerName);}
+static void ZeroMonData(struct Pokemon *p){memset(p,0,sizeof(*p));}
+static unsigned CalculatePlayerPartyCount(void){unsigned n=0;for(unsigned i=0;i<6;++i)if(gPlayerParty[i].species)++n;return n;}
 static void LockPlayerFieldControls(void){++locked;}
 static void FreezeObjectEvents(void){++frozen;}
 static void StopPlayerAvatar(void){++stopped;}
@@ -82,7 +85,7 @@ int main(void){
     struct Pokemon original[6];
     reset();gSpecialVar_0x8004=2;assert(!Route101_StartTestBattle());assert(!starts && !clears && !locked);
     /* Reject fainted/egg teams before changing trainer flags, callbacks or RAM backups. */
-    reset();gSpecialVar_0x8004=0;gPlayerParty[1].hp=0;gPlayerParty[2].egg=1;
+    reset();gSpecialVar_0x8004=0;gPlayerParty[0].hp=gPlayerParty[1].hp=0;gPlayerParty[2].egg=1;
     memcpy(original,gPlayerParty,sizeof(original));assert(!Route101_StartTestBattle());
     assert(!memcmp(original,gPlayerParty,sizeof(original)) && !starts && !clears && !locked);
     reset();gSpecialVar_0x8004=1;for(unsigned i=0;i<3;++i)gPlayerParty[i].hp=0;
@@ -92,12 +95,22 @@ int main(void){
         assert(Route101_StartTestBattle());assert(starts==1 && inits==2 && locked==1 && frozen==1 && stopped==1);
         assert(gBattleTypeFlags==(BATTLE_TYPE_TRAINER|BATTLE_TYPE_DOUBLE));
         assert(gTrainerBattleOpponent_A==TRAINER_ROUTE101_TEST_DOUBLE && gTrainerBattleOpponent_B==TRAINER_NONE);
-        assert(!gPartnerTrainerId && !memcmp(original,gPlayerParty,sizeof(original)));
+        assert(!gPartnerTrainerId && !memcmp(original,gPlayerParty,sizeof(struct Pokemon)*3));
+        assert(!gPlayerParty[3].species && gPlayerPartyCount==3 && sRoute101TestPartyActive);
+        assert(!memcmp(save.playerParty,original,sizeof(original)));
         assert(clears==1 && clearIds[0]==TRAINER_FLAGS_START+TRAINER_ROUTE101_TEST_DOUBLE);
         /* Both normal return and real whiteout callback stay in place. */
-        memcpy(save.playerParty,gPlayerParty,sizeof(gPlayerParty));gBattleOutcome=outcome;
+        gBattleOutcome=outcome;
         gMain.savedCallback();assert(callback==(outcome==B_OUTCOME_WON?CB2_ReturnToFieldContinueScriptPlayMapMusic:CB2_WhiteOut));
-        assert(!restores && ends==(outcome==B_OUTCOME_WON));
+        assert(restores==1 && ends==(outcome==B_OUTCOME_WON) && !sRoute101TestPartyActive);
+        assert(!memcmp(gPlayerParty,original,sizeof(original)) && gPlayerPartyCount==6);
+    }
+    for(unsigned test=0;test<2;++test)for(unsigned count=1;count<=6;++count){
+        reset();gPlayerPartyCount=count;
+        for(unsigned i=count;i<6;++i)memset(&gPlayerParty[i],0,sizeof(gPlayerParty[i]));
+        memcpy(original,gPlayerParty,sizeof(original));gSpecialVar_0x8004=test;
+        assert(Route101_StartTestBattle());gMain.savedCallback();
+        assert(gPlayerPartyCount==count && !memcmp(original,gPlayerParty,sizeof(original)));
     }
     /* Full team and an early-game one-Pokemon team, including gaps before NPC slots. */
     for(unsigned count=1;count<=6;count+=5)for(unsigned outcome=B_OUTCOME_WON;outcome<=B_OUTCOME_DREW;++outcome){

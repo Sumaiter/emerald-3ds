@@ -38,6 +38,7 @@
 #include "3ds_coop.h"
 #include "3ds_local.h"
 #include "local_link.h"
+#include "constants/local_link.h"
 #include "3ds_log.h"
 #include "librfu.h"
 
@@ -431,6 +432,19 @@ static void HandlePeerMessage(u16 from, const u8 *msg, u32 len)
         break;
     case PEER_BATTLE:
     case PEER_BLOCK:
+        // Co-op owns an authenticated two-player session without performing
+        // the GBA adapter CONNECT handshake. Reuse the native battle channel,
+        // but accept only the current participant, never arbitrary peers or
+        // block traffic belonging to another wireless activity.
+        if (msg[0] == PEER_BATTLE && CtrCoop_IsDoubleBattle())
+        {
+            struct LocalPeer peers[1];
+            if (LocalLink_GetSession() == LOCAL_SESSION_IN
+             && LocalLink_GetSessionKind() == LOCAL_KIND_COOP
+             && LocalLink_GetPeers(peers, 1) == 1 && peers[0].id == from)
+                ChannelReceive(PEER_BATTLE, from, msg + 1, len - 1);
+            break;
+        }
         // Only from the link: a late one from a player no longer on it was
         // filed as the host's own block (player 0).
         if (sA.state == AD_HOST)

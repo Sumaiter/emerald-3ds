@@ -24,6 +24,7 @@ static uint8_t sFollowWarpGroup, sFollowWarpNum;
 static int16_t sFollowWarpX, sFollowWarpY;
 static bool sPrepareFollowBattle = true;
 bool CtrCoop_EnginePrepareFollowBattle(void) { return sPrepareFollowBattle; }
+bool CtrCoop_EngineTestPartyActive(void) { return false; }
 bool CtrCoop_EngineFollowWarp(uint8_t group,uint8_t num,uint16_t layout,int16_t x,int16_t y)
 {
     (void)layout; ++sFollowWarpCalls; sFollowWarpGroup=group;sFollowWarpNum=num;

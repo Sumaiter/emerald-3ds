@@ -1,5 +1,13 @@
 # Uebergabe: Emerald 3DS Local Co-op
 
+## Sprint 7: beide Nachtests vom Nutzer bestanden (2026-11-15)
+
+Build 8af20c2c7a809005: normales Gast-Abmelden und anschliessender Wiederbeitritt/
+Host-Speichern-Neuladen mit korrektem Team/KP/AP/Status ohne Duplikate bestaetigt.
+Damit neue Sprint-7-Abmeldung abgenommen; fruehere Abbruchtests aus Sprint 6
+bleiben gueltig. Historische Offenvermerke unten sind insoweit ueberholt.
+Offene Issues #1..4 und #6..8 bleiben bestehen. Naechster Auftrag: Sprint 8 mergen.
+
 ## Sprint 7: Integration nach Sprint-6-Nutzerabnahme (2026-11-15)
 
 Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.

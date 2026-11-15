@@ -1,5 +1,13 @@
 # Host und Gast auf diesem PC starten
 
+## Sprint 7: gezielte Nutzertests bestanden (2026-11-15)
+
+Build 8af20c2c7a809005: Gast normal abmelden und mit erhaltenem Team/KP/AP/Status
+wieder beitreten bzw. Host speichern/neuladen erfolgreich, keine Duplikate.
+Beide gezielten Nachtests bestaetigt. Die umfangreiche Liste unten enthaelt
+auch bereits in Sprint 6 gepruefte Regressionen und ist historisch; sie ist
+keine erneute Pflichtabnahme aller Varianten. Offene Issues bleiben separat.
+
 ## Sprint 7 testen: Abmelden, Abbrueche und Speichern (2026-11-15)
 
 Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.

@@ -1,5 +1,15 @@
 # Status: Emerald 3DS Koop-Mod
 
+## Sprint 7: Nutzerabnahme bestanden (2026-11-15)
+
+Nutzer bestaetigt beide gezielten Nachtests fuer Build 8af20c2c7a809005:
+normales Gast-Abmelden mit sicherer Rueckkehr ins Hauptmenue sowie erneuter
+Beitritt und Speichern/Neuladen mit unveraenderten Pokemon/KP/AP/Status ohne
+Duplikate. Die neue Sprint-7-Abmeldung ist damit manuell abgenommen. Bereits
+in Sprint 6 gepruefte Abbruchpfade bleiben bestaetigt; nicht benannte Varianten
+werden nicht zusaetzlich als getestet ausgegeben. Offene Issues #1..4 und
+#6..8 bleiben bestehen. Auftrag: Abnahme pushen, Sprint 8 integrieren.
+
 ## Sprint 7: Integration von Abmeldung und sicherem Abbruch (2026-11-15)
 
 Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
@@ -675,7 +685,7 @@ stehen in `LOKAL_TESTEN.md`.
 
 ## Sprint 7: Abmeldung, Verbindungsabbrüche und sicheres Speichern
 
-**Status: In Main integriert; Gesamtverify, ARM-Release und Datenpaket bestanden. Manuelle Sprint-7-Abnahme offen.**
+**Status: In Main integriert und vom Nutzer abgenommen (2026-11-15); bekannte Issues bleiben separat offen.**
 
 ### Aufgaben
 

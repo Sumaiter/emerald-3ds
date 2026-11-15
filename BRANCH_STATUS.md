@@ -1,5 +1,12 @@
 # Entwicklungsstand: Sprint 7 auf Main
 
+## Sprint-7-Abnahme (2026-11-15)
+
+Beide gezielten Nutzertests bestanden: Gast-Abmelden sowie Wiederbeitritt und
+Host-Speichern-Neuladen ohne veraenderte Teamdaten oder Duplikate. Build
+8af20c2c7a809005 abgenommen. Sprint 8 wird als naechster Branch integriert;
+bekannte Issues #1..4 und #6..8 bleiben offen.
+
 ## Sprint-7-Integration (2026-11-15)
 
 Build **8af20c2c7a809005**, Boot **E3ID-4fe482705fd68761**, ABI **a8444026**, Protokoll 21.
